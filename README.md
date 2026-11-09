@@ -21,4 +21,6 @@ python -m venv .venv
 - [SubAgent 扩展](Cloud%20Agent/docs/subagents.md)
 - [云端实施路线与拟议协议](Cloud%20Agent/docs/cloud-roadmap.md)
 
-当前提供云端原型及网页调试台，Android OCR 与原生客户端仍待联调实现。
+## 安卓客户端
+
+[Mobile Client](Mobile%20Client/README.md) 包含原生安卓界面、端侧中文 OCR、测试账号与组管理，以及本地联调服务。客户端目前使用自己的 `/v1` 联调接口，接入 `Cloud Agent` 的 `/api` 任务接口是下一阶段工作。两个服务默认都使用端口 `8765`，在同一台电脑上测试时请分别启动。
