@@ -41,15 +41,30 @@ class Settings:
     mock_delay: float = 0.35
     # One service deployment owns one workspace; never trust a client-supplied owner.
     owner: str = "local-workspace"
+    memory_mode: str = "basic"
+    memory_extractor: str = "raw"
+    embedding: str = "hash-demo"
+    embedding_model_path: str = ""
+    index_path: Path = field(default_factory=lambda: Path("data/memory-index"))
+    action_path: Path = field(default_factory=lambda: Path("data/calendar-exports"))
+    caldav_url: str = ""
+    caldav_username: str = ""
+    caldav_password: str = field(default="", repr=False)
 
     def __post_init__(self):
+        if self.memory_mode not in {"basic", "hybrid"} or self.memory_extractor not in {"raw", "simplemem"} or self.embedding not in {"hash-demo", "qwen"}:
+            raise ValueError("Invalid memory configuration")
+        if self.caldav_url:
+            url = urlparse(self.caldav_url)
+            if url.scheme != "https" or not url.hostname or url.username or url.password or url.query or url.fragment:
+                raise ValueError("CalDAV requires a fixed HTTPS calendar collection URL")
         if self.provider not in {"mock", "openai-compatible"}:
             raise ValueError("SCREENMIND_PROVIDER must be mock or openai-compatible")
         if not 1 <= self.concurrency <= 8 or not 2 <= self.max_steps <= 20:
             raise ValueError("Invalid concurrency or max_steps")
         if self.task_timeout <= 0 or self.model_timeout <= 0:
             raise ValueError("Timeouts must be positive")
-        if self.provider != "mock":
+        if self.provider != "mock" or self.memory_extractor == "simplemem":
             url = urlparse(self.base_url)
             if not (self.model_key and self.model and url.hostname):
                 raise ValueError("Real mode requires MODEL_BASE_URL, MODEL and MODEL_API_KEY")
@@ -75,5 +90,14 @@ class Settings:
             max_steps=int(values.get("SCREENMIND_MAX_STEPS", "6")),
             task_timeout=float(values.get("SCREENMIND_TASK_TIMEOUT", "120")),
             model_timeout=float(values.get("SCREENMIND_MODEL_TIMEOUT", "40")),
+            memory_mode=values.get("SCREENMIND_MEMORY_MODE", "basic"),
+            memory_extractor=values.get("SCREENMIND_MEMORY_EXTRACTOR", "raw"),
+            embedding=values.get("SCREENMIND_EMBEDDING", "hash-demo"),
+            embedding_model_path=values.get("SCREENMIND_EMBEDDING_MODEL_PATH", ""),
+            index_path=Path(values.get("SCREENMIND_INDEX_PATH", "data/memory-index")),
+            action_path=Path(values.get("SCREENMIND_ACTION_PATH", "data/calendar-exports")),
+            caldav_url=values.get("SCREENMIND_CALDAV_URL", ""),
+            caldav_username=values.get("SCREENMIND_CALDAV_USERNAME", ""),
+            caldav_password=values.get("SCREENMIND_CALDAV_PASSWORD", ""),
         )
 

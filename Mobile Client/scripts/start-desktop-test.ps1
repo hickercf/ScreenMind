@@ -4,7 +4,7 @@ $projectRoot = Split-Path $PSScriptRoot -Parent
 $sdk = Join-Path $projectRoot '.tools/sdk'
 $adb = Join-Path $sdk 'platform-tools/adb.exe'
 $emulator = Join-Path $sdk 'emulator/emulator.exe'
-$apk = Join-Path $projectRoot 'dist/weiguang-0.1.0-universal-debug.apk'
+$apk = Join-Path $projectRoot 'app/build/outputs/apk/debug/app-debug.apk'
 $avdName = 'WeiguangTest'
 $serial = "emulator-$EmulatorPort"
 foreach ($required in @($adb, $emulator, $apk, (Join-Path $projectRoot '.tools/avd/WeiguangTest.ini'))) {
@@ -32,7 +32,7 @@ if (-not $health) {
         if ((Get-Date) -gt $deadline) { throw "Backend did not start. Check $logDir/desktop-backend.err.log" }
     } until ($health)
 }
-if ($health.status -ne 'ok' -or $health.schema_version -ne 1 -or -not $health.decision_provider) { throw 'Port 8765 is occupied by another service.' }
+if ($health.status -ne 'ok' -or $health.schema_version -ne 1 -or $health.agent_api -ne '/v1/agent') { throw 'Port 8765 is occupied by another service or an old backend. Restart with scripts/start-backend.ps1.' }
 
 # Only replace the hidden emulator created by this project's automated tests.
 $hidden = Get-CimInstance Win32_Process | Where-Object {
@@ -70,3 +70,4 @@ if ($LASTEXITCODE -ne 0) { throw 'App installation failed.' }
 & $adb -s $serial shell am start -n cn.weiguang.app/.MainActivity
 if ($LASTEXITCODE -ne 0) { throw 'App launch failed.' }
 Write-Host 'Ready. Use the emulator window. Backend: http://127.0.0.1:8765'
+

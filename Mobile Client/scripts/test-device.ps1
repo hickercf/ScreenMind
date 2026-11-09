@@ -15,5 +15,6 @@ try {
     $result | Out-File -Encoding utf8 'docs/device-test-output.txt'
     $result | Select-Object -Last 12
     & $adb -s $Serial pull '/sdcard/Android/data/cn.weiguang.app/files/screenshots/.' 'docs/previews'
-    if (-not (($result -join "`n") -match 'OK \(4 tests\)')) { throw 'Device tests failed. See docs/device-test-output.txt' }
+    if (-not (($result -join "`n") -match 'OK \(6 tests\)')) { throw 'Device tests failed. See docs/device-test-output.txt' }
 } finally { Pop-Location }
+

@@ -1,6 +1,8 @@
 package cn.weiguang.app.data
 
 import androidx.room.*
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import kotlinx.coroutines.flow.Flow
 import org.json.JSONObject
 import java.time.Instant
@@ -64,10 +66,32 @@ interface DecisionDao {
     suspend fun clear(account: String)
 }
 
-@Database(entities = [LocalEvent::class, LocalDecision::class], version = 1, exportSchema = false)
+@Entity(tableName = "agent_commands", primaryKeys = ["accountKey", "path"])
+data class AgentCommand(val accountKey: String, val path: String, val body: String)
+
+@Dao
+interface AgentCommandDao {
+    @Query("SELECT * FROM agent_commands WHERE accountKey=:account AND path=:path")
+    suspend fun get(account: String, path: String): AgentCommand?
+    @Query("SELECT * FROM agent_commands WHERE accountKey=:account")
+    suspend fun all(account: String): List<AgentCommand>
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun save(command: AgentCommand)
+    @Query("DELETE FROM agent_commands WHERE accountKey=:account AND path=:path")
+    suspend fun remove(account: String, path: String)
+}
+
+val MIGRATION_1_2 = object : Migration(1, 2) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("CREATE TABLE IF NOT EXISTS agent_commands (accountKey TEXT NOT NULL, path TEXT NOT NULL, body TEXT NOT NULL, PRIMARY KEY(accountKey,path))")
+    }
+}
+
+@Database(entities = [LocalEvent::class, LocalDecision::class, AgentCommand::class], version = 2, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun events(): EventDao
     abstract fun decisions(): DecisionDao
+    abstract fun agentCommands(): AgentCommandDao
 }
 
 data class UserSession(
@@ -99,3 +123,4 @@ object Validation {
         else -> null
     }
 }
+

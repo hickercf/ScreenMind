@@ -2,6 +2,8 @@
 
 本文以工程内真实实现为准。手机端已完成数据入口、标准化记录、账号与测试组页面、建议卡片和反馈。云端模型与设备 SDK 可以独立替换接入。
 
+2026-11-09 增补：Android v0.2 已接入同仓库 Cloud Agent，新增 `/v1/agent` 路由及 `cloud-v1` 交互。本文下方原 schema v1 线索/规则建议协议保持兼容，新增职责、接口、启动与验收见 [AGENT_INTEGRATION.md](AGENT_INTEGRATION.md) 和 [AGENT_TEST_REPORT.md](AGENT_TEST_REPORT.md)。请同时检出 Cloud Agent，旧手机源码压缩包不足以启动新版网关。
+
 ## 责任与交付
 
 | 负责方 | 应交付内容 | 联调完成条件 |
@@ -161,3 +163,4 @@ HTTP JSON，编码 UTF-8，基路径 `/v1`。发布版使用 HTTPS。受保护�
 建议的联调提交包含一次完整过程的录屏、设备及系统版本、后端提交版本、成功与失败请求的脱敏记录、复现步骤。错误记录保留 request_id 与 event_id，避免输出聊天正文、密码或令牌。
 
 手机端本版直接使用 OkHttp 映射 JSON，减少联调依赖。后端默认 SQLite，正式多实例部署迁移数据库与限流时保持本文事务及隔离语义。
+

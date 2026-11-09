@@ -147,9 +147,10 @@ fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () ->
                     Button(onClick = { model.recognize(sharedImage); clearSharedImage() }, enabled = !model.busy) { Text("识别并核对") }
                 }
                 when {
+                    page == "agent" -> AgentScreen(model, events)
                     page == "groups" -> GroupScreen(model)
                     page == "watch" -> WatchScreen()
-                    tab == 0 -> HomeScreen(model, events, decisions, { imagePicker.launch("image/*") }, { tab = 1 })
+                    tab == 0 -> HomeScreen(model, events, decisions, { imagePicker.launch("image/*") }, { tab = 1 }, { page = "agent" })
                     tab == 1 -> ClueScreen(model, events, { imagePicker.launch("image/*") }, requestCalendar, requestLocation)
                     tab == 2 -> DevicesScreen(model, requestCalendar, requestLocation, requestNotification, { page = "watch" })
                     else -> ProfileScreen(model) { page = "groups"; model.loadGroups() }
@@ -213,10 +214,11 @@ private fun EndpointDialog(model: AppViewModel, onDismiss: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.HomeScreen(model: AppViewModel, events: List<LocalEvent>, decisions: List<LocalDecision>, onImage: () -> Unit, onClues: () -> Unit) {
+private fun ColumnScope.HomeScreen(model: AppViewModel, events: List<LocalEvent>, decisions: List<LocalDecision>, onImage: () -> Unit, onClues: () -> Unit, onAgent: () -> Unit) {
     val session by model.session.collectAsStateWithLifecycle()
     Note(DateTimeFormatter.ofPattern("M 月 d 日").format(ZonedDateTime.now()))
     Title("把线索，变成下一步。", "你决定哪些信息值得连接。")
+    Button(onClick = onAgent, enabled = !model.busy && session?.endpoint != "offline", modifier = Modifier.fillMaxWidth().testTag("open-agent")) { Text("进入云端事项") }
     if (decisions.isEmpty()) Panel(accent = true) {
         Mark(Icons.Outlined.AutoAwesome, "从第一条线索开始")
         Text("一张截图，也可以成为\n清晰的下一步。", style = MaterialTheme.typography.titleLarge)
@@ -476,3 +478,4 @@ private fun ColumnScope.GroupScreen(model: AppViewModel) {
 private fun formatTime(value: String): String = try {
     DateTimeFormatter.ofPattern("MM-dd HH:mm").withZone(ZoneId.systemDefault()).format(Instant.parse(value))
 } catch (_: Exception) { value }
+

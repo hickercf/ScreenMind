@@ -1,4 +1,8 @@
-# 端侧与云端接口契约 v0.2
+# 端侧与云端接口契约 v0.4
+
+v0.4 新增 Schedule、索引管理、屏幕删除、辅助委派查询及日历动作协议，详见 [本版协议](phase-two.md)。以下保留兼容接口说明；文末 M0 限制属于历史阶段，运行能力以 `/api/contracts` 为准。
+
+新增 cloud-v1 说明见 [第一阶段接口与联调](phase-one.md)。下面保留既有 legacy 请求格式，文末列出新增接口。
 
 基础地址示例：`http://127.0.0.1:8765`。请求与响应均为 UTF-8 JSON。完整模型见运行服务的 `/openapi.json`。
 
@@ -181,3 +185,9 @@ data: {"seq":12,"task_id":"task_...","kind":"card.published","payload":{"revisio
 **新变化**：确认初始任务后，上传退出消息，创建相同 work_id 的新任务即可。该任务只需关联新消息屏幕，旧计划通过记忆提供。屏幕首次绑定后不能迁到另一事项，返回 422。重试上传仍使用原 event_id；新的独立事项请使用新的屏幕事件。
 
 新事件：`work.created`、`memory.committed`。`router.dispatched` 包含 subagent_id、work_id、reason。完整 Party 状态、演示文本格式和插件扩展方式见 [SubAgent 文档](subagents.md)。
+# v0.3 增量接口
+
+既有接口默认保持 legacy 行为。新增只读事项解析 `POST /api/works/resolve`、协议发现 `GET /api/contracts`、新版回应 `POST /api/tasks/{tid}/responses`；创建任务可选择 `interaction_protocol: "cloud-v1"`。详细请求、状态语义、来源预算和联调步骤见 [第一阶段说明](phase-one.md)。
+
+任务详情新增 `memory_context` 与 `interaction`，列表不返回这两份完整内容。cloud-v1 信息发布即完成；澄清回答和状态确认走 responses；旧 confirm 只用于 legacy。外部动作暂未启用。
+

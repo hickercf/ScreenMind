@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import org.json.JSONArray
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.util.Locale
 import java.util.UUID
@@ -42,6 +45,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var invite by mutableStateOf<JSONObject?>(null)
         private set
     private var generationRequest: Pair<List<String>, String>? = null
+    var agentWorks by mutableStateOf<List<JSONObject>>(emptyList())
+        private set
+    var agentCapabilities by mutableStateOf<List<JSONObject>>(emptyList())
+        private set
+    var agentTasks by mutableStateOf<List<JSONObject>>(emptyList())
+        private set
+    var agentWork by mutableStateOf<JSONObject?>(null)
+        private set
+    var agentTask by mutableStateOf<JSONObject?>(null)
+        private set
+    var agentReceipt by mutableStateOf<JSONObject?>(null)
+        private set
+    var agentMode by mutableStateOf("正在连接")
+        private set
+    var agentError by mutableStateOf<String?>(null)
+        private set
+    var selectedWorkId by mutableStateOf<String?>(null)
+        private set
+    private var selectedTaskId: String? = null
+    private var pollingAgent = false
 
     fun action(block: suspend () -> Unit) {
         if (busy) return
@@ -55,7 +78,91 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             finally { busy = false }
         }
     }
-    fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null }
+    fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
+        agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentTask = null; agentReceipt = null
+        selectedWorkId = null; selectedTaskId = null; agentError = null; agentMode = "正在连接"
+    }
+
+    private suspend fun loadAgent() {
+        val account = session.value?.accountKey ?: return
+        if (session.value?.endpoint == "offline") return
+        val taskId = selectedTaskId; val workId = selectedWorkId
+        val snapshot = repository.agentSnapshot(taskId, workId)
+        if (account != session.value?.accountKey || selectedTaskId != taskId || selectedWorkId != workId) return
+        agentWorks = snapshot.itemObjects("works"); agentCapabilities = snapshot.itemObjects("subagents"); agentTasks = snapshot.itemObjects("tasks")
+        agentWork = snapshot.optJSONObject("work"); agentTask = snapshot.optJSONObject("task"); agentReceipt = snapshot.optJSONObject("action")
+        val health = snapshot.getJSONObject("health")
+        agentMode = if (health.optString("provider") == "mock") "模拟模型 · 验证流程" else "真实模型 · ${health.optString("model")}"
+        agentError = null
+    }
+    suspend fun pollAgent() {
+        if (busy || pollingAgent) return
+        pollingAgent = true
+        try { loadAgent() }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (_: java.io.IOException) { agentError = "暂时无法连接。已有任务仍保存在服务端，恢复网络后可继续。" }
+        catch (error: Exception) { agentError = error.message ?: "事项状态读取失败" }
+        finally { pollingAgent = false }
+    }
+    fun refreshAgent() = action { loadAgent() }
+    fun selectAgentWork(id: String) = action { selectedWorkId = id; selectedTaskId = null; agentWork = null; agentTask = null; agentReceipt = null; loadAgent() }
+    fun selectAgentTask(task: JSONObject) = action {
+        selectedTaskId = task.getString("id"); selectedWorkId = task.getString("work_id")
+        agentWork = null; agentTask = null; agentReceipt = null; loadAgent()
+    }
+    fun createAgentWork(title: String, plugin: String) = action {
+        check(title.isNotBlank()) { "请填写事项名称" }
+        val result = repository.agentMutation("works", JSONObject().put("event_id", UUID.randomUUID().toString()).put("title", title.trim()).put("subagent_id", plugin))
+        selectedWorkId = result.getJSONObject("work").getString("id"); selectedTaskId = null
+        agentWork = null; agentTask = null; agentReceipt = null; loadAgent()
+    }
+    fun startAgentTask(instruction: String, selected: List<LocalEvent>) = action {
+        val wid = requireNotNull(selectedWorkId) { "请先创建或选择事项" }
+        check(instruction.isNotBlank() && selected.isNotEmpty()) { "请填写要求，并选择允许使用的已同步线索" }
+        val account = session.value?.accountKey
+        check(selected.all { it.accountKey == account && it.syncState == "synced" }) { "线索尚未同步或账号已变化" }
+        check(selected.size <= 10) { "一次最多选择10条线索" }
+        val refs = JSONArray(selected.map { JSONObject().put("event_id", it.eventId).put("revision", it.revision) })
+        val result = repository.agentMutation("tasks", JSONObject().put("request_id", UUID.randomUUID().toString())
+            .put("work_id", wid).put("instruction", instruction).put("events", refs))
+        selectedTaskId = result.getJSONObject("task").getString("id"); agentTask = null; agentReceipt = null; loadAgent()
+    }
+    fun respondAgent(kind: String, answer: String = "") = action {
+        val task = requireNotNull(agentTask); val output = task.getJSONObject("interaction")
+        val body = JSONObject().put("event_id", UUID.randomUUID().toString()).put("expected_revision", task.getInt("revision"))
+            .put("output_version", output.getInt("output_version")).put("kind", kind)
+        when (kind) {
+            "answer" -> { check(answer.isNotBlank()) { "请填写回答" }; body.put("question_id", output.getString("question_id")).put("answer", answer) }
+            "accept_state", "reject_state" -> body.put("proposal_id", output.getString("proposal_id"))
+            "authorize_action", "reject_action" -> body.put("action_id", output.getString("action_id"))
+        }
+        repository.agentMutation("tasks/${task.getString("id")}/responses", body); loadAgent()
+    }
+    fun controlAgent(kind: String, text: String = "") = action {
+        val task = requireNotNull(agentTask)
+        val body = JSONObject().put("event_id", UUID.randomUUID().toString()).put("expected_revision", task.getInt("revision")).put("kind", kind)
+        if (kind == "revise") { check(text.isNotBlank()) { "请填写补充要求" }; body.put("message", text) }
+        repository.agentMutation("tasks/${task.getString("id")}/actions", body); loadAgent()
+    }
+    fun previewCalendar(itemId: String, end: String) = action {
+        val work = requireNotNull(agentWork)
+        val time = java.time.LocalDateTime.parse(end.trim()).atZone(java.time.ZoneId.systemDefault()).toOffsetDateTime().toString()
+        val result = repository.agentMutation("works/${work.getString("id")}/action-proposals", JSONObject()
+            .put("event_id", UUID.randomUUID().toString()).put("expected_state_version", work.getInt("memory_version"))
+            .put("item_id", itemId).put("end", time).put("tool", "calendar.export"))
+        selectedTaskId = result.getJSONObject("task").getString("id"); agentTask = null; agentReceipt = null; loadAgent()
+    }
+    fun reconcileAgent() = action {
+        val id = requireNotNull(agentReceipt).getString("id")
+        repository.agentMutation("actions/$id/reconcile", JSONObject()); loadAgent()
+    }
+    fun saveAgentCalendar(uri: Uri, actionId: String) = action {
+        val data = repository.agentCalendar(actionId)
+        withContext(Dispatchers.IO) {
+            requireNotNull(getApplication<Application>().contentResolver.openOutputStream(uri)).use { it.write(data.getString("content").toByteArray(Charsets.UTF_8)) }
+        }
+        message = "日历文件已保存，请在日历应用中导入；保存文件不代表导入完成。"
+    }
     fun login(username: String, password: String, register: Boolean) = action {
         repository.authenticate(username.trim(), password, register)
         message = if (register) "账号已创建" else "登录成功"
@@ -109,3 +216,4 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun share(groupId: String, eventId: String) = action { repository.share(groupId, eventId); message = "所选文字已共享到测试组" }
     fun unshare(groupId: String, eventId: String) = action { repository.unshare(groupId, eventId); message = "该测试组中的共享已撤回" }
 }
+

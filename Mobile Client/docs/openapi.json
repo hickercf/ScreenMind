@@ -1,8 +1,8 @@
 {
   "openapi": "3.1.0",
   "info": {
-    "title": "微光联调 API",
-    "version": "0.1.0"
+    "title": "微光 + ScreenMind Agent API",
+    "version": "0.2.0"
   },
   "paths": {
     "/health": {
@@ -969,10 +969,1128 @@
           }
         }
       }
+    },
+    "/v1/agent/health": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Health",
+        "operationId": "health_v1_agent_health_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/subagents": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Subagents",
+        "operationId": "subagents_v1_agent_subagents_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/works": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Works",
+        "operationId": "works_v1_agent_works_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Create Work",
+        "operationId": "create_work_v1_agent_works_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WorkInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/works/{wid}": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Work",
+        "operationId": "work_v1_agent_works__wid__get",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/tasks": {
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Task",
+        "operationId": "task_v1_agent_tasks_post",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Tasks",
+        "operationId": "tasks_v1_agent_tasks_get",
+        "parameters": [
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/tasks/{tid}": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Get Task",
+        "operationId": "get_task_v1_agent_tasks__tid__get",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Tid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/tasks/{tid}/responses": {
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Respond",
+        "operationId": "respond_v1_agent_tasks__tid__responses_post",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Tid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "oneOf": [
+                  {
+                    "$ref": "#/components/schemas/Acknowledge"
+                  },
+                  {
+                    "$ref": "#/components/schemas/Answer"
+                  },
+                  {
+                    "$ref": "#/components/schemas/StateResponse"
+                  },
+                  {
+                    "$ref": "#/components/schemas/ActionResponse"
+                  }
+                ],
+                "discriminator": {
+                  "propertyName": "kind",
+                  "mapping": {
+                    "acknowledge": "#/components/schemas/Acknowledge",
+                    "answer": "#/components/schemas/Answer",
+                    "accept_state": "#/components/schemas/StateResponse",
+                    "reject_state": "#/components/schemas/StateResponse",
+                    "authorize_action": "#/components/schemas/ActionResponse",
+                    "reject_action": "#/components/schemas/ActionResponse"
+                  }
+                },
+                "title": "Body"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/tasks/{tid}/actions": {
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Action",
+        "operationId": "action_v1_agent_tasks__tid__actions_post",
+        "parameters": [
+          {
+            "name": "tid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Tid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActionInput"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/works/{wid}/action-proposals": {
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Propose Action",
+        "operationId": "propose_action_v1_agent_works__wid__action_proposals_post",
+        "parameters": [
+          {
+            "name": "wid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Wid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CalendarRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/actions/{aid}": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Get Action",
+        "operationId": "get_action_v1_agent_actions__aid__get",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Aid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/actions/{aid}/reconcile": {
+      "post": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Reconcile",
+        "operationId": "reconcile_v1_agent_actions__aid__reconcile_post",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Aid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/actions/{aid}/artifact": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Artifact",
+        "operationId": "artifact_v1_agent_actions__aid__artifact_get",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Aid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/agent/actions/{aid}/calendar": {
+      "get": {
+        "tags": [
+          "Agent integration"
+        ],
+        "summary": "Calendar",
+        "operationId": "calendar_v1_agent_actions__aid__calendar_get",
+        "parameters": [
+          {
+            "name": "aid",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+              "title": "Aid"
+            }
+          },
+          {
+            "name": "authorization",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Authorization"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "Acknowledge": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "cloud-v1",
+            "title": "Contract Version",
+            "default": "cloud-v1"
+          },
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "output_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Output Version"
+          },
+          "kind": {
+            "type": "string",
+            "const": "acknowledge",
+            "title": "Kind"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_revision",
+          "output_version",
+          "kind"
+        ],
+        "title": "Acknowledge"
+      },
+      "ActionInput": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "revise",
+              "confirm",
+              "cancel",
+              "retry"
+            ],
+            "title": "Kind"
+          },
+          "message": {
+            "type": "string",
+            "maxLength": 4000,
+            "title": "Message",
+            "default": ""
+          },
+          "card_version": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Card Version"
+          },
+          "edits": {
+            "patternProperties": {
+              "^[a-zA-Z0-9_.:-]{1,100}$": {
+                "type": "string",
+                "maxLength": 1000,
+                "minLength": 1
+              }
+            },
+            "type": "object",
+            "maxProperties": 24,
+            "title": "Edits"
+          },
+          "screen_ids": {
+            "items": {
+              "type": "string",
+              "pattern": "^[a-zA-Z0-9_.:-]{1,100}$"
+            },
+            "type": "array",
+            "maxItems": 20,
+            "title": "Screen Ids"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_revision",
+          "kind"
+        ],
+        "title": "ActionInput"
+      },
+      "ActionResponse": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "cloud-v1",
+            "title": "Contract Version",
+            "default": "cloud-v1"
+          },
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "output_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Output Version"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "authorize_action",
+              "reject_action"
+            ],
+            "title": "Kind"
+          },
+          "action_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Action Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_revision",
+          "output_version",
+          "kind",
+          "action_id"
+        ],
+        "title": "ActionResponse"
+      },
+      "Answer": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "cloud-v1",
+            "title": "Contract Version",
+            "default": "cloud-v1"
+          },
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "output_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Output Version"
+          },
+          "kind": {
+            "type": "string",
+            "const": "answer",
+            "title": "Kind"
+          },
+          "question_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Question Id"
+          },
+          "answer": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Answer"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_revision",
+          "output_version",
+          "kind",
+          "question_id",
+          "answer"
+        ],
+        "title": "Answer"
+      },
+      "CalendarRequest": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_state_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected State Version"
+          },
+          "item_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Item Id"
+          },
+          "end": {
+            "type": "string",
+            "format": "date-time",
+            "title": "End"
+          },
+          "tool": {
+            "type": "string",
+            "enum": [
+              "calendar.export",
+              "calendar.caldav"
+            ],
+            "title": "Tool",
+            "default": "calendar.export"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_state_version",
+          "item_id",
+          "end"
+        ],
+        "title": "CalendarRequest"
+      },
       "ContextEvent": {
         "properties": {
           "schema_version": {
@@ -1106,6 +2224,27 @@
         ],
         "title": "DecisionRequest"
       },
+      "EventRef": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Event Id"
+          },
+          "revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Revision"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "revision"
+        ],
+        "title": "EventRef"
+      },
       "FeedbackInput": {
         "properties": {
           "action": {
@@ -1222,6 +2361,92 @@
         ],
         "title": "ShareInput"
       },
+      "StateResponse": {
+        "properties": {
+          "contract_version": {
+            "type": "string",
+            "const": "cloud-v1",
+            "title": "Contract Version",
+            "default": "cloud-v1"
+          },
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "expected_revision": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Expected Revision"
+          },
+          "output_version": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Output Version"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "accept_state",
+              "reject_state"
+            ],
+            "title": "Kind"
+          },
+          "proposal_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Proposal Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "expected_revision",
+          "output_version",
+          "kind",
+          "proposal_id"
+        ],
+        "title": "StateResponse"
+      },
+      "TaskRequest": {
+        "properties": {
+          "request_id": {
+            "type": "string",
+            "format": "uuid",
+            "title": "Request Id"
+          },
+          "work_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Work Id"
+          },
+          "instruction": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Instruction"
+          },
+          "events": {
+            "items": {
+              "$ref": "#/components/schemas/EventRef"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Events"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "request_id",
+          "work_id",
+          "instruction",
+          "events"
+        ],
+        "title": "TaskRequest"
+      },
       "ValidationError": {
         "properties": {
           "loc": {
@@ -1245,6 +2470,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
@@ -1254,6 +2486,34 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WorkInput": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "title": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title"
+          },
+          "subagent_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Subagent Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "title",
+          "subagent_id"
+        ],
+        "title": "WorkInput"
       }
     }
   }

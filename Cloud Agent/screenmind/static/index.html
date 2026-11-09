@@ -27,7 +27,9 @@
           <div><span class="eyebrow">WORKSPACE MEMORY</span><h2>一个事项，一份持续记忆。</h2><p class="muted">不同聚会的记忆隔离；每次任务读取已确认版本，草稿确认后才生效。</p></div>
           <div class="scope-controls"><label for="work-select">当前事项<select id="work-select"><option value="">独立任务（不保存事项记忆）</option></select></label><label for="agent-select">处理能力<select id="agent-select"><option value="">Router 自动分发</option></select></label></div>
           <div class="scope-controls"><label for="work-name">新事项名称<input id="work-name" maxlength="200" placeholder="例如：周六生日聚会"></label><button id="create-work" class="secondary">创建独立事项</button><button id="party-demo" class="primary">体验 Party 场景 →</button></div>
+          <button id="schedule-demo" class="secondary">体验日程场景 →</button>
           <div id="memory-panel" hidden><div class="memory-heading"><strong id="memory-title"></strong><span id="memory-version" class="mode-badge"></span></div><p id="memory-summary" class="muted"></p><details><summary>查看已确认记忆与版本历史</summary><pre id="memory-json"></pre><div id="memory-history"></div></details><div class="source-actions"><button id="party-decline" class="secondary">模拟：小林临时退出</button><button id="party-tentative" class="text-button">模拟：小林可能来不了</button></div></div>
+          <div id="calendar-panel" class="scope-controls" hidden><label for="calendar-item">导出已确认日程<select id="calendar-item"></select></label><label for="calendar-end">结束时间（本机时区）<input id="calendar-end" type="datetime-local"></label><button id="calendar-preview" class="secondary">预览日历文件</button></div>
         </section>
         <div class="work-grid">
           <section class="context-panel panel">
@@ -50,6 +52,8 @@
               <p id="task-routing" class="muted"></p><p id="draft-memory" class="notice" hidden></p>
               <div id="progress-view" class="progress-view" hidden><span class="pulse-ring"></span><div><strong id="progress-title">正在处理</strong><p>可以补充要求或取消任务；其他任务独立运行。</p></div></div>
               <div id="error-view" class="error-view" hidden></div>
+              <p id="question-view" class="notice" hidden></p><pre id="action-preview" hidden></pre><pre id="action-result" hidden></pre>
+              <button id="action-download" class="secondary" hidden>下载日历文件</button><button id="action-reconcile" class="secondary" hidden>核对执行结果</button>
               <div id="card-view" hidden><div class="card-heading"><span class="eyebrow">INTERACTIVE RESULT</span><span id="card-version"></span></div><h3 id="card-title"></h3><p id="card-summary" class="muted"></p><div id="card-fields"></div></div>
               <div id="followup-area"><label for="followup">补充要求</label><textarea id="followup" rows="2" maxlength="4000" placeholder="修改上方字段，或告诉 Agent 接下来怎么处理……"></textarea><label class="attach-label"><input type="checkbox" id="attach-screens"> 将左侧选中的新屏幕补充到当前任务</label></div>
               <div class="task-actions"><button id="revise" class="primary">保存修改并继续 →</button><button id="confirm" class="secondary">确认完成</button><button id="retry" class="secondary" hidden>重试任务</button><button id="cancel" class="text-button danger">取消</button></div>
@@ -58,7 +62,7 @@
           </section>
           <section class="activity-panel panel"><div class="section-title"><div><span class="eyebrow">OBSERVABILITY</span><h2>执行轨迹</h2></div><span class="live-label"><span class="tiny-dot"></span> LIVE</span></div><p class="muted panel-caption">真实工具事件与状态变更，不展示模型内部推理。</p><ol id="event-list" class="event-list"><li class="empty-events">等待任务开始</li></ol><div class="activity-footer">事件持久化保存<br><span>刷新页面后可继续查看</span></div></section>
         </div>
-        <footer class="page-footer"><span>SCREENMIND LAB / BUILD 0.2</span><span>屏幕 → 上下文 → 任务 → 交互</span></footer>
+        <footer class="page-footer"><span>SCREENMIND LAB / BUILD 0.4</span><span>屏幕 → 上下文 → 任务 → 交互</span></footer>
       </main>
     </div>
   </div>

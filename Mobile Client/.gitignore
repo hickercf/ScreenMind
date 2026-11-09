@@ -12,3 +12,7 @@ __pycache__/
 *.jks
 *.keystore
 dist/
+agents/
+artifacts/
+*.lock
+

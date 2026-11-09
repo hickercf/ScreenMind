@@ -4,13 +4,15 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "screenmind-superagent"
-version = "0.2.0"
+version = "0.4.0"
 description = "Event-driven OCR task engine and interactive card prototype"
 requires-python = ">=3.12"
 dependencies = ["fastapi==0.136.1", "uvicorn==0.46.0", "httpx==0.28.1", "pydantic==2.13.4"]
 
 [project.optional-dependencies]
 test = ["pytest==9.0.3"]
+memory = ["lancedb==0.25.3", "numpy==2.2.6", "openai==2.3.0"]
+qwen = ["sentence-transformers==5.1.1", "transformers==4.57.1"]
 
 [tool.setuptools.packages.find]
 include = ["screenmind*"]

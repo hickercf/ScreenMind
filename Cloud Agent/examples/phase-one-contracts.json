@@ -1,0 +1,157 @@
+{
+  "synthetic": true,
+  "contract_version": "cloud-v1",
+  "notes": "用运行服务返回的ID和版本替换示例值；第四类仅为未启用契约。",
+  "flows": [
+    {
+      "runtime_supported": true,
+      "output": {
+        "contract_version": "cloud-v1",
+        "task_id": "task_example",
+        "work_id": null,
+        "revision": 1,
+        "output_version": 1,
+        "kind": "information",
+        "card": {
+          "type": "information",
+          "title": "材料通知",
+          "summary": "合成联调示例",
+          "fields": [
+            {
+              "id": "deadline",
+              "label": "截止时间",
+              "value": "周五17:00",
+              "source_refs": [
+                "scr_example:deadline"
+              ],
+              "origin": "source",
+              "editable": true
+            }
+          ]
+        }
+      },
+      "response": {
+        "contract_version": "cloud-v1",
+        "event_id": "event_example",
+        "expected_revision": 1,
+        "output_version": 1,
+        "kind": "acknowledge"
+      },
+      "expected": "发布即完成；已阅不写状态"
+    },
+    {
+      "runtime_supported": true,
+      "output": {
+        "contract_version": "cloud-v1",
+        "task_id": "task_example",
+        "work_id": null,
+        "revision": 1,
+        "output_version": 1,
+        "kind": "clarification",
+        "question_id": "question_example",
+        "question": "材料截止时间是否调整？",
+        "source_refs": [
+          "scr_example:deadline"
+        ]
+      },
+      "response": {
+        "contract_version": "cloud-v1",
+        "event_id": "event_example",
+        "expected_revision": 1,
+        "output_version": 1,
+        "kind": "answer",
+        "question_id": "question_example",
+        "answer": "改为周六15:00"
+      },
+      "expected": "同一task_id进入revision=2，不直接写正式状态"
+    },
+    {
+      "runtime_supported": true,
+      "output": {
+        "contract_version": "cloud-v1",
+        "task_id": "task_example",
+        "work_id": "work_example",
+        "revision": 1,
+        "output_version": 1,
+        "kind": "state_proposal",
+        "proposal_id": "proposal_example",
+        "base_state_version": 0,
+        "candidate_state": {
+          "card": {
+            "type": "information",
+            "title": "材料通知",
+            "summary": "合成联调示例",
+            "fields": [
+              {
+                "id": "deadline",
+                "label": "截止时间",
+                "value": "周五17:00",
+                "source_refs": [
+                  "scr_example:deadline"
+                ],
+                "origin": "source",
+                "editable": true
+              }
+            ]
+          }
+        },
+        "card": {
+          "type": "information",
+          "title": "材料通知",
+          "summary": "合成联调示例",
+          "fields": [
+            {
+              "id": "deadline",
+              "label": "截止时间",
+              "value": "周五17:00",
+              "source_refs": [
+                "scr_example:deadline"
+              ],
+              "origin": "source",
+              "editable": true
+            }
+          ]
+        }
+      },
+      "response": {
+        "contract_version": "cloud-v1",
+        "event_id": "event_example",
+        "expected_revision": 1,
+        "output_version": 1,
+        "kind": "accept_state",
+        "proposal_id": "proposal_example"
+      },
+      "expected": "事务校验后正式版本0变1；拒绝/过期不提交"
+    },
+    {
+      "runtime_supported": false,
+      "output": {
+        "contract_version": "cloud-v1",
+        "task_id": "task_example",
+        "work_id": "work_example",
+        "revision": 1,
+        "output_version": 1,
+        "kind": "action_proposal",
+        "action_id": "action_example",
+        "base_state_version": 1,
+        "tool": "calendar.create_event",
+        "parameters": {
+          "title": "演示安排",
+          "start": "2026-12-10T16:00:00+08:00",
+          "end": "2026-12-10T16:30:00+08:00",
+          "calendar_id": "explicit_user_choice"
+        },
+        "execution_enabled": false
+      },
+      "response": {
+        "contract_version": "cloud-v1",
+        "event_id": "event_example",
+        "expected_revision": 1,
+        "output_version": 1,
+        "kind": "authorize_action",
+        "action_id": "action_example"
+      },
+      "expected": "仅保留Schema，当前服务不发布或执行外部动作"
+    }
+  ]
+}

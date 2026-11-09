@@ -1,6 +1,10 @@
-# ScreenMind Super Agent · 第一阶段框架 v0.2
+# ScreenMind Super Agent · 云端框架 v0.4
 
 结构化 OCR → Router → 可注册 SubAgent → 交互卡片 → 用户确认 → 独立事项记忆。首个业务能力是 Party 聚会协调，原有信息整理能力继续可用。
+
+v0.4 在基础 MemoryProvider、事项关联与 cloud-v1 上新增：SimpleMem 文本抽取适配、LanceDB 混合检索、可选本地 Qwen 编码器、Schedule、单层时间检查委派、授权日历导出及可配置 CalDAV 执行器。安装配置、接口与实际验证范围见 [本轮实现说明](docs/phase-two.md)。基础记忆仍是默认配置；增强记忆显式开启。
+
+Android v0.2 通过手机认证网关接入本引擎，详见 [端云联调说明](../Mobile%20Client/docs/AGENT_INTEGRATION.md)。手机联调使用网关启动脚本即可，无需另起本目录服务。独立网页工作台仍用于调试单个工作区。
 
 本项目借鉴 DeepSeek Super-agent 的事件、任务、Worker 隔离与状态持久化设计，独立实现移动端所需的精简服务。没有复制或部署 DeepSeek Harness 原型。默认使用模拟模型，**模拟输出只证明框架流程，不代表 AI 理解能力**。
 
@@ -44,8 +48,12 @@ python -m uvicorn screenmind.api:create_app --factory --host 127.0.0.1 --port 87
 | --- | --- |
 | OCR 输入 | 接收已结构化、已脱敏的文字与可选坐标，不截屏、不运行 OCR |
 | Router | 独立路由类：事项绑定优先，其次显式选择，最后插件关键词匹配；不明确时要求选择 |
-| SubAgent | 注册表、统一插件契约、InformationAgent 与 PartyAgent；Worker 动态使用插件 Schema 与规则 |
-| 事项记忆 | work_id 隔离、已确认状态、候选状态、版本历史、并发覆盖保护 |
+| SubAgent | 注册表、统一插件契约、Information、Party、Schedule；Worker 动态使用插件 Schema 与规则 |
+| 事项记忆 | work_id 隔离、正式状态、候选状态、版本历史；基础 MemoryProvider 读取同事项近期原文和用户修订 |
+| 新版交互 | cloud-v1 信息、澄清、状态提议与动作授权；输出与任务版本校验 |
+| 增强记忆 | 可选 SimpleMem 文本机制 + 词法/实体/向量排序融合；索引可重建，输出回到原始证据 |
+| 辅助委派 | Party / Schedule 可调用只读时间检查，父任务与状态版本校验，超时及取消 |
+| 外部动作 | 独立预览授权、SQLite 执行记录、ICS 实际文件导出；配置后可使用 CalDAV 创建事件 |
 | 执行约束 | 默认 2 个并发任务、每轮最多 6 次模型请求、总超时 120 秒 |
 | 持续交互 | 补充要求或新屏幕、字段修订、确认、取消、失败重试 |
 | 持久化 | 屏幕、输入、任务状态、卡片版本、事件日志及幂等记录 |
@@ -54,7 +62,7 @@ python -m uvicorn screenmind.api:create_app --factory --host 127.0.0.1 --port 87
 | 可观测性 | 真实状态、工具名、工具校验失败和耗时；不保存或展示模型内部推理 |
 | 界面 | 桌面/手机宽度的网页调试台；1.2 秒轮询，后端另提供 SSE |
 
-**尚未实现**：语义 Router、自动主题关联、跨事项长期语义检索、多 Agent 团队、MCP、主动任务、Android 原生客户端、多用户登录、智能 Watchdog、外部写操作。
+**尚未实现**：语义 Router、自动主题关联、跨事项长期语义检索、自主多 Agent 团队、MCP、主动任务、Android 原生客户端、多用户登录、智能 Watchdog。辅助委派目前只有确定性时间检查；日历动作目前是创建或导出，不包括修改、删除和双向同步。
 
 当前不是部署到公共网络的多租户服务。一个部署仅对应一个工作区，API Key 代表该工作区。内部查询包含 owner 边界，但不提供多用户账号体系。
 
@@ -123,10 +131,10 @@ python -m pytest -q --basetemp=artifacts/pytest-local
 
 ## 继续开发的顺序
 
-1. 按 [云端实施路线](docs/cloud-roadmap.md) 明确公共契约和基础 MemoryProvider。
-2. 根据 [当前接口契约](docs/api-contract.md) 接入 Android，优先打通 Party 闭环。
-3. 以 Schedule 验证插件复用，再分阶段适配增强记忆与受控委派。
-4. 拟议交互示例位于 `docs/drafts/interaction-contract-v1.2.json`，尚不是当前可调用 API。
+1. 根据 [第一阶段说明](docs/phase-one.md) 联调 cloud-v1 与基础记忆，实际手机 OCR 待端侧接入。
+2. 根据 [当前接口契约](docs/api-contract.md) 保持旧客户端兼容，优先完成 Party 的真实行动反馈。
+3. v0.4 已接入 Schedule、增强记忆与受控委派；下一步按 [实现说明](docs/phase-two.md) 完成真实 Qwen 环境、CalDAV 账号联调与冻结对照评测。
+4. 当前协议样例位于 `examples/phase-one-contracts.json`；`docs/drafts/interaction-contract-v1.2.json` 保留为旧设计草案。
 
 设计依据：[DeepSeek 原型领域模型](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/docs/001-domain.md)、[执行机制](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/docs/003-execution.md)、[扩展接口](https://github.com/deepseek-ai/dsh-superagent-prototype/blob/main/src/core/ports.ts)。
 

@@ -16,8 +16,9 @@ class AgentContext:
 
 @dataclass(frozen=True)
 class Proposal:
-    card: dict
+    card: dict | None = None
     memory: dict | None = None
+    question: dict | None = None
 
 
 class SubAgent(Protocol):

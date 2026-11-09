@@ -1,11 +1,12 @@
 """Composition root: new capabilities register here, without changing the runtime."""
 from .information import InformationAgent
 from .party import PartyAgent
+from .schedule import ScheduleAgent
 
 
 class Registry:
     def __init__(self, agents=None):
-        entries = list(agents) if agents is not None else [InformationAgent(), PartyAgent()]
+        entries = list(agents) if agents is not None else [InformationAgent(), PartyAgent(), ScheduleAgent()]
         self.agents = {agent.id: agent for agent in entries}
         if len(self.agents) != len(entries):
             raise ValueError("Duplicate SubAgent id")
@@ -18,4 +19,4 @@ class Registry:
 
     def catalog(self):
         return [{"id": a.id, "name": a.name, "description": a.description,
-                 "requires_work": a.requires_work} for a in self.agents.values()]
+                 "requires_work": a.requires_work, "auxiliary_tools": list(getattr(a, "auxiliary_tools", ()))} for a in self.agents.values()]

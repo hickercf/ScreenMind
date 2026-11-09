@@ -15,6 +15,7 @@ class Block(StrictModel):
     text: Text
     kind: Literal["paragraph", "chat", "card", "key_value"] = "paragraph"
     speaker: str | None = Field(default=None, max_length=100)
+    message_at: AwareDatetime | None = None
     # Coordinates are optional, normalized to 0..1000 by the Android adapter.
     bbox: list[float] | None = Field(default=None, min_length=4, max_length=4)
 
@@ -51,6 +52,12 @@ class TaskInput(StrictModel):
     screen_ids: list[Identifier] = Field(min_length=1, max_length=20)
     work_id: Identifier | None = None
     subagent_id: Identifier | None = None
+    interaction_protocol: Literal["legacy", "cloud-v1"] = "legacy"
+
+
+class WorkResolutionInput(StrictModel):
+    screen_ids: list[Identifier] = Field(min_length=1, max_length=20)
+    work_id: Identifier | None = None
 
 
 class WorkInput(StrictModel):

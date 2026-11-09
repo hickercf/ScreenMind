@@ -1,4 +1,7 @@
-fastapi==0.121.0
-uvicorn==0.38.0
+fastapi==0.136.1
+uvicorn==0.46.0
+pydantic==2.13.4
+starlette==1.10.0
 argon2-cffi==25.1.0
 httpx==0.28.1
+

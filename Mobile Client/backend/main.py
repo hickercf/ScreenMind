@@ -1,4 +1,4 @@
-"""Local integration backend. Authentication is real; decisions use a labeled rule provider."""
+"""Authenticated mobile gateway: legacy rule cards and isolated Cloud Agent runtimes."""
 import hashlib
 import json
 import os
@@ -59,6 +59,9 @@ CREATE TABLE IF NOT EXISTS shared_events (
  share_id TEXT PRIMARY KEY, group_id TEXT NOT NULL REFERENCES groups(id), user_id TEXT NOT NULL REFERENCES users(id),
  event_id TEXT NOT NULL, text TEXT NOT NULL, created_at INTEGER NOT NULL, UNIQUE(group_id,user_id,event_id)
 );
+CREATE TABLE IF NOT EXISTS agent_invalidations (
+ seq INTEGER PRIMARY KEY AUTOINCREMENT, user_id TEXT NOT NULL, event_id TEXT NOT NULL, revision INTEGER
+);
 """
 
 
@@ -77,10 +80,18 @@ def initialize():
 @asynccontextmanager
 async def lifespan(app):
     initialize()
-    yield
+    from .agent_bridge import AgentHub
+    from screenmind.api import ProcessLock
+    lock = ProcessLock(database_path().with_suffix('.gateway'))
+    app.state.agent_hub = AgentHub(database_path)
+    try:
+        yield
+    finally:
+        await app.state.agent_hub.close()
+        lock.close()
 
 
-app = FastAPI(title='微光联调 API', version='0.1.0', lifespan=lifespan)
+app = FastAPI(title='微光 + ScreenMind Agent API', version='0.2.0', lifespan=lifespan)
 
 
 def db():
@@ -201,6 +212,12 @@ def session_user(authorization: str | None = Header(default=None), conn=Depends(
     return dict(row)
 
 
+def short_session_user(authorization: str | None = Header(default=None)):
+    with closing(sqlite3.connect(database_path())) as conn:
+        conn.row_factory = sqlite3.Row
+        return session_user(authorization, conn)
+
+
 def issue_session(conn, user_id, username, session_id=None):
     access = secrets.token_urlsafe(32)
     refresh = secrets.token_urlsafe(48)
@@ -220,7 +237,7 @@ def require_member(conn, group_id, user, owner=False):
 
 @app.get('/health')
 def health():
-    return {'status': 'ok', 'decision_provider': 'rule_demo', 'schema_version': 1}
+    return {'status': 'ok', 'decision_provider': 'rule_demo', 'schema_version': 1, 'agent_api': '/v1/agent'}
 
 
 @app.post('/v1/auth/register', status_code=201)
@@ -324,16 +341,22 @@ def remove_member(group_id: str, member_id: str, user=Depends(session_user), con
 
 
 @app.post('/v1/events')
-def upsert_event(data: ContextEvent, user=Depends(session_user), conn=Depends(db)):
+async def upsert_event(data: ContextEvent, request: Request, user=Depends(short_session_user)):
     event_id = str(data.event_id)
     body = data.model_dump_json()
-    old = conn.execute('SELECT * FROM events WHERE user_id=? AND event_id=?', (user['id'], event_id)).fetchone()
-    if old and old['revision'] == data.revision and old['body'] == body:
-        return {'event_id': event_id, 'revision': data.revision, 'status': 'synced'}
-    expected = old['revision'] + 1 if old else 1
-    if data.revision != expected:
-        raise HTTPException(409, '线索版本冲突，请刷新后重试')
-    conn.execute('INSERT OR REPLACE INTO events VALUES (?,?,?,?)', (user['id'], event_id, data.revision, body))
+    hub = request.app.state.agent_hub
+    async with hub.lock(user['id']):
+        with closing(hub.connect()) as conn, conn:
+            conn.execute('BEGIN IMMEDIATE')
+            old = conn.execute('SELECT * FROM events WHERE user_id=? AND event_id=?', (user['id'], event_id)).fetchone()
+            replay = old and old['revision'] == data.revision and old['body'] == body
+            if not replay:
+                expected = old['revision'] + 1 if old else 1
+                if data.revision != expected:
+                    raise HTTPException(409, '线索版本冲突，请刷新后重试')
+                conn.execute('INSERT OR REPLACE INTO events VALUES (?,?,?,?)', (user['id'], event_id, data.revision, body))
+                conn.execute('INSERT INTO agent_invalidations(user_id,event_id,revision) VALUES(?,?,?)', (user['id'], event_id, data.revision))
+        await hub.invalidate(user['id'])
     return {'event_id': event_id, 'revision': data.revision, 'status': 'synced'}
 
 
@@ -344,9 +367,14 @@ def events(user=Depends(session_user), conn=Depends(db)):
 
 
 @app.delete('/v1/events/{event_id}')
-def delete_event(event_id: str, user=Depends(session_user), conn=Depends(db)):
-    conn.execute('DELETE FROM events WHERE user_id=? AND event_id=?', (user['id'], event_id))
-    conn.execute('DELETE FROM shared_events WHERE user_id=? AND event_id=?', (user['id'], event_id))
+async def delete_event(event_id: str, request: Request, user=Depends(short_session_user)):
+    hub = request.app.state.agent_hub
+    async with hub.lock(user['id']):
+        with closing(hub.connect()) as conn, conn:
+            conn.execute('DELETE FROM events WHERE user_id=? AND event_id=?', (user['id'], event_id))
+            conn.execute('DELETE FROM shared_events WHERE user_id=? AND event_id=?', (user['id'], event_id))
+            conn.execute('INSERT INTO agent_invalidations(user_id,event_id,revision) VALUES(?,?,NULL)', (user['id'], event_id))
+        await hub.invalidate(user['id'])
     return {'ok': True}
 
 
@@ -434,3 +462,10 @@ def unshare(group_id: str, event_id: str, user=Depends(session_user), conn=Depen
     require_member(conn, group_id, user)
     conn.execute('DELETE FROM shared_events WHERE group_id=? AND user_id=? AND event_id=?', (group_id, user['id'], event_id))
     return {'ok': True}
+
+
+# Register authenticated Agent routes after the legacy authentication helpers.
+import sys
+from .agent_bridge import install
+install(app, sys.modules[__name__])
+

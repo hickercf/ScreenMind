@@ -2,7 +2,13 @@
 
 首发平台为 Android 10 及以上，使用 Kotlin、Jetpack Compose、Room 和内置中文 OCR。手机端可以离线运行，测试账号和组管理由随工程提供的联调后端实现。
 
-## 已实现的第一版
+## v0.2 云端事项
+
+新增“云端事项”入口：创建或选择事项、勾选已同步线索、跟踪异步任务、回答澄清、确认正式状态、单独授权日历文件导出。复用同仓库 Cloud Agent 的 Information、Party、Schedule，使用服务端账号隔离工作区。模型可配置为真实服务，界面区分模拟模型与真实模型。
+
+详见 [端云集成说明](docs/AGENT_INTEGRATION.md) 与 [本轮验证记录](docs/AGENT_TEST_REPORT.md)。原有 `rule_demo` 建议仍是单独的规则演示，点击“采纳”只记录反馈。
+
+## 原有能力
 
 - 森林绿视觉风格、深浅主题、首页、线索、设备、我的四个入口。
 - 真实账号注册、登录、令牌刷新、退出和加密会话保存。
@@ -13,7 +19,7 @@
 - 带来源依据的摘要与追问卡片、采纳及忽略反馈。
 - 手机通知测试，供指定手表或手环验证通知转发。
 
-当前建议使用 `rule_demo` 规则提供者，界面明确显示“规则演示”。真实 AI 模型、QQ/微信后台通知采集、连续屏幕采集、穿戴健康 SDK 和腕上按钮回传属于队友后续对接范围。原始截图只在导入核对时使用，不上传和长期保存。
+原有建议使用 `rule_demo` 规则提供者，界面明确显示“规则演示”；新事项入口使用 Cloud Agent 的模型配置。QQ/微信后台通知采集、连续屏幕采集、穿戴健康 SDK 和腕上按钮回传仍属于后续对接范围。原始截图只在导入核对时使用，不上传和长期保存。
 
 ## 快速启动
 
@@ -28,7 +34,7 @@ Set-Location '.\Mobile Client'
 powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
 ```
 
-脚本首次创建 `.venv` 并安装后端依赖，精确版本记录在 `backend/requirements.lock.txt`。服务默认只监听本机 `127.0.0.1:8765`。浏览器打开 `http://127.0.0.1:8765/docs` 可查看和调试接口，`/health` 用于检查服务状态。
+脚本首次创建 `.venv`，安装 `backend/requirements.lock.txt` 及相邻的 `Cloud Agent`。需要 Python 3.12+，请检出完整 ScreenMind 仓库。一个进程同时提供认证、同步与 Agent 接口，默认监听 `127.0.0.1:8765`。浏览器打开 `http://127.0.0.1:8765/docs` 查看接口，`/health` 检查网关状态。真实模型读取 `Cloud Agent/.env`，密钥不进入手机安装包。
 
 连接安卓手机并开启 USB 调试后，在另一个终端执行。
 
@@ -61,6 +67,8 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -SetupSdk
 
 默认任务包括构建调试 APK、本地单元测试和 Android Lint。生成的 APK 位于 `app/build/outputs/apk/debug/app-debug.apk`。Gradle Wrapper 也提供常规 `gradlew.bat assembleDebug` 入口，需要本机配置正确的 JDK 与 SDK。
 
+Windows 中文目录下请使用 `scripts/build.ps1`：脚本会使用一个空闲盘符作为临时路径别名，结束后自动移除，避免 JDK 17 测试进程无法加载中文路径中的测试类。源文件不移动。直接用 Android Studio 或 Gradle Wrapper 时，建议检出到英文路径。
+
 针对 ARM64 手机的轻量内测构建开启代码与资源压缩，可运行 `& './scripts/build.ps1' -Tasks @('assemblePilot')`。输出位于 `app/build/outputs/apk/pilot/app-pilot.apk`，签名为开发调试签名，可用于内部安装。`pilot` 与 `debug` 允许 HTTP 联调，正式 `release` 保持 HTTPS 要求。最终交付包在 `dist` 中。
 
 ## 联调演示顺序
@@ -78,7 +86,7 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -SetupSdk
 
 ## 项目入口
 
-给队友交接时可以发送 `dist/weiguang-source-0.1.0.zip` 和 ARM64 内测 APK。源码包包含代码、协议、测试与截图，排除了便携工具、构建缓存、本机数据库和本机路径配置；队友按上面的全新环境步骤或 Android Studio 方式准备环境。
+给队友交接时请使用本仓库的完整源码，包含相邻的 `Cloud Agent` 目录。旧 `weiguang-source-0.1.0.zip` 不包含本轮端云集成。便携工具、构建缓存、本机数据库和密钥不提交到版本仓库。
 
 | 文件或目录 | 用途 |
 |---|---|
@@ -92,10 +100,11 @@ powershell -ExecutionPolicy Bypass -File scripts/build.ps1 -SetupSdk
 | `docs/decision.schema.json` | 决策结果结构与允许的动作 |
 | `docs/TEST_REPORT.md` | 实测结果与尚需真机确认的项目 |
 
-运行后端测试使用 `& '.venv/Scripts/python.exe' -m unittest backend.test_api -v`。可复用的 Android 设备测试保存在 `app/src/androidTest`。先启动后端，再运行 `& './scripts/test-device.ps1' -Serial 'emulator-5554'`，它会构建并安装测试包、设置端口转发、执行测试并拉取截图。替换 Serial 可以指定其他测试设备。该测试会创建随机名称的专用测试账号，覆盖真实页面、端侧中文 OCR 与本地账户隔离。
+运行后端测试使用 `& '.venv/Scripts/python.exe' -m unittest backend.test_api backend.test_agent_bridge -v`。可复用的 Android 设备测试保存在 `app/src/androidTest`。先启动后端，再运行 `& './scripts/test-device.ps1' -Serial 'emulator-5554'`，它会构建并安装测试包、设置端口转发、执行测试并拉取截图。替换 Serial 可以指定其他测试设备。该测试会创建随机名称的专用测试账号，覆盖真实页面、端侧中文 OCR 与本地账户隔离。
 
 ## 发布前补齐
 
 后端当前使用 SQLite 和单进程内存限流，适合小规模内部联调。公开部署前需由云端同学完成 HTTPS、数据库迁移、集中限流、运维备份、密码找回与上线账户管理。正式上架需配置团队签名并核对届时渠道要求。
 
 OPPO 真机的权限行为、耗电、内存和穿戴显示需要在具体型号上验收。可以先安装本版运行手机功能，穿戴接入独立推进。
+

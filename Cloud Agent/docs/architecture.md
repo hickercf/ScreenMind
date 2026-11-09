@@ -1,4 +1,8 @@
-# 框架设计与取舍 v0.2
+# 框架设计与取舍
+
+v0.4 增量：后台 MemoryService 在基础上下文上加入检索；Schedule 复用插件/交互协议；DelegationService 提供限定只读子任务；ActionService 独立管理预览、授权、执行与核对。三者均以 SQLite 正式状态为准，不赋予模型直接写权限。详见 [v0.4 架构与边界](phase-two.md)。
+
+v0.3 在以下 v0.2 基础设计上增加只读 WorkResolver、基础 MemoryProvider、固定轮次上下文和版本化交互协议，详见 [第一阶段实现](phase-one.md)。原有数据库表、任务与卡片接口仍兼容。
 
 ## 数据流
 

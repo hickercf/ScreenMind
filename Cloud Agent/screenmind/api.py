@@ -8,11 +8,13 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 from .config import Settings
-from .models import ActionInput, ScreenInput, TaskInput, WorkInput
+from .models import ActionInput, ScreenInput, TaskInput, WorkInput, WorkResolutionInput
+from .interactions import InteractionResponse, interaction_adapter
 from .agents import Registry
 from .providers import CompatibleProvider, MockProvider
 from .store import DomainError, Store, encode
 from .worker import Runtime
+from .actions import ActionService, CalendarRequest
 
 
 class ProcessLock:
@@ -42,7 +44,7 @@ class ProcessLock:
         self.file.close()
 
 
-def create_app(settings=None, provider=None, registry=None):
+def create_app(settings=None, provider=None, registry=None, memory_provider=None):
     settings = settings or Settings.from_env()
     registry = registry or Registry()
 
@@ -52,7 +54,25 @@ def create_app(settings=None, provider=None, registry=None):
         store = None
         runtime = None
         try:
-            store = Store(settings.db_path, settings.owner, registry)
+            store = Store(settings.db_path, settings.owner, registry, memory_provider)
+            app.state.memory_error = None
+            if settings.memory_mode == "hybrid":
+                try:
+                    from .retrieval import LanceIndex, HashDemoEmbedding, QwenEmbedding
+                    from .simplemem_adapter import RawExtractor, SimpleMemExtractor
+                    from .memory_service import MemoryService
+                    encoder = (await asyncio.to_thread(QwenEmbedding, settings.embedding_model_path)
+                               if settings.embedding == "qwen" else HashDemoEmbedding())
+                    index = await asyncio.to_thread(LanceIndex, settings.index_path, encoder.name)
+                    extractor = SimpleMemExtractor(settings) if settings.memory_extractor == "simplemem" else RawExtractor()
+                    store.memory_service = MemoryService(store, encoder, index, extractor)
+                    for work in store.list_works():
+                        # Backfill only when no jobs exist; manual rebuild remains explicit.
+                        if not store.memory_status(work["id"]):
+                            store.rebuild_memory(work["id"])
+                except Exception as exc:
+                    app.state.memory_error = type(exc).__name__
+            app.state.actions = ActionService(store, settings)
             selected = provider or (MockProvider(settings.mock_delay, registry) if settings.provider == "mock" else CompatibleProvider(settings))
             runtime = Runtime(store, selected, settings)
             app.state.store, app.state.runtime = store, runtime
@@ -65,7 +85,7 @@ def create_app(settings=None, provider=None, registry=None):
                 store.close()
             lock.close()
 
-    app = FastAPI(title="ScreenMind Super Agent", version="0.2.0", lifespan=lifespan)
+    app = FastAPI(title="ScreenMind Super Agent", version="0.4.0", lifespan=lifespan)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
     @app.middleware("http")
@@ -109,9 +129,25 @@ def create_app(settings=None, provider=None, registry=None):
     @app.get("/api/health")
     async def health():
         scheduler = app.state.runtime.scheduler
-        return {"status": "ok" if scheduler and not scheduler.done() else "degraded",
+        background_ok = all(not t.done() for t in app.state.runtime.background)
+        return {"status": "ok" if scheduler and not scheduler.done() and background_ok else "degraded",
                 "provider": settings.provider, "model": settings.model if settings.provider != "mock" else "deterministic-demo",
-                "concurrency": settings.concurrency, "scope": "single-user", "router": "registry-and-work-binding"}
+                "concurrency": settings.concurrency, "scope": "single-user", "router": "registry-and-work-binding",
+                "memory_mode": "hybrid" if app.state.store.memory_service else "basic",
+                "memory_requested": settings.memory_mode, "memory_error": app.state.memory_error,
+                "action_tools": list(app.state.actions.tools)}
+
+    @app.get("/api/contracts")
+    async def contracts():
+        return {"version": "cloud-v1", "default_task_protocol": "legacy",
+                "supported_outputs": ["information", "clarification", "state_proposal", "action_proposal"],
+                "external_actions_enabled": True, "action_tools": list(app.state.actions.tools),
+                "memory_mode": "hybrid" if app.state.store.memory_service else "basic",
+                "output_schema": interaction_adapter.json_schema()}
+
+    @app.post("/api/works/resolve")
+    async def resolve_work(body: WorkResolutionInput):
+        return app.state.store.work_resolver.inspect(body.screen_ids, body.work_id)
 
     @app.get("/api/subagents")
     async def subagents():
@@ -130,6 +166,38 @@ def create_app(settings=None, provider=None, registry=None):
     async def work(wid: str):
         return {"work": app.state.store.work(wid), "history": app.state.store.memory_history(wid)}
 
+    @app.get("/api/works/{wid}/memory-index")
+    async def memory_index(wid: str):
+        return {"jobs": app.state.store.memory_status(wid), "enabled": app.state.store.memory_service is not None}
+
+    @app.post("/api/works/{wid}/memory-index/rebuild", status_code=202)
+    async def rebuild_index(wid: str):
+        app.state.store.rebuild_memory(wid)
+        return {"jobs": app.state.store.memory_status(wid)}
+
+    @app.post("/api/works/{wid}/action-proposals", status_code=201)
+    async def propose_action(wid: str, body: CalendarRequest):
+        task, replayed = app.state.actions.propose(wid, body.model_dump(mode="json"))
+        return {"task": task, "replayed": replayed}
+
+    @app.get("/api/actions/{aid}")
+    async def get_action(aid: str):
+        return {"action": app.state.actions.get(aid)}
+
+    @app.post("/api/actions/{aid}/reconcile")
+    async def reconcile_action(aid: str):
+        return {"action": await app.state.actions.reconcile(aid)}
+
+    @app.get("/api/actions/{aid}/artifact")
+    async def action_artifact(aid: str):
+        action = app.state.actions.get(aid)
+        if action["tool"] != "calendar.export" or action["status"] != "succeeded":
+            raise DomainError("没有可下载的日历文件", 404)
+        path = app.state.actions.tools["calendar.export"].path(aid)
+        if not path.is_file():
+            raise DomainError("日历文件已丢失", 404)
+        return FileResponse(path, media_type="text/calendar", filename=path.name)
+
     @app.post("/api/screens", status_code=201)
     async def screen(body: ScreenInput):
         value, replayed = app.state.store.save_screen(body.model_dump(mode="json"))
@@ -138,6 +206,13 @@ def create_app(settings=None, provider=None, registry=None):
     @app.get("/api/screens")
     async def screens():
         return {"screens": app.state.store.list_screens()}
+
+    @app.delete("/api/screens/{sid}")
+    async def delete_screen(sid: str):
+        affected = app.state.store.delete_screen(sid)
+        for tid in affected:
+            app.state.runtime.interrupt(tid)
+        return {"deleted": sid, "invalidated_tasks": affected}
 
     @app.post("/api/tasks", status_code=202)
     async def task(body: TaskInput):
@@ -152,9 +227,24 @@ def create_app(settings=None, provider=None, registry=None):
     async def detail(tid: str):
         return {"task": app.state.store.task(tid)}
 
+    @app.get("/api/tasks/{tid}/delegations")
+    async def delegations(tid: str):
+        app.state.store.task(tid)
+        rows = app.state.store.db.execute("SELECT * FROM delegations WHERE owner=? AND parent_task_id=? ORDER BY at", (settings.owner, tid))
+        import json
+        return {"delegations": [{**{k: r[k] for k in ("id", "helper", "status", "revision", "base_version", "at")},
+                                  "result": json.loads(r["result"]) if r["result"] else None} for r in rows]}
+
     @app.post("/api/tasks/{tid}/actions", status_code=202)
     async def action(tid: str, body: ActionInput):
         value, replayed = app.state.store.action(tid, body.model_dump(mode="json"))
+        if not replayed:
+            app.state.runtime.interrupt(tid)
+        return {"task": value, "replayed": replayed}
+
+    @app.post("/api/tasks/{tid}/responses", status_code=202)
+    async def respond(tid: str, body: InteractionResponse):
+        value, replayed = app.state.store.respond(tid, body.model_dump(mode="json"))
         if not replayed:
             app.state.runtime.interrupt(tid)
         return {"task": value, "replayed": replayed}

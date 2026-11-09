@@ -21,6 +21,23 @@ python -m venv .venv
 - [SubAgent 扩展](Cloud%20Agent/docs/subagents.md)
 - [云端实施路线与拟议协议](Cloud%20Agent/docs/cloud-roadmap.md)
 
-## 安卓客户端
+## 安卓客户端与云端联调
 
-[Mobile Client](Mobile%20Client/README.md) 包含原生安卓界面、端侧中文 OCR、测试账号与组管理，以及本地联调服务。客户端目前使用自己的 `/v1` 联调接口，接入 `Cloud Agent` 的 `/api` 任务接口是下一阶段工作。两个服务默认都使用端口 `8765`，在同一台电脑上测试时请分别启动。
+[Mobile Client](Mobile%20Client/README.md) 提供原生安卓界面、端侧中文 OCR、账号与测试组、线索同步和云端事项交互。手机通过原有认证网关的 `/v1/agent` 接口使用同一套 Cloud Agent 引擎；每位用户的事项、证据、索引和动作文件分别隔离。
+
+手机联调只需启动一个服务，默认端口为 `8765`：
+
+```powershell
+cd "Mobile Client"
+powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
+```
+
+首页进入“云端事项”，选择已同步线索，再依次处理澄清、确认方案、单独授权动作。当前手机端支持 Information、Party 和 Schedule；日历动作生成可保存的 ICS 文件，文件保存与日历导入分别展示。原有规则演示保留为独立入口。
+
+云端 v0.4 还包含可选 SimpleMem 文本适配、LanceDB 混合检索、Qwen 编码器接口和时间检查辅助 Agent。增强记忆需显式安装及启用，默认仍使用 basic。手机网关不开放共享服务器凭据的 CalDAV 写入。
+
+- [端云接口、隔离与启动说明](Mobile%20Client/docs/AGENT_INTEGRATION.md)
+- [本轮验证记录](Mobile%20Client/docs/AGENT_TEST_REPORT.md)
+- [增强能力安装与验证边界](Cloud%20Agent/docs/phase-two.md)
+
+如同时运行独立云端网页工作台，请把它设到另一个端口（例如 `8766`）。工作台自己的数据库与手机账号工作区分开。完整检出两个目录后再启动手机网关，不使用旧版单独的手机源码包。

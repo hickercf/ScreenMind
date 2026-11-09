@@ -202,6 +202,52 @@ class Repository(private val context: Context, val database: AppDatabase) {
     suspend fun removeMember(groupId: String, userId: String) = mutex.withLock { authenticated("/v1/groups/$groupId/members/$userId", "DELETE") }
     suspend fun share(groupId: String, eventId: String) = mutex.withLock { authenticated("/v1/groups/$groupId/shares", "POST", JSONObject().put("event_id", eventId)) }
     suspend fun unshare(groupId: String, eventId: String) = mutex.withLock { authenticated("/v1/groups/$groupId/shares/$eventId", "DELETE") }
+
+    // Persist the exact command before sending. An uncertain response is retried with
+    // the same id and parameters, including after process death; never invent a new id.
+    private suspend fun sendAgentCommand(command: AgentCommand): JSONObject {
+        check(session.value?.accountKey == command.accountKey) { "账号已变化，请重新打开事项" }
+        return try {
+            val result = authenticated(command.path, "POST", JSONObject(command.body))
+            database.agentCommands().remove(command.accountKey, command.path)
+            result
+        } catch (error: ApiFailure) {
+            if (error.status in listOf(400,403,404,409,422)) database.agentCommands().remove(command.accountKey, command.path)
+            throw error
+        }
+    }
+
+    suspend fun agentMutation(path: String, body: JSONObject): JSONObject = mutex.withLock {
+        val account = requireNotNull(session.value).accountKey
+        val fullPath = "/v1/agent/$path"
+        val prior = database.agentCommands().get(account, fullPath)
+        check(prior == null) { "上次操作结果尚未确定，请刷新以核对原请求" }
+        val command = AgentCommand(account, fullPath, body.toString())
+        database.agentCommands().save(command)
+        sendAgentCommand(command)
+    }
+
+    suspend fun agentSnapshot(taskId: String?, workId: String?): JSONObject = mutex.withLock {
+        val account = requireNotNull(session.value).accountKey
+        for (pending in database.agentCommands().all(account)) sendAgentCommand(pending)
+        val result = JSONObject().put("account", account)
+            .put("health", authenticated("/v1/agent/health"))
+            .put("subagents", authenticated("/v1/agent/subagents").getJSONArray("subagents"))
+            .put("works", authenticated("/v1/agent/works").getJSONArray("works"))
+            .put("tasks", authenticated("/v1/agent/tasks").getJSONArray("tasks"))
+        if (workId != null) result.put("work", authenticated("/v1/agent/works/$workId").getJSONObject("work"))
+        if (taskId != null) {
+            val task = authenticated("/v1/agent/tasks/$taskId").getJSONObject("task")
+            result.put("task", task)
+            val output = task.optJSONObject("interaction")
+            if (output?.optString("kind") == "action_proposal") result.put("action", authenticated("/v1/agent/actions/${output.getString("action_id")}").getJSONObject("action"))
+        }
+        result
+    }
+
+    suspend fun agentCalendar(actionId: String): JSONObject = mutex.withLock {
+        authenticated("/v1/agent/actions/$actionId/calendar")
+    }
 }
 
 class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWorker(context, parameters) {
@@ -213,3 +259,4 @@ class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWork
         catch (_: java.io.IOException) { Result.retry() }
     }
 }
+

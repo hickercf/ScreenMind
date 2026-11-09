@@ -1,5 +1,9 @@
 # SubAgent 扩展契约 v0.2
 
+v0.4 增量：`Proposal` 可返回 `question`，由 Worker 发布 cloud-v1 澄清；`auxiliary_tools=("time_check",)` 声明辅助能力白名单；可选 `calendar_item(state, item_id)` 提供动作条目读取能力。Schedule 是第二个持续事项插件。外部动作仍由框架 ActionService 独立授权执行，插件不直接执行。详见 [v0.4](phase-two.md)。
+
+v0.3 保留本插件接口；Worker 会将基础 MemoryProvider 返回的同事项历史加入 read_screens 结果与引用白名单。cloud-v1 模式额外提供框架级 ask_clarification 工具，插件不直接写正式状态或执行外部动作。协议说明见 [第一阶段实现](phase-one.md)。
+
 框架共享 Router、任务执行器、队列、生命周期、版本校验、事项记忆、模型适配器和 HTTP/卡片协议。领域插件负责提示词、输出 Schema、业务规则、候选记忆及可选模拟流程。
 
 `work_id` 标识一个持续事项，例如某一次生日聚会；`task_id` 标识一次处理，例如根据退出消息调整方案；`subagent_id` 标识可复用的能力，例如 `party`。一个事项有多次任务，一个能力服务多个事项。记忆不保存在 SubAgent 实例中。

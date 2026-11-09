@@ -65,6 +65,15 @@ function renderTask(task, force=false){
   $('error-view').hidden=!failed;$('error-view').textContent=task.error||'';
   $('card-view').hidden=!task.card;$('followup-area').hidden=ended||failed;$('finished-note').hidden=!ended;
   $('revise').hidden=ended||failed;$('confirm').hidden=task.status!=='waiting_input';$('retry').hidden=!failed;$('cancel').hidden=ended;
+  const output=task.interaction, clarification=output?.kind==='clarification', external=output?.kind==='action_proposal';
+  $('question-view').hidden=!clarification;$('question-view').textContent=clarification?output.question:'';
+  $('action-preview').hidden=!external;$('action-preview').textContent=external?JSON.stringify(output.parameters,null,2):'';
+  $('action-result').hidden=!external;$('action-result').textContent='';
+  $('action-download').hidden=true;$('action-reconcile').hidden=true;
+  $('confirm').textContent=external?'授权执行此动作':'确认完成';
+  $('revise').textContent=clarification?'提交回答并继续 →':'保存修改并继续 →';
+  if(clarification)$('confirm').hidden=true;
+  if(external){$('followup-area').hidden=true;$('revise').hidden=true;$('retry').hidden=true;loadAction(task).catch(e=>notice(e.message));}
   if(task.card){
     $('card-version').textContent='CARD v'+task.card_version+(active?' · 上一版':'');$('card-title').textContent=task.card.title;$('card-summary').textContent=task.card.summary;
     const fields=$('card-fields');fields.replaceChildren();
@@ -127,12 +136,22 @@ $('import-toggle').onclick=()=>{$('import-panel').hidden=!$('import-panel').hidd
 $('import-submit').onclick=()=>guarded($('import-submit'),async()=>{let body;try{body=JSON.parse($('screen-json').value);}catch{throw new Error('JSON 格式无效，请检查括号和引号');}const result=await api('screens',body);state.selected.add(result.screen.id);state.screens=(await api('screens')).screens;renderScreens();$('import-panel').hidden=true;notice('屏幕记录已保存',true);});
 $('create-form').onsubmit=e=>{e.preventDefault();guarded($('create-submit'),async()=>{
   if(!state.selected.size)throw new Error('请先载入或导入屏幕，并至少选择一条记录');
-  const {task}=await api('tasks',{event_id:uuid(),instruction:$('instruction').value,screen_ids:[...state.selected],work_id:state.workId||null,subagent_id:$('agent-select').value||null});
+  const {task}=await api('tasks',{event_id:uuid(),instruction:$('instruction').value,screen_ids:[...state.selected],work_id:state.workId||null,subagent_id:$('agent-select').value||null,interaction_protocol:$('agent-select').value==='schedule'?'cloud-v1':'legacy'});
   state.tasks=(await api('tasks')).tasks;await selectTask(task.id);
 });};
 function edits(){const result={};for(const input of $('card-fields').querySelectorAll('textarea')){const original=state.current.card.fields.find(f=>f.id===input.dataset.fieldId);if(input.value!==original.value){if(!input.value.trim())throw new Error('字段不能为空');result[original.id]=input.value;}}return result;}
 async function act(kind){
   const task=state.current;if(!task)return;
+  const out=task.interaction;
+  if(task.interaction_protocol==='cloud-v1'&&out&&task.status==='waiting_input'&&
+     (kind==='confirm'||(kind==='revise'&&out.kind==='clarification')||(kind==='cancel'&&out.kind==='action_proposal'))){
+    const body={event_id:uuid(),expected_revision:task.revision,output_version:out.output_version};
+    if(out.kind==='clarification'){if(!$('followup').value.trim())throw new Error('请先填写回答');Object.assign(body,{kind:'answer',question_id:out.question_id,answer:$('followup').value});}
+    else if(out.kind==='state_proposal'){if(Object.keys(edits()).length||$('followup').value.trim())throw new Error('请先保存修改');Object.assign(body,{kind:'accept_state',proposal_id:out.proposal_id});}
+    else if(out.kind==='action_proposal')Object.assign(body,{kind:kind==='cancel'?'reject_action':'authorize_action',action_id:out.action_id});
+    else body.kind='acknowledge';
+    const result=await api('tasks/'+task.id+'/responses',body);$('followup').value='';renderTask(result.task,true);return;
+  }
   const body={event_id:uuid(),kind,expected_revision:task.revision};
   if(kind==='revise'){
     body.message=$('followup').value;body.edits=task.status==='waiting_input'?edits():{};
@@ -161,9 +180,12 @@ async function renderMemory(){
   const wid=state.workId;$('memory-panel').hidden=!wid;if(!wid)return;
   const {work,history}=await api('works/'+wid);if(wid!==state.workId)return;
   $('memory-title').textContent=work.title;$('memory-version').textContent='已确认记忆 v'+work.memory_version;
-  const plan=work.state.plan;$('memory-summary').textContent=plan?plan.participants.map(p=>p.name+' · '+({attending:'参加',tentative:'待确认',declined:'退出'}[p.status])).join(' / '):(work.memory_version?'已保存确认后的事项信息。':'尚未确认初始方案，记忆为空。');
+  const plan=work.state.plan;$('memory-summary').textContent=plan?plan.participants.map(p=>p.name+' · '+({attending:'参加',tentative:'待确认',declined:'退出'}[p.status])).join(' / '):(work.memory_version?'已保存确认后的事项信息。':'尚未确认初始方案，正式状态为空。');
   $('memory-json').textContent=JSON.stringify(work.state,null,2);$('memory-history').replaceChildren(...history.map(h=>element('p','muted','v'+h.version+' · '+screenTime(h.at)+' · '+h.task_id)));
   for(const id of ['party-decline','party-tentative']){$(id).hidden=work.subagent_id!=='party';$(id).disabled=!work.memory_version;}
+  $('calendar-panel').hidden=work.subagent_id!=='schedule'||!work.memory_version;
+  const items=Object.values(work.state.items||{}), signature=JSON.stringify(items);
+  if($('calendar-item').dataset.signature!==signature){$('calendar-item').replaceChildren(...items.map(item=>{const o=element('option','',item.title+' · '+item.at);o.value=item.id;return o;}));$('calendar-item').dataset.signature=signature;}
 }
 $('work-select').onchange=()=>{state.workId=$('work-select').value;state.selected.clear();$('new-task').click();renderWorks();renderScreens();renderMemory().catch(e=>notice(e.message));};
 async function newWork(title,agent){const {work}=await api('works',{event_id:uuid(),title,subagent_id:agent});state.works=(await api('works')).works;state.workId=work.id;state.selected.clear();$('new-task').click();renderWorks();renderScreens();await renderMemory();return work;}
@@ -179,5 +201,31 @@ for(const [id,text] of [['party-decline','我今晚不去了'],['party-tentative
   const work=state.works.find(w=>w.id===state.workId);if(!work?.memory_version)throw new Error('请先确认初始计划');
   $('new-task').click();await addPartyScreen(partyScreen([{speaker:'小林',text}],'成员状态变更 · 小林'));
   $('instruction').value='根据这条新消息更新聚会候选方案，检查人数、费用和责任分工的影响，等待我确认。';notice('新消息已载入。点击“开始处理”查看影响分析；原计划保持到你确认。',true);
+});
+async function loadAction(task){
+  const {action}=await api('actions/'+task.interaction.action_id);if(state.current?.id!==task.id)return;
+  $('action-result').textContent='执行状态：'+action.status+(action.receipt?'\n'+JSON.stringify(action.receipt,null,2):'');
+  $('confirm').hidden=action.status!=='proposed';$('cancel').hidden=action.status!=='proposed';
+  $('action-download').hidden=action.status!=='succeeded'||action.tool!=='calendar.export';
+  $('action-reconcile').hidden=action.status!=='unknown';
+}
+$('action-download').onclick=()=>guarded($('action-download'),async()=>{
+  const aid=state.current.interaction.action_id;
+  const r=await fetch('/api/actions/'+aid+'/artifact',{headers:state.key?{Authorization:'Bearer '+state.key}:{}});
+  if(!r.ok)throw new Error('日历文件读取失败');const url=URL.createObjectURL(await r.blob());const a=document.createElement('a');a.href=url;a.download=aid+'.ics';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
+  notice('已下载日历文件。请在日历应用中导入，下载不等于导入完成。',true);
+});
+$('action-reconcile').onclick=()=>guarded($('action-reconcile'),async()=>{const task=state.current;await api('actions/'+task.interaction.action_id+'/reconcile',{});await selectTask(task.id);});
+$('calendar-preview').onclick=()=>guarded($('calendar-preview'),async()=>{
+  const work=(await api('works/'+state.workId)).work;
+  if(!$('calendar-end').value)throw new Error('请填写结束时间（按本机时区）');
+  const {task}=await api('works/'+work.id+'/action-proposals',{event_id:uuid(),expected_state_version:work.memory_version,item_id:$('calendar-item').value,end:new Date($('calendar-end').value).toISOString(),tool:'calendar.export'});
+  await selectTask(task.id);
+});
+$('schedule-demo').onclick=()=>guarded($('schedule-demo'),async()=>{
+  await newWork('答辩日程 · '+new Date().toLocaleTimeString('zh-CN'),'schedule');
+  const changes=[{id:'material',title:'提交材料',at:'2026-12-10T17:00:00+08:00',before:['defense']},{id:'defense',title:'答辩',at:'2026-12-10T18:00:00+08:00'}];
+  await addPartyScreen(partyScreen([{text:JSON.stringify({schedule_changes:changes}),message_at:new Date().toISOString()}],'日程 · 合成示例'));
+  $('instruction').value='整理这些日程，检查明确的先后约束，等待我确认。';notice('日程样例已载入。确认计划后，可以预览并授权导出日历。',true);
 });
 init();
