@@ -1,0 +1,161 @@
+{
+  "contract_version": "next-draft-1",
+  "synthetic": true,
+  "implementation_status": "design_only_not_current_api",
+  "notes": [
+    "These examples define proposed behavior, not an implemented API.",
+    "No real external action is requested or executed.",
+    "Server derives authorization scope from authenticated context."
+  ],
+  "flows": [
+    {
+      "case_id": "information",
+      "output": {
+        "kind": "information",
+        "task_id": "task_info_01",
+        "revision": 1,
+        "output_version": 1,
+        "work_id": null,
+        "summary": "通知包含两项准备要求",
+        "source_refs": [
+          "screen_demo_01:block_01"
+        ]
+      },
+      "response": {
+        "event_id": "event_ack_01",
+        "kind": "acknowledge",
+        "task_id": "task_info_01",
+        "expected_revision": 1,
+        "output_version": 1
+      },
+      "expected": {
+        "task_status_on_publish": "completed",
+        "formal_state_write": false
+      }
+    },
+    {
+      "case_id": "clarification",
+      "output": {
+        "kind": "clarification",
+        "task_id": "task_schedule_change",
+        "revision": 1,
+        "output_version": 1,
+        "work_id": "work_schedule_demo",
+        "question_id": "q_deadline",
+        "question": "答辩已改到16:00，材料截止仍为17:00，材料时间是否调整？",
+        "source_refs": [
+          "screen_notice_old:block_01",
+          "screen_notice_new:block_01"
+        ]
+      },
+      "response": {
+        "event_id": "event_answer_01",
+        "kind": "answer",
+        "task_id": "task_schedule_change",
+        "question_id": "q_deadline",
+        "expected_revision": 1,
+        "output_version": 1,
+        "answer": "材料改为2026年12月10日15:00"
+      },
+      "expected": {
+        "same_task_id": true,
+        "new_revision": 2,
+        "formal_state_version": 1,
+        "requires_new_state_confirmation": true
+      }
+    },
+    {
+      "case_id": "state_proposal",
+      "output": {
+        "kind": "state_proposal",
+        "task_id": "task_schedule_change",
+        "revision": 2,
+        "output_version": 2,
+        "work_id": "work_schedule_demo",
+        "proposal_id": "proposal_schedule_02",
+        "base_state_version": 1,
+        "candidate_state": {
+          "material_deadline": "2026-12-10T15:00:00+08:00",
+          "defense_start": "2026-12-10T16:00:00+08:00",
+          "timezone": "Asia/Shanghai",
+          "dependency": "material_submission_before_defense",
+          "material_status": "pending",
+          "defense_status": "pending"
+        },
+        "changes": [
+          {
+            "field": "material_deadline",
+            "before": "2026-12-10T17:00:00+08:00",
+            "after": "2026-12-10T15:00:00+08:00",
+            "source_refs": [
+              "input:task_schedule_change:2"
+            ]
+          },
+          {
+            "field": "defense_start",
+            "before": "2026-12-10T18:00:00+08:00",
+            "after": "2026-12-10T16:00:00+08:00",
+            "source_refs": [
+              "screen_notice_new:block_01"
+            ]
+          }
+        ]
+      },
+      "response": {
+        "event_id": "event_accept_02",
+        "kind": "accept_state",
+        "task_id": "task_schedule_change",
+        "proposal_id": "proposal_schedule_02",
+        "expected_revision": 2,
+        "output_version": 2
+      },
+      "expected": {
+        "formal_state_version_on_success": 2,
+        "task_status": "completed",
+        "reject_preserves_version": 1,
+        "stale_state": "conflict_no_commit"
+      }
+    },
+    {
+      "case_id": "action_proposal",
+      "output": {
+        "kind": "action_proposal",
+        "task_id": "task_calendar_demo",
+        "revision": 1,
+        "output_version": 1,
+        "work_id": "work_schedule_demo",
+        "action_id": "action_calendar_01",
+        "base_state_version": 2,
+        "tool": "calendar.create_event",
+        "parameters": {
+          "calendar_id": "calendar_demo",
+          "title": "答辩",
+          "start": "2026-12-10T16:00:00+08:00",
+          "end": "2026-12-10T16:30:00+08:00",
+          "timezone": "Asia/Shanghai"
+        },
+        "parameter_origins": {
+          "calendar_id": "explicit_user_selection",
+          "end": "explicit_user_selection",
+          "start": "confirmed_state_v2"
+        },
+        "execution_mode": "example_only"
+      },
+      "response": {
+        "event_id": "event_authorize_01",
+        "kind": "authorize_action",
+        "task_id": "task_calendar_demo",
+        "action_id": "action_calendar_01",
+        "expected_revision": 1,
+        "output_version": 1
+      },
+      "expected": {
+        "after_authorization": "authorized_not_succeeded",
+        "authorization_bound_to": "server_stored_exact_parameters",
+        "success_requires": "verified_tool_receipt",
+        "parameter_change": "new_proposal_and_authorization",
+        "unknown_result": "reconcile_before_retry"
+      }
+    }
+  ]
+}

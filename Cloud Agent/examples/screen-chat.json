@@ -1,0 +1,12 @@
+{
+  "event_id": "android-demo-chat-v1",
+  "session_id": "registration-session",
+  "app_package": "com.tencent.mm",
+  "app_name": "微信",
+  "page_title": "项目群（合成示例）",
+  "captured_at": "2026-11-07T10:02:00+08:00",
+  "blocks": [
+    {"id": "message-1", "kind": "chat", "speaker": "老师", "text": "计划书请在周四下午 17:00 前给我预审，正式提交时间不变。"},
+    {"id": "message-2", "kind": "chat", "speaker": "我", "text": "我负责云端 Super Agent，计划书中的架构部分由我整理。"}
+  ]
+}

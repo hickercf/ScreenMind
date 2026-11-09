@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ScreenMind · Agent 工作台</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="/" aria-label="ScreenMind 首页"><span class="brand-symbol">S<span>·</span></span><span>ScreenMind<small>CONTEXT → ACTION</small></span></a>
+      <div class="workspace-label"><span class="tiny-dot"></span> 本机研究工作区</div>
+      <button id="new-task" class="new-task"><span>＋</span> 新建任务 <span class="small-arrow">↗</span></button>
+      <div class="sidebar-heading">任务记录 <span id="task-count">00</span></div>
+      <nav id="task-list" aria-label="任务记录"><p class="sidebar-empty">创建第一个任务，<br>让屏幕信息开始流动。</p></nav>
+      <div class="sidebar-bottom"><span class="version-mark">02</span><div>SUPER AGENT LAB<small>端云协同框架 · 第一阶段</small></div></div>
+    </aside>
+    <div class="main-shell">
+      <header class="topbar"><div class="breadcrumb">实验工作台 <span>/</span> 云端任务引擎</div><div class="topbar-right"><span id="connection" class="connection">连接中</span><button class="text-button" id="key-toggle">连接设置</button><a href="/docs" target="_blank" rel="noreferrer" class="text-button">API 文档 ↗</a></div></header>
+      <section id="key-panel" class="key-panel" hidden><label for="api-key">服务端 API Key</label><input type="password" id="api-key" autocomplete="off" placeholder="配置了 SCREENMIND_API_KEY 时填写"><button id="save-key" class="primary">连接</button><span>仅保存在当前页面内存中</span></section>
+      <main>
+        <div class="page-intro"><div><div class="eyebrow">SCREENMIND / WORKBENCH</div><h1>让信息，成为行动。</h1><p>接入屏幕上下文，观察任务执行，参与结果修订。</p></div><div class="mode-panel"><span id="mode-label" class="mode-badge">正在读取配置</span><small id="mode-description">模型与服务状态</small></div></div>
+        <div class="pipeline" aria-label="处理流水线"><div><span>01</span> 屏幕上下文</div><i>→</i><div><span>02</span> Router 分派</div><i>→</i><div><span>03</span> Worker 执行</div><i>→</i><div><span>04</span> 交互卡片</div></div>
+        <div id="notice" class="notice" role="status" aria-live="polite" hidden></div>
+        <section class="panel work-scope" aria-label="事项与能力">
+          <div><span class="eyebrow">WORKSPACE MEMORY</span><h2>一个事项，一份持续记忆。</h2><p class="muted">不同聚会的记忆隔离；每次任务读取已确认版本，草稿确认后才生效。</p></div>
+          <div class="scope-controls"><label for="work-select">当前事项<select id="work-select"><option value="">独立任务（不保存事项记忆）</option></select></label><label for="agent-select">处理能力<select id="agent-select"><option value="">Router 自动分发</option></select></label></div>
+          <div class="scope-controls"><label for="work-name">新事项名称<input id="work-name" maxlength="200" placeholder="例如：周六生日聚会"></label><button id="create-work" class="secondary">创建独立事项</button><button id="party-demo" class="primary">体验 Party 场景 →</button></div>
+          <div id="memory-panel" hidden><div class="memory-heading"><strong id="memory-title"></strong><span id="memory-version" class="mode-badge"></span></div><p id="memory-summary" class="muted"></p><details><summary>查看已确认记忆与版本历史</summary><pre id="memory-json"></pre><div id="memory-history"></div></details><div class="source-actions"><button id="party-decline" class="secondary">模拟：小林临时退出</button><button id="party-tentative" class="text-button">模拟：小林可能来不了</button></div></div>
+        </section>
+        <div class="work-grid">
+          <section class="context-panel panel">
+            <div class="section-title"><div><span class="eyebrow">INPUT</span><h2>屏幕上下文</h2></div><span id="screen-count" class="counter">0</span></div>
+            <p class="muted panel-caption">选择此次任务可以读取的屏幕记录。</p>
+            <div class="source-actions"><button id="load-demo" class="secondary">＋ 载入示例屏幕</button><button id="import-toggle" class="text-button">导入 JSON</button></div>
+            <div id="import-panel" hidden><label class="sr-only" for="screen-json">屏幕 JSON</label><textarea id="screen-json" rows="8" placeholder="粘贴符合 /api/screens 协议的结构化 OCR JSON"></textarea><button id="import-submit" class="secondary">保存屏幕</button></div>
+            <div id="screen-list" class="screen-list"><div class="empty-source"><div class="source-illustration">[ Aa ]</div><strong>从两份屏幕开始</strong><p>使用内置的比赛通知和群聊示例，<br>无需手机或模型密钥。</p></div></div>
+            <div class="input-footnote">原始图片不上传。当前入口接收端侧已过滤的结构化文字。</div>
+          </section>
+          <section class="task-panel panel">
+            <div id="compose-view">
+              <div class="section-title"><div><span class="eyebrow">INTENT</span><h2>这次想完成什么？</h2></div><span class="round-arrow">↗</span></div>
+              <form id="create-form"><label for="instruction">给 Agent 一个明确任务</label><textarea id="instruction" rows="5" maxlength="4000" required placeholder="例如：整理这些屏幕中的报名要求，生成可以逐项修改的信息卡片。">整理这些屏幕中的报名要求，生成可以逐项修改的信息卡片，并保留信息来源。</textarea><div class="composer-footer"><span>读取所选屏幕与当前事项记忆</span><button class="primary" id="create-submit" type="submit">开始处理 <span>→</span></button></div></form>
+              <div class="first-run"><span class="eyebrow">一个完整的交互回路</span><h3>结果不是终点。<br>修改之后，继续推进。</h3><div class="example-card"><span class="example-label">截止时间 <small>可编辑字段</small></span><div>周五 18:00 <span>✎</span></div><p>屏幕来源 → 用户修订 → 更新卡片</p></div><p class="muted">此区域为交互说明。真实结果将在任务执行后显示。</p></div>
+            </div>
+            <div id="task-view" hidden>
+              <div class="section-title"><div><span class="eyebrow">ACTIVE TASK</span><h2 id="task-title">当前任务</h2></div><span id="task-status" class="status-pill"></span></div>
+              <p id="task-instruction" class="task-instruction"></p><div class="task-meta"><span id="task-id"></span><span id="task-revision"></span></div>
+              <p id="task-routing" class="muted"></p><p id="draft-memory" class="notice" hidden></p>
+              <div id="progress-view" class="progress-view" hidden><span class="pulse-ring"></span><div><strong id="progress-title">正在处理</strong><p>可以补充要求或取消任务；其他任务独立运行。</p></div></div>
+              <div id="error-view" class="error-view" hidden></div>
+              <div id="card-view" hidden><div class="card-heading"><span class="eyebrow">INTERACTIVE RESULT</span><span id="card-version"></span></div><h3 id="card-title"></h3><p id="card-summary" class="muted"></p><div id="card-fields"></div></div>
+              <div id="followup-area"><label for="followup">补充要求</label><textarea id="followup" rows="2" maxlength="4000" placeholder="修改上方字段，或告诉 Agent 接下来怎么处理……"></textarea><label class="attach-label"><input type="checkbox" id="attach-screens"> 将左侧选中的新屏幕补充到当前任务</label></div>
+              <div class="task-actions"><button id="revise" class="primary">保存修改并继续 →</button><button id="confirm" class="secondary">确认完成</button><button id="retry" class="secondary" hidden>重试任务</button><button id="cancel" class="text-button danger">取消</button></div>
+              <p id="finished-note" class="muted" hidden>任务已结束，结果仍可查看。你可以从左侧创建新任务。</p>
+            </div>
+          </section>
+          <section class="activity-panel panel"><div class="section-title"><div><span class="eyebrow">OBSERVABILITY</span><h2>执行轨迹</h2></div><span class="live-label"><span class="tiny-dot"></span> LIVE</span></div><p class="muted panel-caption">真实工具事件与状态变更，不展示模型内部推理。</p><ol id="event-list" class="event-list"><li class="empty-events">等待任务开始</li></ol><div class="activity-footer">事件持久化保存<br><span>刷新页面后可继续查看</span></div></section>
+        </div>
+        <footer class="page-footer"><span>SCREENMIND LAB / BUILD 0.2</span><span>屏幕 → 上下文 → 任务 → 交互</span></footer>
+      </main>
+    </div>
+  </div>
+</body>
+</html>

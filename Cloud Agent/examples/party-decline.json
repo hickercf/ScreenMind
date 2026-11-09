@@ -1,0 +1,9 @@
+{
+  "event_id": "party-decline-001",
+  "session_id": "birthday-party-001",
+  "app_package": "com.tencent.mm",
+  "app_name": "微信 · 合成示例",
+  "page_title": "成员状态变更 · 小林",
+  "captured_at": "2026-11-08T11:00:00+08:00",
+  "blocks": [{"id": "departure", "kind": "chat", "speaker": "小林", "text": "我今晚不去了"}]
+}

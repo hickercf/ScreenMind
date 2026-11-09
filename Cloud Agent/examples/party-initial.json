@@ -1,0 +1,17 @@
+{
+  "event_id": "party-initial-001",
+  "session_id": "birthday-party-001",
+  "app_package": "com.tencent.mm",
+  "app_name": "微信 · 合成示例",
+  "page_title": "生日聚会 · 初始安排",
+  "captured_at": "2026-11-08T10:00:00+08:00",
+  "blocks": [
+    {"id": "name", "text": "聚会名称：生日 Party"},
+    {"id": "people", "text": "参加成员：小林、小王、小李、小陈、小张、小周、小吴、小赵"},
+    {"id": "time", "text": "时间：本周六 18:30（示例）"},
+    {"id": "place", "text": "地点：湖畔餐厅（示例）"},
+    {"id": "cost", "text": "套餐总价：688元"},
+    {"id": "budget", "text": "人均预算：150元"},
+    {"id": "cake", "text": "蛋糕负责人：小林"}
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "event_id": "android-demo-notice-v1",
+  "session_id": "registration-session",
+  "app_package": "cn.wps.moffice_eng",
+  "app_name": "WPS",
+  "page_title": "比赛报名通知（合成示例）",
+  "captured_at": "2026-11-07T10:00:00+08:00",
+  "blocks": [
+    {"id": "deadline", "kind": "key_value", "text": "校内材料截止：2026年11月13日 18:00", "bbox": [80, 150, 900, 210]},
+    {"id": "materials", "kind": "paragraph", "text": "提交项目计划书、团队证明和演示视频。"}
+  ]
+}

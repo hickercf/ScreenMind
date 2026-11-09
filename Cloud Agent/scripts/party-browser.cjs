@@ -1,0 +1,53 @@
+/* Actual browser flow: create party, confirm, departure draft, revise, confirm, reload. */
+const {chromium}=require('playwright');
+const fs=require('node:fs');
+const assert=require('node:assert/strict');
+(async()=>{
+  const browser=await chromium.launch({headless:true,executablePath:process.env.SCREENMIND_BROWSER||undefined});
+  const page=await browser.newPage({viewport:{width:1440,height:1050},locale:'zh-CN'});
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  try{
+    await page.goto(process.env.SCREENMIND_URL||'http://127.0.0.1:8765');
+    await page.locator('#mode-label').filter({hasText:'模拟模型'}).waitFor();
+    await page.locator('#party-demo').click();
+    await page.locator('#notice').filter({hasText:'已建立独立聚会'}).waitFor();
+    const workId=await page.locator('#work-select').inputValue();
+    assert.ok(workId.startsWith('work_'));
+    await page.locator('#create-submit').click();
+    await page.locator('#task-status').filter({hasText:'等待你确认'}).waitFor();
+    assert.match(await page.locator('#field-attendance').inputValue(),/确定参加 8 人/);
+    assert.match(await page.locator('#field-cost').inputValue(),/86.00/);
+    assert.equal(await page.locator('#field-attendance').isDisabled(),true);
+    await page.locator('#memory-version').filter({hasText:'v0'}).waitFor();
+    await page.locator('#confirm').click();
+    await page.locator('#memory-version').filter({hasText:'v1'}).waitFor();
+    await page.locator('#party-decline').click();
+    await page.locator('#notice').filter({hasText:'新消息已载入'}).waitFor();
+    await page.locator('#create-submit').click();
+    await page.locator('#task-status').filter({hasText:'等待你确认'}).waitFor();
+    assert.match(await page.locator('#field-attendance').inputValue(),/确定参加 7 人/);
+    assert.match(await page.locator('#field-cost').inputValue(),/98.29/);
+    assert.match(await page.locator('#field-responsibility_0').inputValue(),/待重新分配/);
+    assert.match(await page.locator('#memory-summary').innerText(),/小林 · 参加/);
+    assert.equal(await page.locator('#draft-memory').isVisible(),true);
+    await page.screenshot({path:'artifacts/party-departure-desktop.png',fullPage:true});
+    await page.locator('#followup').fill('蛋糕负责人：小王');
+    await page.locator('#revise').click();
+    await page.locator('#card-version').filter({hasText:'CARD v2'}).waitFor();
+    await page.locator('#task-status').filter({hasText:'等待你确认'}).waitFor();
+    assert.equal(await page.locator('#field-responsibility_0').inputValue(),'小王');
+    await page.locator('#confirm').click();
+    await page.locator('#memory-version').filter({hasText:'v2'}).waitFor();
+    assert.match(await page.locator('#memory-summary').innerText(),/小林 · 退出/);
+    await page.reload();
+    await page.locator('#task-status').filter({hasText:'已完成'}).waitFor();
+    await page.locator('#memory-version').filter({hasText:'v2'}).waitFor();
+    assert.equal(await page.locator('#work-select').inputValue(),workId);
+    await page.setViewportSize({width:390,height:844});
+    await page.screenshot({path:'artifacts/party-mobile.png',fullPage:true});
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    assert.deepEqual(errors,[]);
+    const report={passed:true,work_id:workId,checks:['work-bound routing','initial memory v0->v1','8->7 attendance','86.00->98.29 cost','responsibility gap','draft does not overwrite memory','readonly derived fields','reassign via followup','confirm memory v2','reload persistence','390px layout','no page errors']};
+    fs.writeFileSync('artifacts/party-browser-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report));
+  }finally{await browser.close();}
+})().catch(e=>{console.error(e);process.exitCode=1;});
