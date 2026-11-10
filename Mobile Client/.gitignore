@@ -13,6 +13,7 @@ __pycache__/
 *.keystore
 dist/
 agents/
+releases/
 artifacts/
 *.lock
 

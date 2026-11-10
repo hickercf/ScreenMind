@@ -1,0 +1,21 @@
+.git
+**/.env
+**/.env.*
+**/.venv
+**/.tools
+**/.gradle
+**/.kotlin
+**/__pycache__
+**/*.egg-info
+**/build
+**/dist
+**/artifacts
+**/releases
+**/*.sqlite3*
+**/*.db*
+**/*.apk
+**/*.jks
+**/*.keystore
+Cloud Agent/data
+Mobile Client/backend/agents
+**/local.properties

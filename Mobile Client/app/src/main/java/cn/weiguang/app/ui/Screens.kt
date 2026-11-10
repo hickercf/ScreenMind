@@ -36,6 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.Lifecycle
+import cn.weiguang.app.BuildConfig
 import cn.weiguang.app.AppViewModel
 import cn.weiguang.app.EditorDraft
 import cn.weiguang.app.data.*
@@ -77,6 +80,10 @@ private fun Mark(icon: ImageVector, label: String) {
 @Composable
 fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () -> Unit) {
     val session by model.session.collectAsStateWithLifecycle()
+    val endpoint by model.endpoint.collectAsStateWithLifecycle()
+    val update by model.updater.state.collectAsStateWithLifecycle()
+    LaunchedEffect(endpoint) { model.updater.check(endpoint, manual = false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { model.updater.check(endpoint, manual = false) }
     val observedEvents by model.events.collectAsStateWithLifecycle()
     val observedDecisions by model.decisions.collectAsStateWithLifecycle()
     val events = observedEvents.filter { it.accountKey == session?.accountKey }
@@ -124,6 +131,9 @@ fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () ->
                     if (page.isNotEmpty()) IconButton(onClick = { page = "" }, enabled = !model.busy) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
                     else Icon(Icons.Outlined.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 10.dp))
                     Text("微光", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    if (BuildConfig.ENABLE_SELF_UPDATE) TextButton(onClick = { page = "updates" }) {
+                        Text(if (update.release != null) "发现更新" else "更新")
+                    }
                     SuggestionChip(onClick = { }, label = { Text(if (session?.endpoint == "offline") "离线体验" else "开发内测") })
                     if (session != null && session?.endpoint != "offline") IconButton(onClick = model::sync, enabled = !model.busy) { Icon(Icons.Outlined.Sync, "同步") }
                 }
@@ -139,7 +149,9 @@ fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () ->
         }
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(scrollState).padding(horizontal = 22.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            if (session == null) {
+            if (page == "updates" && BuildConfig.ENABLE_SELF_UPDATE) {
+                UpdateScreen(model, endpoint, onEndpoint = { showEndpoint = true })
+            } else if (session == null) {
                 LoginScreen(model, onEndpoint = { showEndpoint = true })
             } else {
                 if (sharedImage != null) Panel(accent = true) {
@@ -424,7 +436,7 @@ private fun ColumnScope.ProfileScreen(model: AppViewModel, onGroups: () -> Unit)
         Note("本机按账号与服务器分别存储。切换账号后仅展示对应线索；云端处理和组内共享分别确认。")
     }
     OutlinedButton(onClick = { confirmLogout = true }, enabled = !model.busy, modifier = Modifier.fillMaxWidth()) { Icon(Icons.AutoMirrored.Outlined.Logout, null); Spacer(Modifier.width(8.dp)); Text("退出登录") }
-    Note("微光 0.1.0 · 开发内测版")
+    Note("微光 ${BuildConfig.VERSION_NAME} · 开发内测版")
     if (confirmLogout) AlertDialog(onDismissRequest = { confirmLogout = false }, title = { Text("退出当前账号？") }, text = { Text("待上传任务将停止，本机记录按账号保留。重新登录后可以同步。") }, confirmButton = { TextButton(onClick = { confirmLogout = false; model.logout() }) { Text("退出") } }, dismissButton = { TextButton(onClick = { confirmLogout = false }) { Text("取消") } })
 }
 

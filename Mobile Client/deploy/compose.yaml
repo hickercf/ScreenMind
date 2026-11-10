@@ -1,0 +1,53 @@
+name: screenmind
+services:
+  gateway:
+    build:
+      context: ../..
+      dockerfile: Mobile Client/deploy/Dockerfile
+    restart: unless-stopped
+    environment:
+      WEIGUANG_DB: /data/weiguang.sqlite3
+      WEIGUANG_RELEASE_DIR: /releases
+      SCREENMIND_PROVIDER: ${SCREENMIND_PROVIDER:-openai-compatible}
+      SCREENMIND_MODEL_BASE_URL: ${SCREENMIND_MODEL_BASE_URL:?Set model base URL}
+      SCREENMIND_MODEL: ${SCREENMIND_MODEL:-deepseek-flash}
+      SCREENMIND_MODEL_API_KEY: ${SCREENMIND_MODEL_API_KEY:?Set model API key}
+      SCREENMIND_MEMORY_MODE: basic
+      SCREENMIND_MEMORY_EXTRACTOR: raw
+    volumes:
+      - agent_data:/data
+      - ../backend/releases:/releases:ro
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8765/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+  proxy:
+    image: caddy:2
+    restart: unless-stopped
+    environment:
+      SCREENMIND_DOMAIN: ${SCREENMIND_DOMAIN:?Set your domain}
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      gateway:
+        condition: service_healthy
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: '3'
+volumes:
+  agent_data:
+  caddy_data:
+  caddy_config:

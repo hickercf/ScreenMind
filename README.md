@@ -23,6 +23,8 @@ python -m venv .venv
 
 ## 安卓客户端与云端联调
 
+手机 v0.3 增加应用内更新；部署后通过固定 HTTPS 地址连接 Agent、检查版本和下载安装包。参见 [服务器配置与部署](Mobile%20Client/docs/SERVER_DEPLOYMENT.md) 和 [更新发布流程](Mobile%20Client/docs/APP_UPDATES.md)。
+
 [Mobile Client](Mobile%20Client/README.md) 提供原生安卓界面、端侧中文 OCR、账号与测试组、线索同步和云端事项交互。手机通过原有认证网关的 `/v1/agent` 接口使用同一套 Cloud Agent 引擎；每位用户的事项、证据、索引和动作文件分别隔离。
 
 手机联调只需启动一个服务，默认端口为 `8765`：

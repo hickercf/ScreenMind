@@ -468,4 +468,6 @@ def unshare(group_id: str, event_id: str, user=Depends(session_user), conn=Depen
 import sys
 from .agent_bridge import install
 install(app, sys.modules[__name__])
+from .app_updates import router as updates_router
+app.include_router(updates_router)
 

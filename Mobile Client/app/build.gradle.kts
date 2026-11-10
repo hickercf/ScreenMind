@@ -12,13 +12,17 @@ android {
         applicationId = "cn.weiguang.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 2
-        versionName = "0.2.0"
+        versionCode = 3
+        versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "false")
+        buildConfigField("boolean", "ENABLE_SELF_UPDATE", "false")
     }
     buildTypes {
-        debug { buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "true") }
+        debug {
+            buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "true")
+            buildConfigField("boolean", "ENABLE_SELF_UPDATE", "true")
+        }
         release {
             isMinifyEnabled = true
             isShrinkResources = true
@@ -30,6 +34,7 @@ android {
             matchingFallbacks += "release"
             ndk { abiFilters += (project.findProperty("targetAbi") as String? ?: "arm64-v8a") }
             buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "true")
+            buildConfigField("boolean", "ENABLE_SELF_UPDATE", "true")
         }
     }
     compileOptions {

@@ -26,6 +26,7 @@ import java.util.UUID
 data class EditorDraft(val text: String = "", val source: String = "manual", val type: String = "note", val id: String? = null, val upload: Boolean = false, val occurredAt: String? = null, val uploaded: Boolean = false, val imageUri: Uri? = null)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
+    val updater = AppUpdater(application, viewModelScope)
     val repository = (application as WeiguangApp).repository
     private val capture = CaptureService(application)
     val session = repository.session
