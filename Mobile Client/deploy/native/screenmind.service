@@ -1,0 +1,28 @@
+[Unit]
+Description=ScreenMind mobile gateway and cloud agent
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=screenmind
+Group=screenmind
+WorkingDirectory=/opt/screenmind/app/Mobile Client
+EnvironmentFile=/etc/screenmind/screenmind.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/opt/screenmind/venv/bin/python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765 --workers 1 --no-proxy-headers
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=45
+UMask=0027
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/screenmind
+MemoryHigh=700M
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target
