@@ -56,16 +56,22 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
         try:
             store = Store(settings.db_path, settings.owner, registry, memory_provider)
             app.state.memory_error = None
-            if settings.memory_mode == "hybrid":
+            if settings.memory_mode in {"hybrid", "structured"}:
                 try:
                     from .retrieval import LanceIndex, HashDemoEmbedding, QwenEmbedding
                     from .simplemem_adapter import RawExtractor, SimpleMemExtractor
                     from .memory_service import MemoryService
-                    encoder = (await asyncio.to_thread(QwenEmbedding, settings.embedding_model_path)
-                               if settings.embedding == "qwen" else HashDemoEmbedding())
-                    index = await asyncio.to_thread(LanceIndex, settings.index_path, encoder.name)
-                    extractor = SimpleMemExtractor(settings) if settings.memory_extractor == "simplemem" else RawExtractor()
-                    store.memory_service = MemoryService(store, encoder, index, extractor)
+                    from .research_memory import StructuredExtractor, IntentPlanner, NoEmbedding, NoVectorIndex
+                    if settings.memory_mode == "structured":
+                        encoder, index = NoEmbedding(), NoVectorIndex()
+                    else:
+                        encoder = (await asyncio.to_thread(QwenEmbedding, settings.embedding_model_path)
+                                   if settings.embedding == "qwen" else HashDemoEmbedding())
+                        index = await asyncio.to_thread(LanceIndex, settings.index_path, encoder.name)
+                    extractor = (StructuredExtractor(settings) if settings.memory_extractor == "structured" else
+                                 SimpleMemExtractor(settings) if settings.memory_extractor == "simplemem" else RawExtractor())
+                    store.memory_service = MemoryService(store, encoder, index, extractor,
+                        planner=IntentPlanner(settings) if settings.memory_planning else None, mode=settings.memory_mode)
                     for work in store.list_works():
                         # Backfill only when no jobs exist; manual rebuild remains explicit.
                         if not store.memory_status(work["id"]):
@@ -85,7 +91,7 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
                 store.close()
             lock.close()
 
-    app = FastAPI(title="ScreenMind Super Agent", version="0.4.0", lifespan=lifespan)
+    app = FastAPI(title="ScreenMind Super Agent", version="0.5.0", lifespan=lifespan)
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
     @app.middleware("http")
@@ -133,8 +139,10 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
         return {"status": "ok" if scheduler and not scheduler.done() and background_ok else "degraded",
                 "provider": settings.provider, "model": settings.model if settings.provider != "mock" else "deterministic-demo",
                 "concurrency": settings.concurrency, "scope": "single-user", "router": "registry-and-work-binding",
-                "memory_mode": "hybrid" if app.state.store.memory_service else "basic",
+                "memory_mode": app.state.store.memory_service.mode if app.state.store.memory_service else "basic",
                 "memory_requested": settings.memory_mode, "memory_error": app.state.memory_error,
+                "memory_planning": bool(app.state.store.memory_service and app.state.store.memory_service.planner),
+                "evidence_review": settings.evidence_review,
                 "action_tools": list(app.state.actions.tools)}
 
     @app.get("/api/contracts")
@@ -142,7 +150,7 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
         return {"version": "cloud-v1", "default_task_protocol": "legacy",
                 "supported_outputs": ["information", "clarification", "state_proposal", "action_proposal"],
                 "external_actions_enabled": True, "action_tools": list(app.state.actions.tools),
-                "memory_mode": "hybrid" if app.state.store.memory_service else "basic",
+                "memory_mode": app.state.store.memory_service.mode if app.state.store.memory_service else "basic",
                 "output_schema": interaction_adapter.json_schema()}
 
     @app.post("/api/works/resolve")
@@ -169,6 +177,24 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
     @app.get("/api/works/{wid}/memory-index")
     async def memory_index(wid: str):
         return {"jobs": app.state.store.memory_status(wid), "enabled": app.state.store.memory_service is not None}
+
+    @app.get('/api/works/{wid}/memories')
+    async def memories(wid: str, limit: int = Query(default=20, ge=1, le=50), after: str = Query(default='', max_length=200)):
+        import json
+        from .memory_service import source_record
+        store = app.state.store
+        store.work(wid)
+        service = store.memory_service
+        if not service:
+            return {'enabled': False, 'entries': [], 'next_cursor': None}
+        rows = store.db.execute('''SELECT e.source_ref,e.payload FROM memory_entries e JOIN memory_jobs j
+            ON e.owner=j.owner AND e.work_id=j.work_id AND e.source_ref=j.source_ref
+            WHERE e.owner=? AND e.work_id=? AND e.source_ref>? AND j.status='done' AND e.generation=j.generation
+            AND e.encoder=? AND e.extractor=? ORDER BY e.source_ref LIMIT ?''',
+            (store.owner, wid, after, service.encoder.name, service.extractor.name, limit+1)).fetchall()
+        entries = [{'source_ref': r['source_ref'], 'memory': json.loads(r['payload']), 'acceptance': 'derived_hint_not_confirmed_state'}
+                   for r in rows[:limit] if source_record(store, wid, r['source_ref'])]
+        return {'enabled': True, 'entries': entries, 'next_cursor': rows[limit-1]['source_ref'] if len(rows)>limit else None}
 
     @app.post("/api/works/{wid}/memory-index/rebuild", status_code=202)
     async def rebuild_index(wid: str):

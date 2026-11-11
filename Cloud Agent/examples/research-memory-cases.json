@@ -1,0 +1,33 @@
+{
+  "dataset_version": "screenmind-synthetic-memory-v1",
+  "synthetic": true,
+  "noise_count": 14,
+  "works": [
+    {
+      "name": "party",
+      "facts": [
+        {"id": "cake", "text": "小林答应负责买蛋糕，其他人不用再买。"},
+        {"id": "venue", "text": "甲场地最多只能坐六人，我们有八人，所以没有采用甲场地。"},
+        {"id": "uncertain", "text": "小林后来表示可能赶不过来，还没有最终决定是否退出。"},
+        {"id": "decline", "text": "小林今天确认不参加聚会，他原来负责的蛋糕还没有交给别人。"}
+      ],
+      "queries": [
+        {"question": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？", "required": ["cake", "decline"]},
+        {"question": "之前为什么排除了甲场地？", "required": ["venue"]}
+      ]
+    },
+    {
+      "name": "schedule",
+      "facts": [
+        {"id": "before", "text": "组会最初安排在周三下午三点，地点是第一会议室。"},
+        {"id": "after", "text": "组会后来改成周四下午三点，地点仍然是第一会议室。"},
+        {"id": "dependency", "text": "答辩前必须提交材料，材料应在十二月十日十七点前交齐。"},
+        {"id": "reason", "text": "第一会议室的投影仪损坏，所以改用第二会议室。"}
+      ],
+      "queries": [
+        {"question": "组会的星期几发生了什么变化？", "required": ["before", "after"]},
+        {"question": "为什么换了开会地点？", "required": ["reason"]}
+      ]
+    }
+  ]
+}

@@ -43,6 +43,8 @@ class Settings:
     owner: str = "local-workspace"
     memory_mode: str = "basic"
     memory_extractor: str = "raw"
+    memory_planning: bool = False
+    evidence_review: bool = False
     embedding: str = "hash-demo"
     embedding_model_path: str = ""
     index_path: Path = field(default_factory=lambda: Path("data/memory-index"))
@@ -52,7 +54,7 @@ class Settings:
     caldav_password: str = field(default="", repr=False)
 
     def __post_init__(self):
-        if self.memory_mode not in {"basic", "hybrid"} or self.memory_extractor not in {"raw", "simplemem"} or self.embedding not in {"hash-demo", "qwen"}:
+        if self.memory_mode not in {"basic", "hybrid", "structured"} or self.memory_extractor not in {"raw", "simplemem", "structured"} or self.embedding not in {"hash-demo", "qwen"}:
             raise ValueError("Invalid memory configuration")
         if self.caldav_url:
             url = urlparse(self.caldav_url)
@@ -64,7 +66,7 @@ class Settings:
             raise ValueError("Invalid concurrency or max_steps")
         if self.task_timeout <= 0 or self.model_timeout <= 0:
             raise ValueError("Timeouts must be positive")
-        if self.provider != "mock" or self.memory_extractor == "simplemem":
+        if self.provider != "mock" or self.memory_extractor in {"simplemem", "structured"} or self.memory_planning or self.evidence_review:
             url = urlparse(self.base_url)
             if not (self.model_key and self.model and url.hostname):
                 raise ValueError("Real mode requires MODEL_BASE_URL, MODEL and MODEL_API_KEY")
@@ -92,6 +94,8 @@ class Settings:
             model_timeout=float(values.get("SCREENMIND_MODEL_TIMEOUT", "40")),
             memory_mode=values.get("SCREENMIND_MEMORY_MODE", "basic"),
             memory_extractor=values.get("SCREENMIND_MEMORY_EXTRACTOR", "raw"),
+            memory_planning=values.get("SCREENMIND_MEMORY_PLANNING", "false").lower() == "true",
+            evidence_review=values.get("SCREENMIND_EVIDENCE_REVIEW", "false").lower() == "true",
             embedding=values.get("SCREENMIND_EMBEDDING", "hash-demo"),
             embedding_model_path=values.get("SCREENMIND_EMBEDDING_MODEL_PATH", ""),
             index_path=Path(values.get("SCREENMIND_INDEX_PATH", "data/memory-index")),

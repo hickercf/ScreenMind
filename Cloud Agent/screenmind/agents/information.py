@@ -10,6 +10,7 @@ class InformationAgent:
     description = "将屏幕原文整理为可修订、有出处的信息卡片"
     keywords = ()
     requires_work = False
+    auxiliary_tools = ('evidence_review',)
     output_tool = "present_card"
     output_schema = Card.model_json_schema()
     system_prompt = """你是信息整理 SubAgent。先调用 read_screens，再调用 present_card。

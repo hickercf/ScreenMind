@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
 
 首页进入“云端事项”，选择已同步线索，再依次处理澄清、确认方案、单独授权动作。当前手机端支持 Information、Party 和 Schedule；日历动作生成可保存的 ICS 文件，文件保存与日历导入分别展示。原有规则演示保留为独立入口。
 
-云端 v0.4 还包含可选 SimpleMem 文本适配、LanceDB 混合检索、Qwen 编码器接口和时间检查辅助 Agent。增强记忆需显式安装及启用，默认仍使用 basic。手机网关不开放共享服务器凭据的 CalDAV 写入。
+云端 v0.5 增加轻量 SQLite 历史检索、结构化记忆/意图规划实验及模型证据审阅辅助 Agent；保留 SimpleMem 作者文本适配、LanceDB 与 Qwen 接口。源码默认 basic，部署配置可选择不加载向量模型的 structured 模式。手机网关不开放共享服务器凭据的 CalDAV 写入。研究范围和实验结果见 [复现记录](Cloud%20Agent/docs/research-reproduction.md)。
 
 - [端云接口、隔离与启动说明](Mobile%20Client/docs/AGENT_INTEGRATION.md)
 - [本轮验证记录](Mobile%20Client/docs/AGENT_TEST_REPORT.md)

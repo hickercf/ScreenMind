@@ -46,7 +46,7 @@ class ScheduleAgent:
     description = "维护明确时间、截止条件、依赖与用户完成反馈；变更需确认"
     keywords = ("schedule", "日程", "答辩", "截止")
     requires_work = True
-    auxiliary_tools = ("time_check",)
+    auxiliary_tools = ("time_check", "evidence_review")
     output_tool = "present_schedule"
     output_schema = ScheduleDraft.model_json_schema()
     system_prompt = """你是日程 SubAgent。read_screens 后通过 present_schedule 提交变化项。

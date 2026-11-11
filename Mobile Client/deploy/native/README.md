@@ -1,6 +1,6 @@
 # Ubuntu 小内存服务器部署
 
-适用于 Ubuntu 24.04 / Python 3.12，以 systemd 管理一个 Uvicorn 进程，复用 Nginx 提供 HTTPS。OCR 在手机端执行，模型调用外部 API；记忆使用 basic 模式，不安装 Qwen、PyTorch 或 LanceDB。
+适用于 Ubuntu 24.04 / Python 3.12，以 systemd 管理一个 Uvicorn 进程，复用 Nginx 提供 HTTPS。OCR 在手机端执行，模型调用外部 API；v0.5 默认使用 structured 记忆模式、raw 提取器和中文词法检索，关闭模型检索规划，不安装 Qwen、PyTorch 或 LanceDB。独立证据审阅 Agent 通过外部模型 API 执行。
 
 2 核 / 2 GB 可作为小规模试用配置，实际容量须测量；它不等同于高并发部署方案。服务设置 700 MB 的 MemoryHigh 和 1 GB 的 MemoryMax，达到上限可能触发回收或重启，应根据真实负载监控调整。每进程最多打开 8 个用户工作区的现有限制仍然存在。
 

@@ -14,6 +14,20 @@ def terms(text):
     return set(tokens)
 
 
+def lexical_scores(documents, query_terms):
+    """BM25-style binary term frequency with length normalization and corpus IDF."""
+    tokens = {ref: terms(text) for ref, text in documents.items()}
+    count = len(tokens)
+    average = sum(map(len, tokens.values())) / max(count, 1) or 1
+    frequencies = {term: sum(term in values for values in tokens.values()) for term in query_terms}
+    scores = {}
+    for ref, values in tokens.items():
+        length_factor = 1 + 1.2 * (.25 + .75 * len(values) / average)
+        scores[ref] = sum(math.log(1 + (count - frequencies[t] + .5) / (frequencies[t] + .5)) * 2.2 / length_factor
+                          for t in values & query_terms)
+    return scores
+
+
 class HashDemoEmbedding:
     """Deterministic lexical vectors for offline engineering tests, NOT semantic Qwen."""
     name = "hash-demo-256"

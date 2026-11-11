@@ -1,0 +1,252 @@
+{
+  "scope": "small_synthetic_retrieval_experiment_not_paper_benchmark",
+  "dataset_sha256": "7e18dd9c847bf469d15d3072f7415feea0c305cf99143f124b2704f5b50eb4dd",
+  "model": "deepseek-flash",
+  "synthetic": true,
+  "history_char_budget": 12000,
+  "semantic_vectors": false,
+  "variants": [
+    {
+      "name": "full_history",
+      "results": [
+        {
+          "work": "party",
+          "question": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 6242,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "party",
+          "question": "之前为什么排除了甲场地？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 6573,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "组会的星期几发生了什么变化？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 6239,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "为什么换了开会地点？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 6570,
+          "query_seconds": 0.0,
+          "planning_error": null
+        }
+      ],
+      "build_usage": {},
+      "query_usage": {
+        "calls": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "missing_usage_calls": 0
+      },
+      "build_seconds": 0,
+      "failed_builds": 0,
+      "source_recall": 1.0,
+      "all_required_rate": 1.0
+    },
+    {
+      "name": "basic",
+      "results": [
+        {
+          "work": "party",
+          "question": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？",
+          "required_sources": 2,
+          "recalled_sources": 0,
+          "all_required_present": false,
+          "history_chars": 3484,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "party",
+          "question": "之前为什么排除了甲场地？",
+          "required_sources": 1,
+          "recalled_sources": 0,
+          "all_required_present": false,
+          "history_chars": 3467,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "组会的星期几发生了什么变化？",
+          "required_sources": 2,
+          "recalled_sources": 0,
+          "all_required_present": false,
+          "history_chars": 3484,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "为什么换了开会地点？",
+          "required_sources": 1,
+          "recalled_sources": 0,
+          "all_required_present": false,
+          "history_chars": 3467,
+          "query_seconds": 0.0,
+          "planning_error": null
+        }
+      ],
+      "build_usage": {},
+      "query_usage": {
+        "calls": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "missing_usage_calls": 0
+      },
+      "build_seconds": 0,
+      "failed_builds": 0,
+      "source_recall": 0.0,
+      "all_required_rate": 0.0
+    },
+    {
+      "name": "raw_lexical",
+      "results": [
+        {
+          "work": "party",
+          "question": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 6418,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "party",
+          "question": "之前为什么排除了甲场地？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 6401,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "组会的星期几发生了什么变化？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 6415,
+          "query_seconds": 0.0,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "为什么换了开会地点？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 6398,
+          "query_seconds": 0.0,
+          "planning_error": null
+        }
+      ],
+      "build_usage": {
+        "calls": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "missing_usage_calls": 0
+      },
+      "query_usage": {
+        "calls": 0,
+        "prompt_tokens": 0,
+        "completion_tokens": 0,
+        "missing_usage_calls": 0
+      },
+      "build_seconds": 0.23,
+      "failed_builds": 0,
+      "source_recall": 1.0,
+      "all_required_rate": 1.0
+    },
+    {
+      "name": "structured_planned",
+      "results": [
+        {
+          "work": "party",
+          "question": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 7338,
+          "query_seconds": 4.19,
+          "planning_error": null
+        },
+        {
+          "work": "party",
+          "question": "之前为什么排除了甲场地？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 6861,
+          "query_seconds": 2.55,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "组会的星期几发生了什么变化？",
+          "required_sources": 2,
+          "recalled_sources": 2,
+          "all_required_present": true,
+          "history_chars": 7335,
+          "query_seconds": 2.55,
+          "planning_error": null
+        },
+        {
+          "work": "schedule",
+          "question": "为什么换了开会地点？",
+          "required_sources": 1,
+          "recalled_sources": 1,
+          "all_required_present": true,
+          "history_chars": 7778,
+          "query_seconds": 1.89,
+          "planning_error": null
+        }
+      ],
+      "build_usage": {
+        "calls": 36,
+        "prompt_tokens": 15115,
+        "completion_tokens": 15105,
+        "missing_usage_calls": 0
+      },
+      "query_usage": {
+        "calls": 4,
+        "prompt_tokens": 1383,
+        "completion_tokens": 1041,
+        "missing_usage_calls": 0
+      },
+      "build_seconds": 142.91,
+      "failed_builds": 0,
+      "source_recall": 1.0,
+      "all_required_rate": 1.0
+    }
+  ],
+  "limitations": [
+    "4 synthetic questions; no held-out human data",
+    "Measures evidence recall, not answer accuracy",
+    "No semantic embeddings; no LoCoMo scores",
+    "Source-window consolidation only; no cross-source semantic synthesis",
+    "Full-history control has a separate 200000-character budget; other variants have 12000",
+    "Latency includes model/network variance; no production capacity claim"
+  ]
+}

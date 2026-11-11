@@ -5,6 +5,7 @@ No upstream code copied. Generated memories are retrieval hints, never formal fa
 """
 import json
 import httpx
+import threading
 
 
 class RawExtractor:
@@ -45,8 +46,14 @@ class JsonLLMClient:
         if not settings.model_key or not settings.base_url or not settings.model:
             raise ValueError("SimpleMem extraction requires explicit model configuration")
         self.settings = settings
+        self._local = threading.local()
+
+    @property
+    def last_usage(self):
+        return getattr(self._local, 'usage', {})
 
     def chat_completion(self, messages, temperature=.1, response_format=None):
+        self._local.usage = {'calls': 1, 'usage_reported': False}
         # Narrow JSON request, finite HTTP timeout, no hidden fallback model or unbounded retry.
         with httpx.Client(timeout=self.settings.model_timeout, follow_redirects=False) as client:
             result = client.post(self.settings.base_url + "/chat/completions",
@@ -55,7 +62,11 @@ class JsonLLMClient:
                       "max_tokens": 4096, "stream": False})
             if result.status_code != 200:
                 raise ValueError("Memory model request failed")
-            choice = result.json()["choices"][0]
+            body = result.json()
+            usage = body.get('usage') or {}
+            self._local.usage = {'calls': 1, 'usage_reported': bool(usage),
+                'prompt_tokens': usage.get('prompt_tokens'), 'completion_tokens': usage.get('completion_tokens')}
+            choice = body["choices"][0]
             if choice.get("finish_reason") == "length":
                 raise ValueError("Memory extraction exceeded its response budget")
             return choice["message"]["content"]

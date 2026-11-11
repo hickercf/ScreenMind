@@ -56,7 +56,7 @@ class PartyAgent:
     description = "维护聚会计划，分析成员退出、预算变化和责任缺口；确认后更新事项记忆"
     keywords = ("party", "聚会", "聚餐", "生日")
     requires_work = True
-    auxiliary_tools = ("time_check",)
+    auxiliary_tools = ("time_check", "evidence_review")
     output_tool = "present_party"
     output_schema = PartyDraft.model_json_schema()
     system_prompt = """你是 PartySubAgent。先 read_screens 获取授权屏幕和当前事项记忆，再 present_party 提交完整候选状态。

@@ -80,6 +80,19 @@ class AgentBridgeTests(unittest.TestCase):
         task, _ = self.start(work, [event])
         return work, event, self.wait(task['id'])
 
+    def test_memory_and_delegation_endpoints_preserve_account_isolation(self):
+        w = self.work()
+        path = f"agent/works/{w['id']}"
+        self.assertEqual(self.req('GET', path+'/memory-index').status_code, 200)
+        self.assertEqual(self.req('GET', path+'/memories').json()['enabled'], False)
+        self.assertEqual(self.req('GET', path+'/memories', user=self.b).status_code, 404)
+        self.assertEqual(self.req('POST', path+'/memory-index/rebuild', {}, user=self.b).status_code, 404)
+        event = self.upload('合成记忆隔离测试')
+        task, _ = self.start(w, [event])
+        self.wait(task['id'])
+        self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations").status_code, 200)
+        self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations", user=self.b).status_code, 404)
+
     def test_async_flow_scope_and_retry_identity(self):
         w = self.work()
         e = self.upload('截图里的材料截止时间：2026年12月10日17:00。')

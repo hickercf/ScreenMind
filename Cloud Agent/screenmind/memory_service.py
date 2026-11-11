@@ -10,6 +10,16 @@ from .retrieval import terms
 from .store import encode, now
 
 
+def observed_call(component, method, *args):
+    """Read thread-local usage on the calling thread, including failed model responses."""
+    result, error = None, None
+    try:
+        result = getattr(component, method)(*args)
+    except Exception as exc:
+        error = exc
+    return result, error, getattr(getattr(component, 'client', None), 'last_usage', {})
+
+
 def enqueue(store, wid, ref):
     store.db.execute("""INSERT OR IGNORE INTO memory_jobs(owner,work_id,source_ref,status,attempts)
         VALUES(?,?,?,'pending',0)""", (store.owner, wid, ref))
@@ -43,8 +53,9 @@ def source_record(store, wid, ref):
 
 
 class MemoryService:
-    def __init__(self, store, encoder, index, extractor):
+    def __init__(self, store, encoder, index, extractor, planner=None, mode="hybrid"):
         self.store, self.encoder, self.index, self.extractor = store, encoder, index, extractor
+        self.planner, self.mode = planner, mode
         self.lock = asyncio.Lock()
 
     async def index_one(self):
@@ -65,7 +76,12 @@ class MemoryService:
                 self.store.db.execute("UPDATE memory_jobs SET status='deleted' WHERE owner=? AND work_id=? AND source_ref=?",
                                       (self.store.owner, wid, ref))
                 return True
-            entry = await asyncio.to_thread(self.extractor.extract, record["text"], record["timestamp"], record["speaker"])
+            entry, extraction_error, usage = await asyncio.to_thread(observed_call, self.extractor, 'extract', record["text"], record["timestamp"], record["speaker"])
+            if usage:
+                self.store.event(None, 'memory.model_usage', {'work_id': wid, 'source_ref': ref,
+                    'succeeded': extraction_error is None, **usage})
+            if extraction_error:
+                raise extraction_error
             vector = (await asyncio.to_thread(self.encoder.encode, [entry["text"]]))[0]
             current = self.store.db.execute("SELECT generation,status FROM memory_jobs WHERE owner=? AND work_id=? AND source_ref=?",
                                             (self.store.owner, wid, ref)).fetchone()
@@ -114,16 +130,35 @@ class MemoryService:
                 AND e.encoder=? AND e.extractor=? ORDER BY j.rowid DESC LIMIT 2000""",
                 (self.store.owner, wid, self.encoder.name, self.extractor.name)).fetchall()
             entries = {r[0]: json.loads(r[1]) for r in rows}
+            plan, planning_error, planning_usage = None, None, {}
+            if self.planner and entries:
+                try:
+                    async with asyncio.timeout(12):
+                        plan, error, planning_usage = await asyncio.to_thread(observed_call, self.planner, 'plan', query)
+                        if error:
+                            raise error
+                except Exception as exc:
+                    planning_error = type(exc).__name__
+                    if isinstance(exc, TimeoutError):
+                        planning_usage = {'calls': 1, 'usage_reported': False}
+            queries = list(dict.fromkeys([query] + (plan['queries'] if plan else [])))
             query_terms = terms(query)
-            lexical = sorted(entries, key=lambda r: len(terms(entries[r]["text"]) & query_terms), reverse=True)
-            lexical = [r for r in lexical if terms(entries[r]["text"]) & query_terms][:12]
-            symbolic = [r for r in entries if any(v and v in query for k in ("keywords", "persons", "entities") for v in entries[r].get(k, []))][:12]
-            degraded = False
+            for text in queries[1:] + (plan['keywords'] + plan['entities'] if plan else []):
+                query_terms.update(terms(text))
+            from .retrieval import lexical_scores
+            lexical_weights = lexical_scores({r: e['text'] for r, e in entries.items()}, query_terms)
+            lexical = sorted((r for r in entries if lexical_weights[r] > 0), key=lambda r: lexical_weights[r], reverse=True)[:12]
+            symbolic_query = ' '.join(queries + (plan['entities'] if plan else []))
+            symbolic = [r for r in entries if any(v and v in symbolic_query for k in ("keywords", "persons", "entities") for v in entries[r].get(k, []))][:12]
+            degraded = planning_error is not None
             try:
-                vector = (await asyncio.to_thread(self.encoder.encode, [query], True))[0]
-                async with self.lock:
-                    semantic = await asyncio.to_thread(self.index.search, self.store.owner, wid, vector, 12)
-                semantic = [r for r in semantic if r in entries]
+                semantic = []
+                if self.mode != 'structured':
+                    vectors = await asyncio.to_thread(self.encoder.encode, queries, True)
+                    for vector in vectors:
+                        async with self.lock:
+                            hits = await asyncio.to_thread(self.index.search, self.store.owner, wid, vector, 12)
+                        semantic.extend(r for r in hits if r in entries and r not in semantic)
             except Exception:
                 semantic, degraded = [], True
             scores = {}
@@ -138,7 +173,7 @@ class MemoryService:
                 record = source_record(self.store, wid, row[0])
                 if record and terms(record["text"]) & query_terms:
                     raw.append((len(terms(record["text"]) & query_terms), row[0]))
-            chosen = [r for _, r in sorted(raw, reverse=True)[:4]] + sorted(scores, key=scores.get, reverse=True)[:8]
+            chosen = [r for _, r in sorted(raw, reverse=True)[:4]] + sorted(scores, key=scores.get, reverse=True)[:plan['top_k'] if plan else 8]
             items = []
             for ref in dict.fromkeys(chosen):
                 record = source_record(self.store, wid, ref)
@@ -164,13 +199,18 @@ class MemoryService:
                 seen.update(refs)
                 history.append(item)
                 size += cost
-            base.update(mode="hybrid-degraded" if degraded else "hybrid", history=history, history_chars_used=size,
+            base.update(mode=self.mode + ('-degraded' if degraded else ''), history=history, history_chars_used=size,
                         retrieval={"encoder": self.encoder.name, "extractor": self.extractor.name,
                                    "indexed_candidates": len(entries), "unindexed_candidates": len(raw),
+                                   "semantic_vectors": self.mode != 'structured',
+                                   "plan": plan, "planning_error": planning_error,
+                                   "planning_usage": planning_usage,
+                                   "selected_source_refs": list(dict.fromkeys(chosen)),
                                    "elapsed_ms": round((time.monotonic()-started)*1000)})
             # No await between validity check and storing the assembled snapshot.
             if self.store.current(task["id"], task["revision"]) and self.store.sources_live(task):
                 self.store.db.execute("UPDATE tasks SET memory_context=? WHERE id=?", (encode(base), task["id"]))
+                self.store.event(task['id'], 'memory.retrieved', base['retrieval'])
                 task = {**task, "memory_context": base}
         except Exception as exc:
             self.store.event(task["id"], "memory.fallback", {"revision": task["revision"], "reason": type(exc).__name__})

@@ -1,6 +1,8 @@
-# ScreenMind Super Agent · 云端框架 v0.4
+# ScreenMind Super Agent · 云端框架 v0.5
 
 结构化 OCR → Router → 可注册 SubAgent → 交互卡片 → 用户确认 → 独立事项记忆。首个业务能力是 Party 聚会协调，原有信息整理能力继续可用。
+
+v0.5 新增无需向量依赖的 SQLite 历史检索、SimpleMem 思路的结构化抽取与检索规划实验模式、只读模型证据审阅 Agent，以及手机网关的记忆/委派查询接口。复现范围、实验结果和上线选择见 [记忆与 SuperAgent 研究适配](docs/research-reproduction.md)。不是 SimpleMem 全文指标复现，也未部署 DeepSeek Harness 原型。
 
 v0.4 在基础 MemoryProvider、事项关联与 cloud-v1 上新增：SimpleMem 文本抽取适配、LanceDB 混合检索、可选本地 Qwen 编码器、Schedule、单层时间检查委派、授权日历导出及可配置 CalDAV 执行器。安装配置、接口与实际验证范围见 [本轮实现说明](docs/phase-two.md)。基础记忆仍是默认配置；增强记忆显式开启。
 

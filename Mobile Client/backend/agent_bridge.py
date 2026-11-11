@@ -15,7 +15,7 @@ import sqlite3
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, Query
 from pydantic import Field
 from screenmind.api import create_app
 from screenmind.config import Settings
@@ -206,6 +206,20 @@ def install(app, main):
     async def work(wid: Identifier, request: Request, user=Depends(authenticated_user)):
         return await forward(request, user, 'GET', 'works/' + wid)
 
+    @router.get('/works/{wid}/memory-index')
+    async def memory_status(wid: Identifier, request: Request, user=Depends(authenticated_user)):
+        return await forward(request, user, 'GET', f'works/{wid}/memory-index')
+
+    @router.post('/works/{wid}/memory-index/rebuild', status_code=202)
+    async def rebuild_memory(wid: Identifier, request: Request, user=Depends(authenticated_user)):
+        return await forward(request, user, 'POST', f'works/{wid}/memory-index/rebuild', {})
+
+    @router.get('/works/{wid}/memories')
+    async def memories(wid: Identifier, request: Request, limit: int = Query(default=20, ge=1, le=50),
+                       after: str = Query(default='', max_length=200), user=Depends(authenticated_user)):
+        from urllib.parse import urlencode
+        return await forward(request, user, 'GET', f'works/{wid}/memories?' + urlencode({'limit': limit, 'after': after}))
+
     @router.post('/tasks', status_code=202)
     async def task(body: TaskRequest, request: Request, user=Depends(authenticated_user)):
         hub = request.app.state.agent_hub
@@ -222,6 +236,10 @@ def install(app, main):
     @router.get('/tasks/{tid}')
     async def get_task(tid: Identifier, request: Request, user=Depends(authenticated_user)):
         return await forward(request, user, 'GET', 'tasks/' + tid)
+
+    @router.get('/tasks/{tid}/delegations')
+    async def delegations(tid: Identifier, request: Request, user=Depends(authenticated_user)):
+        return await forward(request, user, 'GET', f'tasks/{tid}/delegations')
 
     @router.post('/tasks/{tid}/responses', status_code=202)
     async def respond(tid: Identifier, body: InteractionResponse, request: Request, user=Depends(authenticated_user)):
