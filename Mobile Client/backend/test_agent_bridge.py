@@ -93,6 +93,56 @@ class AgentBridgeTests(unittest.TestCase):
         self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations").status_code, 200)
         self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations", user=self.b).status_code, 404)
 
+    def structured_event(self):
+        text = '周五在A302讨论，记得带电脑'
+        screen = {'event_id': 'evt-capture', 'session_id': 'sess-capture', 'app_package': 'com.tencent.mm',
+            'app_name': '微信', 'page_title': '项目组', 'captured_at': '2026-11-13T12:00:00+08:00',
+            'blocks': [{'id': 'bubble-1', 'kind': 'chat', 'speaker': '小林', 'text': text,
+                        'message_at': '2026-11-13T11:58:00+08:00', 'bbox': [10, 20, 800, 70]}]}
+        return {'event_id': str(uuid4()), 'revision': 1, 'event_type': 'message', 'source_kind': 'screenshot_ocr',
+                'captured_at': screen['captured_at'], 'payload': {'text': text, 'screen': screen}}
+
+    def test_structured_capture_preserves_messages_confirmation_and_isolation(self):
+        event = self.structured_event()
+        self.assertEqual(self.req('POST', 'events', event).status_code, 200)
+        self.assertEqual(self.req('POST', 'events', event).status_code, 200)
+        work = self.work()
+        task, request = self.start(work, [event])
+        self.assertEqual(self.req('POST', 'agent/tasks', request).json()['task']['id'], task['id'])
+        settled = self.wait(task['id'])
+        screen = settled['memory_context']['screens'][0]
+        self.assertEqual(screen['app_package'], 'com.tencent.mm')
+        self.assertEqual(screen['page_title'], '项目组')
+        self.assertEqual(screen['blocks'][0]['speaker'], '小林')
+        self.assertEqual(screen['blocks'][0]['bbox'], [10,20,800,70])
+        self.assertIn('11:58:00', screen['blocks'][0]['message_at'])
+        self.assertEqual(self.req('GET', 'agent/works/'+work['id']).json()['work']['memory_version'], 0)
+        self.assertEqual(self.req('POST', 'agent/tasks', request, user=self.b).status_code, 404)
+        output = settled['interaction']
+        response = self.response(settled, 'accept_state', proposal_id=output['proposal_id'])
+        self.assertEqual(self.req('POST', f"agent/tasks/{task['id']}/responses", response).status_code, 202)
+        self.assertEqual(self.req('GET', 'agent/works/'+work['id']).json()['work']['memory_version'], 1)
+
+    def test_structured_capture_rejects_drift_invalid_coordinates_and_fake_owner(self):
+        for mutate in (
+            lambda e: e['payload'].update(text='另一个版本的文字'),
+            lambda e: e['payload']['screen']['blocks'][0].update(bbox=[0,0,1001,1]),
+            lambda e: e['payload']['screen'].update(owner='another-user'),
+            lambda e: e.update(source_kind='manual'),
+            lambda e: e.update(captured_at='2026-11-12T12:00:00+08:00'),
+        ):
+            event = self.structured_event(); mutate(event)
+            self.assertEqual(self.req('POST', 'events', event).status_code, 422)
+
+    def test_structured_capture_retains_user_occurrence_time_without_replacing_message_time(self):
+        event = self.structured_event()
+        event['occurred_at'] = '2026-12-10T18:00:00+08:00'
+        self.assertEqual(self.req('POST', 'events', event).status_code, 200)
+        task,_ = self.start(self.work(),[event])
+        blocks = self.wait(task['id'])['memory_context']['screens'][0]['blocks']
+        self.assertIn('11:58:00', blocks[0]['message_at'])
+        self.assertTrue(any('2026-12-10T18:00:00+08:00' in b['text'] and '不是消息发送时间' in b['text'] for b in blocks))
+
     def test_async_flow_scope_and_retry_identity(self):
         w = self.work()
         e = self.upload('截图里的材料截止时间：2026年12月10日17:00。')

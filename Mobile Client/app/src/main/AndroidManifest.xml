@@ -30,5 +30,11 @@
                 <data android:mimeType="image/*" />
             </intent-filter>
         </activity>
+        <service android:name=".capture.ChatCaptureService" android:exported="false"
+            android:enabled="@bool/chat_capture_supported"
+            android:label="微光聊天记录" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
+            <meta-data android:name="android.accessibilityservice" android:resource="@xml/chat_accessibility_service" />
+        </service>
     </application>
 </manifest>

@@ -40,6 +40,7 @@ object ScreenPipeline {
      *
      * @param appPackage 自动截图时来自 AccessibilityEvent，手动选图时传 "unknown"
      */
+    @Synchronized
     fun process(
         context: Context,
         bitmap: Bitmap,

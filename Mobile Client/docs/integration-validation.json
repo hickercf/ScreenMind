@@ -1,0 +1,70 @@
+{
+  "date": "2026-11-13",
+  "synthetic": true,
+  "app_version": "0.4.0",
+  "gateway_tests": 30,
+  "android_unit_tests": 21,
+  "legacy_device_tests": 6,
+  "integrated_device": {
+    "synthetic": true,
+    "serial": "emulator-5560",
+    "provider": "mock",
+    "passed": true,
+    "stages": [
+      "actual_adb_forward_removed",
+      "actual_adb_forward_restored",
+      "state_version_1_confirmed_in_ui"
+    ],
+    "seconds": 19.2,
+    "screenshots": [
+      {
+        "name": "integrated-confirmed.png",
+        "sha256": "a18bcddf11f9aaae72772312396a6c3006d6bc402021704478152028c328f277"
+      },
+      {
+        "name": "integrated-input.png",
+        "sha256": "5d0dd8bd467c5d67e99a998a222e9c26970a73cd10791384eb8ce259fdb15e86"
+      }
+    ]
+  },
+  "public_real_model": {
+    "synthetic": true,
+    "passed": true,
+    "base_url": "https://agent.qwertyuiopasdf.asia",
+    "source": "actual_emulator_ppocr_result",
+    "health": {
+      "status": "ok",
+      "provider": "openai-compatible",
+      "model": "deepseek-flash",
+      "concurrency": 1,
+      "scope": "single-user",
+      "router": "registry-and-work-binding",
+      "memory_mode": "structured",
+      "memory_requested": "structured",
+      "memory_error": null,
+      "memory_planning": false,
+      "evidence_review": true,
+      "action_tools": [
+        "calendar.export"
+      ]
+    },
+    "task_status": "waiting_input",
+    "seconds": 8.42,
+    "structured_messages_preserved": 2,
+    "state_version": 1,
+    "relogin_persistence": true
+  },
+  "initial_public_attempt_http": 429,
+  "update_publication": {
+    "older_client_http": 200,
+    "current_client_http": 204,
+    "version_name": "0.4.0",
+    "apk_range_http": 206,
+    "content_range": "bytes 0-1023/181276384",
+    "size_bytes": 181276384,
+    "sha256": "8967438a047efc3e27940467e282d4940bd2d0a01a1e9eccbd2f00f795bfd131",
+    "health": 200,
+    "download_page": 200
+  },
+  "publication_date": "2026-11-14"
+}

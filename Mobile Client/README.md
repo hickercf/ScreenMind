@@ -1,12 +1,18 @@
 # 微光 · Android 端侧信息助手
 
+## v0.4 三部分集成
+
+已将相邻 `ChronoCapsule/core` 接入本 APP：PP-OCRv6 tiny → 消息结构化 → 统一账号与线索队列 → Cloud Agent。导入聊天截图可保留发言人、消息时间、来源与坐标；普通文字纠错仍可使用。Android11+可在云端事项中明确授权自动记录，再开启系统聊天采集权限。
+
+上传与任务创建均持久化，网络或临时服务故障后继续使用原请求补传，不因上一任务运行而跳过材料。Room v3 提供旧库迁移。需要完整检出 `ChronoCapsule`、`Cloud Agent` 和本目录；先升级网关再发布 APP。详见 [集成协议](docs/THREE_PART_INTEGRATION.md) 与 [本轮验收](docs/THREE_PART_TEST_REPORT.md)。
+
 首发平台为 Android 10 及以上，使用 Kotlin、Jetpack Compose、Room 和内置中文 OCR。手机端可以离线运行，测试账号和组管理由随工程提供的联调后端实现。
 
 ## v0.3 云端连接与应用更新
 
 内测版新增启动/前台版本检查、更新页面、下载进度、安装包与签名校验、系统安装确认。云端提供版本接口与首次下载页，支持同服务器或 HTTPS 对象存储分发。服务器部署模板在 `deploy/`，推荐先用 4 核 / 8 GB / 80 GB SSD，无需 GPU；这是待压测的起步配置。
 
-详见 [服务器部署与手机连接](docs/SERVER_DEPLOYMENT.md)、[APP 更新发布流程](docs/APP_UPDATES.md) 与 [更新验证记录](docs/UPDATE_TEST_REPORT.md)。需要首次安装带更新入口的新版，后续才可在 APP 内获取更新；目前尚未部署到真实公网服务器。
+详见 [服务器部署与手机连接](docs/SERVER_DEPLOYMENT.md)、[APP 更新发布流程](docs/APP_UPDATES.md) 与 [更新验证记录](docs/UPDATE_TEST_REPORT.md)。需要首次安装带更新入口的新版，后续才可在 APP 内获取更新。当前公网网关已升级，debug内测渠道已发布0.4.0；手机系统覆盖升级仍需真机验收。
 
 ## v0.2 云端事项
 

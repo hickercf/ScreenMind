@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.work.*
 import cn.weiguang.app.WeiguangApp
+import com.chronocapsule.contract.ScreenContract
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -84,6 +85,7 @@ class Repository(private val context: Context, val database: AppDatabase) {
         catch (_: ApiFailure) { /* A rejected/expired session is removed locally. */ }
         finally {
             WorkManager.getInstance(context).cancelUniqueWork("sync:${current.accountKey}")
+            settings.edit { it.remove(stringPreferencesKey("capture:${current.accountKey}")) }
             sessions.clear()
             sessionState.value = null
         }
@@ -107,6 +109,41 @@ class Repository(private val context: Context, val database: AppDatabase) {
         database.events().save(event)
         if (shouldUpload) scheduleSync(current.accountKey)
         event
+    }
+
+    /** Durable evidence + stable task request are saved together before any network call. */
+    suspend fun saveCapture(payload: ScreenContract.Payload, expectedAccount: String, workId: String? = null,
+                            upload: Boolean = false, requireTarget: Boolean = false, occurredAt: String? = null): LocalEvent = mutex.withLock {
+        val current = requireNotNull(session.value) { "请先登录" }
+        check(current.accountKey == expectedAccount) { "账号已变化，请重新采集" }
+        if (requireTarget) check(captureTarget(expectedAccount) == workId) { "自动记录授权已关闭或事项已变化" }
+        check(payload.validate().isEmpty() && payload.blocks.isNotEmpty()) { "识别结果不符合输入要求" }
+        val send = upload && current.endpoint != "offline"
+        val event = LocalEvent(accountKey = current.accountKey, sourceKind = "screenshot_ocr", eventType = "message",
+            text = payload.blocks.joinToString("\n") { it.text }, capturedAt = payload.capturedAt, occurredAt = occurredAt,
+            screenJson = payload.toJson().toString(), consentToUpload = send, syncState = if (send) "pending" else "local",
+            agentWorkId = workId, agentRequestId = if (workId != null) UUID.randomUUID().toString() else null)
+        database.events().save(event)
+        if (send) scheduleSync(current.accountKey)
+        event
+    }
+
+    suspend fun setCaptureTarget(workId: String?, enabled: Boolean) = mutex.withLock {
+        val current = requireNotNull(session.value)
+        check(current.endpoint != "offline") { "请先登录云端账号" }
+        if (enabled) {
+            check(workId != null) { "请先选择事项" }
+            authenticated("/v1/agent/works/$workId")
+        }
+        settings.edit {
+            val key = stringPreferencesKey("capture:${current.accountKey}")
+            if (enabled && workId != null) it[key] = workId else it.remove(key)
+        }
+    }
+
+    suspend fun captureTarget(account: String): String? {
+        if (session.value?.accountKey != account || session.value?.endpoint == "offline") return null
+        return settings.data.first()[stringPreferencesKey("capture:$account")]
     }
 
     fun scheduleSync(accountKey: String) {
@@ -133,6 +170,22 @@ class Repository(private val context: Context, val database: AppDatabase) {
                 val status = if (error is ApiFailure && error.status in listOf(409, 422)) "conflict" else "failed"
                 database.events().mark(current.accountKey, event.eventId, event.revision, status, event.serverRevision)
                 throw error
+            }
+        }
+        // Every accepted capture has its own request; never drop a screen while another task runs.
+        for (event in database.events().all(current.accountKey).filter {
+            !it.deleted && it.syncState == "synced" && it.agentWorkId != null && it.agentTaskId == null && it.agentError == null
+        }) {
+            val body = JSONObject().put("request_id", requireNotNull(event.agentRequestId))
+                .put("work_id", event.agentWorkId).put("instruction", "请根据新增聊天材料整理或更新当前事项，缺少信息先澄清，只生成候选等待用户确认。")
+                .put("events", JSONArray().put(JSONObject().put("event_id", event.eventId).put("revision", event.revision)))
+            try {
+                val result = authenticated("/v1/agent/tasks", "POST", body)
+                database.events().save(event.copy(agentTaskId = result.getJSONObject("task").getString("id")))
+            } catch (error: ApiFailure) {
+                if (error.status in listOf(400, 403, 404, 409, 422)) {
+                    database.events().save(event.copy(agentError = error.message))
+                } else throw error // transient errors keep the same durable request for WorkManager retry
             }
         }
     }
@@ -170,7 +223,9 @@ class Repository(private val context: Context, val database: AppDatabase) {
             val id = item.getString("event_id")
             val local = database.events().get(current.accountKey, id)
             if (local?.syncState in listOf("pending", "failed") || local?.deleted == true) continue
-            database.events().save(LocalEvent(current.accountKey, id, item.getInt("revision"), item.getString("event_type"), item.getString("source_kind"), item.getJSONObject("payload").getString("text"), item.getString("captured_at"), if (item.isNull("occurred_at")) null else item.getString("occurred_at"), item.getString("timezone"), "synced", true, false, item.getInt("revision")))
+            database.events().save(LocalEvent(current.accountKey, id, item.getInt("revision"), item.getString("event_type"), item.getString("source_kind"), item.getJSONObject("payload").getString("text"), item.getString("captured_at"), if (item.isNull("occurred_at")) null else item.getString("occurred_at"), item.getString("timezone"), "synced", true, false, item.getInt("revision"),
+                screenJson = item.getJSONObject("payload").optJSONObject("screen")?.toString(),
+                agentWorkId = local?.agentWorkId, agentRequestId = local?.agentRequestId, agentTaskId = local?.agentTaskId, agentError = local?.agentError))
         }
         val remote = authenticated("/v1/decisions").itemObjects()
         database.decisions().clear(current.accountKey)

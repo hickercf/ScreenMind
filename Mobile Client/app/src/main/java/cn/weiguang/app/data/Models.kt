@@ -23,14 +23,21 @@ data class LocalEvent(
     val syncState: String = "local",
     val consentToUpload: Boolean = false,
     val deleted: Boolean = false,
-    val serverRevision: Int = 0
+    val serverRevision: Int = 0,
+    val screenJson: String? = null,
+    val agentWorkId: String? = null,
+    val agentRequestId: String? = null,
+    val agentTaskId: String? = null,
+    val agentError: String? = null
 ) {
     fun toPayload(): JSONObject = JSONObject()
         .put("schema_version", 1).put("event_id", eventId).put("revision", revision)
         .put("event_type", eventType).put("source_kind", sourceKind)
         .put("captured_at", capturedAt).put("occurred_at", occurredAt ?: JSONObject.NULL)
         .put("timezone", timezone).put("review_status", "confirmed")
-        .put("payload", JSONObject().put("text", text))
+        .put("payload", JSONObject().put("text", text).apply {
+            screenJson?.let { put("screen", JSONObject(it)) }
+        })
 }
 
 @Entity(tableName = "decisions", primaryKeys = ["accountKey", "decisionId"])
@@ -87,7 +94,15 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
     }
 }
 
-@Database(entities = [LocalEvent::class, LocalDecision::class, AgentCommand::class], version = 2, exportSchema = false)
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        for (column in listOf("screenJson", "agentWorkId", "agentRequestId", "agentTaskId", "agentError")) {
+            db.execSQL("ALTER TABLE events ADD COLUMN $column TEXT")
+        }
+    }
+}
+
+@Database(entities = [LocalEvent::class, LocalDecision::class, AgentCommand::class], version = 3, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun events(): EventDao
     abstract fun decisions(): DecisionDao

@@ -2,6 +2,12 @@
 
 端侧 OCR → 结构化信息过滤 → 云端 SuperAgent → 移动端交互体验。
 
+## 三部分统一接入 · 手机 v0.4
+
+`ChronoCapsule/core` 提供共享 PP-OCRv6 tiny、消息结构化与去重；`Mobile Client` 负责统一账号、上传授权、持久化队列和事项交互；`Cloud Agent` 复用通用执行与记忆。请完整检出三个目录后构建手机端。接口和模拟器测试见 [三部分集成说明](Mobile%20Client/docs/THREE_PART_INTEGRATION.md)。
+
+结构化材料通过带登录的 `/v1/events` 上传，再通过 `/v1/agent/tasks` 进入明确选择的事项，使用 cloud-v1 确认流程。ChronoCapsule 独立调试 APP 的 `/api/*` 地址不作为公网手机入口。服务端须先升级支持 `payload.screen`，再安装手机 v0.4。
+
 ## 云端 Agent
 
 云端实现位于 [Cloud Agent](Cloud%20Agent/README.md)，包含服务代码、可注册 SubAgent、事项状态与记忆、调试界面、接口文档和测试。

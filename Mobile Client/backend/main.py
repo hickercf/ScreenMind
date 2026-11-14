@@ -17,7 +17,8 @@ from uuid import UUID, uuid4
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from screenmind.models import ScreenInput
 
 PASSWORDS = PasswordHasher()
 DUMMY_HASH = PASSWORDS.hash(secrets.token_urlsafe(32))
@@ -158,7 +159,8 @@ class InviteInput(StrictModel):
 
 
 class Payload(StrictModel):
-    text: str = Field(min_length=1, max_length=10000)
+    text: str = Field(min_length=1, max_length=25000)
+    screen: ScreenInput | None = None
 
     @field_validator('text')
     @classmethod
@@ -179,6 +181,20 @@ class ContextEvent(StrictModel):
     timezone: str = Field(default='Asia/Shanghai', max_length=80)
     review_status: Literal['confirmed'] = 'confirmed'
     payload: Payload
+
+    @model_validator(mode='after')
+    def structured_capture(self):
+        if self.payload.screen is None and len(self.payload.text) > 10000:
+            raise ValueError('普通线索最多10000字符')
+        if self.payload.screen is not None:
+            screen = self.payload.screen
+            if self.source_kind != 'screenshot_ocr':
+                raise ValueError('结构化屏幕只允许截图来源')
+            if self.payload.text != '\n'.join(b.text for b in screen.blocks):
+                raise ValueError('核对文字与结构化消息不一致，请重新确认')
+            if self.captured_at != screen.captured_at:
+                raise ValueError('采集时间与结构化屏幕不一致')
+        return self
 
     @field_validator('captured_at', 'occurred_at')
     @classmethod
@@ -343,7 +359,7 @@ def remove_member(group_id: str, member_id: str, user=Depends(session_user), con
 @app.post('/v1/events')
 async def upsert_event(data: ContextEvent, request: Request, user=Depends(short_session_user)):
     event_id = str(data.event_id)
-    body = data.model_dump_json()
+    body = data.model_dump_json(exclude={'payload': {'screen'}} if data.payload.screen is None else None)
     hub = request.app.state.agent_hub
     async with hub.lock(user['id']):
         with closing(hub.connect()) as conn, conn:

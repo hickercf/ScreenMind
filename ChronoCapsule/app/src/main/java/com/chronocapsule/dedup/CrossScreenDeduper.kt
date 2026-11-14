@@ -188,7 +188,7 @@ object CrossScreenDeduper {
     // ---------- 内部 ----------
 
     private fun fingerprint(block: ScreenContract.Block): String =
-        normalize(block.speaker ?: "") + '\u0001' + normalize(block.text)
+        normalize(block.speaker ?: "") + '\u0001' + normalize(block.text) + '\u0001' + (block.messageAt ?: "")
 
     /** 去掉所有空白并转小写；只用于比较，不回写契约 */
     private fun normalize(s: String): String =

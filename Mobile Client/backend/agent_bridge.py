@@ -141,16 +141,27 @@ class AgentHub:
             if row:
                 screens.append(row[0])
                 continue
-            text = event['payload']['text']
-            blocks = [{'id': f'text_{i//4000}', 'kind': 'paragraph', 'text': text[i:i+4000]} for i in range(0, len(text), 4000)]
-            # occurred_at means event occurrence, NEVER message publication time.
-            blocks.append({'id': 'metadata', 'kind': 'key_value', 'text':
-                f"用户确认的来源渠道：{event['source_kind']}；语义类型：{event['event_type']}；时区：{event['timezone']}；"
-                f"事项发生时间：{event.get('occurred_at') or '未知'}。此时间不是消息发送时间，采集时间也不是消息发送时间。"})
-            source = (await self.call(uid, 'POST', 'screens', {
-                'event_id': f"mobile:{data.work_id}:{event['event_id']}:{event['revision']}",
-                'session_id': data.work_id, 'app_package': 'cn.weiguang.app', 'app_name': '微光 · 用户确认线索',
-                'page_title': event['event_type'], 'captured_at': event['captured_at'], 'blocks': blocks})).json()['screen']
+            screen = event['payload'].get('screen')
+            if screen is not None and event.get('occurred_at'):
+                metadata = '用户核对的事项发生时间：' + event['occurred_at'] + '；时区：' + event['timezone'] + '。这不是消息发送时间。'
+                blocks = list(screen['blocks'])
+                if len(blocks) >= 60 or sum(len(b['text']) for b in blocks)+len(metadata) > 24000:
+                    raise HTTPException(422, '消息已达输入上限，请把确定时间作为独立线索补充')
+                key = 'capture_event_time'
+                while key in {b['id'] for b in blocks}: key += '_'
+                screen = {**screen, 'blocks': blocks + [{'id': key, 'kind': 'key_value', 'text': metadata}]}
+            if screen is None:
+                text = event['payload']['text']
+                blocks = [{'id': f'text_{i//4000}', 'kind': 'paragraph', 'text': text[i:i+4000]} for i in range(0, len(text), 4000)]
+                # occurred_at means event occurrence, NEVER message publication time.
+                blocks.append({'id': 'metadata', 'kind': 'key_value', 'text':
+                    f"用户确认的来源渠道：{event['source_kind']}；语义类型：{event['event_type']}；时区：{event['timezone']}；"
+                    f"事项发生时间：{event.get('occurred_at') or '未知'}。此时间不是消息发送时间，采集时间也不是消息发送时间。"})
+                screen = {'session_id': data.work_id, 'app_package': 'cn.weiguang.app', 'app_name': '微光 · 用户确认线索',
+                    'page_title': event['event_type'], 'captured_at': event['captured_at'], 'blocks': blocks}
+            # The authenticated owner/work boundary is decided here, never by the capture client.
+            source = (await self.call(uid, 'POST', 'screens', {**screen,
+                'event_id': f"mobile:{data.work_id}:{event['event_id']}:{event['revision']}"})).json()['screen']
             store.db.execute('INSERT INTO mobile_evidence VALUES(?,?,?,?)',
                 (event['event_id'], event['revision'], data.work_id, source['id']))
             screens.append(source['id'])

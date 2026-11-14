@@ -12,8 +12,8 @@ android {
         applicationId = "cn.weiguang.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "false")
         buildConfigField("boolean", "ENABLE_SELF_UPDATE", "false")
@@ -47,6 +47,7 @@ android {
 }
 
 dependencies {
+    implementation(project(":chronocore"))
     val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
     implementation(composeBom)
     implementation("androidx.core:core-ktx:1.15.0")

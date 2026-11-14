@@ -6,7 +6,7 @@ v0.5 新增无需向量依赖的 SQLite 历史检索、SimpleMem 思路的结构
 
 v0.4 在基础 MemoryProvider、事项关联与 cloud-v1 上新增：SimpleMem 文本抽取适配、LanceDB 混合检索、可选本地 Qwen 编码器、Schedule、单层时间检查委派、授权日历导出及可配置 CalDAV 执行器。安装配置、接口与实际验证范围见 [本轮实现说明](docs/phase-two.md)。基础记忆仍是默认配置；增强记忆显式开启。
 
-Android v0.2 通过手机认证网关接入本引擎，详见 [端云联调说明](../Mobile%20Client/docs/AGENT_INTEGRATION.md)。手机联调使用网关启动脚本即可，无需另起本目录服务。独立网页工作台仍用于调试单个工作区。
+Android v0.4 通过手机认证网关接入本引擎，并复用 ChronoCapsule 的结构化屏幕；详见 [三部分集成说明](../Mobile%20Client/docs/THREE_PART_INTEGRATION.md)。手机联调使用网关启动脚本即可，无需另起本目录服务。独立网页工作台仍用于调试单个工作区。
 
 本项目借鉴 DeepSeek Super-agent 的事件、任务、Worker 隔离与状态持久化设计，独立实现移动端所需的精简服务。没有复制或部署 DeepSeek Harness 原型。默认使用模拟模型，**模拟输出只证明框架流程，不代表 AI 理解能力**。
 
@@ -64,9 +64,9 @@ python -m uvicorn screenmind.api:create_app --factory --host 127.0.0.1 --port 87
 | 可观测性 | 真实状态、工具名、工具校验失败和耗时；不保存或展示模型内部推理 |
 | 界面 | 桌面/手机宽度的网页调试台；1.2 秒轮询，后端另提供 SSE |
 
-**尚未实现**：语义 Router、自动主题关联、跨事项长期语义检索、自主多 Agent 团队、MCP、主动任务、Android 原生客户端、多用户登录、智能 Watchdog。辅助委派目前只有确定性时间检查；日历动作目前是创建或导出，不包括修改、删除和双向同步。
+**尚未实现**：语义 Router、自动主题关联、跨事项长期语义检索、自主多 Agent 团队、MCP、主动任务、智能 Watchdog。辅助委派包含时间检查和受控模型证据审阅；日历动作目前是创建或导出，不包括修改、删除和双向同步。
 
-当前不是部署到公共网络的多租户服务。一个部署仅对应一个工作区，API Key 代表该工作区。内部查询包含 owner 边界，但不提供多用户账号体系。
+本目录独立工作台对应一个工作区，API Key 代表该工作区。正式手机入口由 Mobile Client/backend 提供账号认证与每用户隔离工作区，不将服务端工作区 Key 发给手机。
 
 ## 接入真实模型
 

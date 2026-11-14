@@ -1,0 +1,3029 @@
+{
+  "dataset_sha256": "be880194f9ae913841f2e0cdcb6aa8f87bbc4f864619fbbffd2663bc74b2f07d",
+  "documents": 83,
+  "answerable_queries": 32,
+  "unanswerable_diagnostics": 4,
+  "synthetic": true,
+  "hardware": {
+    "Name": "Intel(R) Core(TM) Ultra 5 125H",
+    "NumberOfCores": 14,
+    "NumberOfLogicalProcessors": 18
+  },
+  "model": {
+    "model": "Qwen/Qwen3-Embedding-0.6B",
+    "revision": "97b0c614be4d77ee51c0cef4e5f07c00f9eb65b3",
+    "sha256": "0437e45c94563b09e13cb7a64478fc406947a93cb34a7e05870fc8dcd48e23fd",
+    "bytes": 1191586416,
+    "download_seconds": 459.41,
+    "origin": "huggingface.co/Qwen"
+  },
+  "dtype": "torch.float32",
+  "threads": 4,
+  "rounds": 3,
+  "packages": {
+    "torch": "2.15.0",
+    "transformers": "4.57.1",
+    "sentence-transformers": "5.1.1",
+    "numpy": "2.2.6"
+  },
+  "variants": {
+    "lexical": {
+      "metrics": {
+        "questions": 32,
+        "recall@1": 0.6285714285714286,
+        "all_evidence@1": 0.6875,
+        "all_evidence_count@1": 22,
+        "recall@3": 0.7714285714285715,
+        "all_evidence@3": 0.8125,
+        "all_evidence_count@3": 26,
+        "recall@5": 0.9142857142857143,
+        "all_evidence@5": 0.9375,
+        "all_evidence_count@5": 30,
+        "recall@8": 0.9428571428571428,
+        "all_evidence@8": 0.9375,
+        "all_evidence_count@8": 30,
+        "mrr": 0.7807291666666667
+      },
+      "latency": {
+        "n": 108,
+        "median_ms": 0.31900001340545714,
+        "p95_ms": 0.742000003810972,
+        "mean_ms": 0.3652092569542152
+      },
+      "memory": {
+        "sample_interval_ms": 50,
+        "samples": 2,
+        "peak_rss_bytes": 31973376,
+        "peak_private_bytes": 17526784,
+        "min_system_available_bytes": 3047485440
+      }
+    },
+    "qwen": {
+      "metrics": {
+        "questions": 32,
+        "recall@1": 0.8571428571428571,
+        "all_evidence@1": 0.84375,
+        "all_evidence_count@1": 27,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 32,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 32,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 32,
+        "mrr": 0.96875
+      },
+      "latency": {
+        "n": 108,
+        "median_ms": 198.63265001913533,
+        "p95_ms": 353.8577000144869,
+        "mean_ms": 212.85352129888014
+      },
+      "memory": {
+        "sample_interval_ms": 50,
+        "samples": 2025,
+        "peak_rss_bytes": 4004343808,
+        "peak_private_bytes": 5385265152,
+        "min_system_available_bytes": 5242880
+      }
+    },
+    "hybrid_rrf": {
+      "metrics": {
+        "questions": 32,
+        "recall@1": 0.7428571428571429,
+        "all_evidence@1": 0.78125,
+        "all_evidence_count@1": 25,
+        "recall@3": 0.9428571428571428,
+        "all_evidence@3": 0.9375,
+        "all_evidence_count@3": 30,
+        "recall@5": 0.9428571428571428,
+        "all_evidence@5": 0.9375,
+        "all_evidence_count@5": 30,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 32,
+        "mrr": 0.8854166666666666
+      },
+      "latency": {
+        "n": 108,
+        "median_ms": 199.11985003273003,
+        "p95_ms": 354.44069997174665,
+        "mean_ms": 213.51717963073128
+      },
+      "memory_note": "Same Qwen process; no separate hybrid memory measurement"
+    }
+  },
+  "load_seconds": 94.10741709999274,
+  "index_build_seconds": 11.326742900011595,
+  "vector_bytes": 339968,
+  "memory_snapshots": {
+    "before": {
+      "rss_bytes": 30978048,
+      "private_bytes": 17199104,
+      "os_peak_rss_bytes": 32002048,
+      "os_peak_private_bytes": 17358848,
+      "system_total_bytes": 16666390528,
+      "system_available_bytes": 3052789760
+    },
+    "after_import": {
+      "rss_bytes": 209915904,
+      "private_bytes": 761110528,
+      "os_peak_rss_bytes": 209915904,
+      "os_peak_private_bytes": 761118720,
+      "system_total_bytes": 16666390528,
+      "system_available_bytes": 2854379520
+    },
+    "after_load": {
+      "rss_bytes": 2850406400,
+      "private_bytes": 4236361728,
+      "os_peak_rss_bytes": 4004343808,
+      "os_peak_private_bytes": 5385265152,
+      "system_total_bytes": 16666390528,
+      "system_available_bytes": 1226121216
+    },
+    "after_index": {
+      "rss_bytes": 2903916544,
+      "private_bytes": 4312641536,
+      "os_peak_rss_bytes": 4004343808,
+      "os_peak_private_bytes": 5385265152,
+      "system_total_bytes": 16666390528,
+      "system_available_bytes": 1796128768
+    },
+    "after_queries": {
+      "rss_bytes": 2902573056,
+      "private_bytes": 4343906304,
+      "os_peak_rss_bytes": 4004343808,
+      "os_peak_private_bytes": 5385265152,
+      "system_total_bytes": 16666390528,
+      "system_available_bytes": 1888350208
+    }
+  },
+  "by_category": {
+    "lexical": {
+      "condition_negation": {
+        "questions": 7,
+        "recall@1": 0.8571428571428571,
+        "all_evidence@1": 0.8571428571428571,
+        "all_evidence_count@1": 6,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 7,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 7,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 7,
+        "mrr": 0.9285714285714286
+      },
+      "entity": {
+        "questions": 5,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 5,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 5,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 5,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 5,
+        "mrr": 1.0
+      },
+      "literal": {
+        "questions": 5,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 5,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 5,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 5,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 5,
+        "mrr": 1.0
+      },
+      "multi_evidence": {
+        "questions": 3,
+        "recall@1": 0.0,
+        "all_evidence@1": 0.0,
+        "all_evidence_count@1": 0,
+        "recall@3": 0.3333333333333333,
+        "all_evidence@3": 0.3333333333333333,
+        "all_evidence_count@3": 1,
+        "recall@5": 0.6666666666666666,
+        "all_evidence@5": 0.6666666666666666,
+        "all_evidence_count@5": 2,
+        "recall@8": 0.8333333333333334,
+        "all_evidence@8": 0.6666666666666666,
+        "all_evidence_count@8": 2,
+        "mrr": 0.3055555555555556
+      },
+      "ocr": {
+        "questions": 2,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 2,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 2,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 2,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 2,
+        "mrr": 1.0
+      },
+      "paraphrase": {
+        "questions": 10,
+        "recall@1": 0.4,
+        "all_evidence@1": 0.4,
+        "all_evidence_count@1": 4,
+        "recall@3": 0.6,
+        "all_evidence@3": 0.6,
+        "all_evidence_count@3": 6,
+        "recall@5": 0.9,
+        "all_evidence@5": 0.9,
+        "all_evidence_count@5": 9,
+        "recall@8": 0.9,
+        "all_evidence@8": 0.9,
+        "all_evidence_count@8": 9,
+        "mrr": 0.5566666666666666
+      }
+    },
+    "qwen": {
+      "condition_negation": {
+        "questions": 7,
+        "recall@1": 0.8571428571428571,
+        "all_evidence@1": 0.8571428571428571,
+        "all_evidence_count@1": 6,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 7,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 7,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 7,
+        "mrr": 0.9285714285714286
+      },
+      "entity": {
+        "questions": 5,
+        "recall@1": 0.8,
+        "all_evidence@1": 0.8,
+        "all_evidence_count@1": 4,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 5,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 5,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 5,
+        "mrr": 0.9
+      },
+      "literal": {
+        "questions": 5,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 5,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 5,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 5,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 5,
+        "mrr": 1.0
+      },
+      "multi_evidence": {
+        "questions": 3,
+        "recall@1": 0.5,
+        "all_evidence@1": 0.0,
+        "all_evidence_count@1": 0,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 3,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 3,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 3,
+        "mrr": 1.0
+      },
+      "ocr": {
+        "questions": 2,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 2,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 2,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 2,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 2,
+        "mrr": 1.0
+      },
+      "paraphrase": {
+        "questions": 10,
+        "recall@1": 1.0,
+        "all_evidence@1": 1.0,
+        "all_evidence_count@1": 10,
+        "recall@3": 1.0,
+        "all_evidence@3": 1.0,
+        "all_evidence_count@3": 10,
+        "recall@5": 1.0,
+        "all_evidence@5": 1.0,
+        "all_evidence_count@5": 10,
+        "recall@8": 1.0,
+        "all_evidence@8": 1.0,
+        "all_evidence_count@8": 10,
+        "mrr": 1.0
+      }
+    }
+  },
+  "rows": [
+    {
+      "id": "q01",
+      "text": "生日甜点原先由谁准备？他退出以后还有什么准备工作需要接手？",
+      "category": "multi_evidence",
+      "groups": [
+        [
+          "p01"
+        ],
+        [
+          "p04"
+        ]
+      ],
+      "lexical_top8": [
+        "p12",
+        "p03",
+        "p13",
+        "p06",
+        "p14",
+        "p04",
+        "party_noise_05",
+        "p09"
+      ],
+      "qwen_top8": [
+        "p01",
+        "p04",
+        "p06",
+        "p14",
+        "p12",
+        "p15",
+        "p03",
+        "p10"
+      ],
+      "hybrid_top8": [
+        "p12",
+        "p06",
+        "p04",
+        "p03",
+        "p14",
+        "party_noise_05",
+        "p05",
+        "p01"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p01",
+          "cosine": 0.4741222560405731
+        },
+        {
+          "id": "p04",
+          "cosine": 0.4642983675003052
+        },
+        {
+          "id": "p06",
+          "cosine": 0.44507211446762085
+        },
+        {
+          "id": "p14",
+          "cosine": 0.4199824035167694
+        },
+        {
+          "id": "p12",
+          "cosine": 0.35000964999198914
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": false,
+      "hybrid_all@1": false,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": false,
+      "lexical_all@5": false,
+      "qwen_all@5": true,
+      "hybrid_all@5": false,
+      "lexical_all@8": false,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q02",
+      "text": "之前为什么排除了甲场地？",
+      "category": "literal",
+      "groups": [
+        [
+          "p02"
+        ]
+      ],
+      "lexical_top8": [
+        "p02",
+        "p16",
+        "p08",
+        "p09",
+        "p14",
+        "party_noise_08",
+        "party_noise_01",
+        "party_noise_04"
+      ],
+      "qwen_top8": [
+        "p02",
+        "p09",
+        "p08",
+        "p03",
+        "p16",
+        "p10",
+        "party_noise_11",
+        "party_noise_07"
+      ],
+      "hybrid_top8": [
+        "p02",
+        "p09",
+        "p08",
+        "p16",
+        "p14",
+        "p03",
+        "p10",
+        "party_noise_08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p02",
+          "cosine": 0.6257467269897461
+        },
+        {
+          "id": "p09",
+          "cosine": 0.5224223136901855
+        },
+        {
+          "id": "p08",
+          "cosine": 0.4132583737373352
+        },
+        {
+          "id": "p03",
+          "cosine": 0.40580958127975464
+        },
+        {
+          "id": "p16",
+          "cosine": 0.3989076018333435
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q03",
+      "text": "组会的星期几发生了什么变化？",
+      "category": "multi_evidence",
+      "groups": [
+        [
+          "s01"
+        ],
+        [
+          "s02"
+        ]
+      ],
+      "lexical_top8": [
+        "schedule_noise_08",
+        "s05",
+        "s09",
+        "s01",
+        "s02",
+        "s06",
+        "schedule_noise_01",
+        "schedule_noise_04"
+      ],
+      "qwen_top8": [
+        "s02",
+        "s01",
+        "s05",
+        "s06",
+        "s09",
+        "s14",
+        "schedule_noise_01",
+        "s04"
+      ],
+      "hybrid_top8": [
+        "s05",
+        "s02",
+        "s01",
+        "s09",
+        "s06",
+        "schedule_noise_01",
+        "s04",
+        "s08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s02",
+          "cosine": 0.6543048620223999
+        },
+        {
+          "id": "s01",
+          "cosine": 0.5927492380142212
+        },
+        {
+          "id": "s05",
+          "cosine": 0.5804719924926758
+        },
+        {
+          "id": "s06",
+          "cosine": 0.4687337279319763
+        },
+        {
+          "id": "s09",
+          "cosine": 0.4627280831336975
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": false,
+      "hybrid_all@1": false,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q04",
+      "text": "为什么换了开会地点？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "s04"
+        ]
+      ],
+      "lexical_top8": [
+        "s05",
+        "s16",
+        "s01",
+        "s02",
+        "s06",
+        "schedule_noise_01",
+        "s07",
+        "schedule_noise_08"
+      ],
+      "qwen_top8": [
+        "s04",
+        "s02",
+        "s01",
+        "s05",
+        "s16",
+        "s06",
+        "s09",
+        "s15"
+      ],
+      "hybrid_top8": [
+        "s05",
+        "s02",
+        "s01",
+        "s16",
+        "s06",
+        "s04",
+        "schedule_noise_01",
+        "s08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s04",
+          "cosine": 0.6731370687484741
+        },
+        {
+          "id": "s02",
+          "cosine": 0.6633379459381104
+        },
+        {
+          "id": "s01",
+          "cosine": 0.5638890266418457
+        },
+        {
+          "id": "s05",
+          "cosine": 0.5562804937362671
+        },
+        {
+          "id": "s16",
+          "cosine": 0.5137611627578735
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": false,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": false,
+      "lexical_all@5": false,
+      "qwen_all@5": true,
+      "hybrid_all@5": false,
+      "lexical_all@8": false,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q05",
+      "text": "谁有必须避开的致敏食材？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "p05"
+        ]
+      ],
+      "lexical_top8": [
+        "p06",
+        "p04",
+        "p15",
+        "p05",
+        "party_noise_01",
+        "party_noise_04",
+        "party_noise_07",
+        "p14"
+      ],
+      "qwen_top8": [
+        "p05",
+        "p06",
+        "p01",
+        "p04",
+        "p16",
+        "p03",
+        "p10",
+        "p14"
+      ],
+      "hybrid_top8": [
+        "p06",
+        "p05",
+        "p04",
+        "p14",
+        "p16",
+        "p03",
+        "p01",
+        "p15"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p05",
+          "cosine": 0.6521334648132324
+        },
+        {
+          "id": "p06",
+          "cosine": 0.5569943189620972
+        },
+        {
+          "id": "p01",
+          "cosine": 0.3191056251525879
+        },
+        {
+          "id": "p04",
+          "cosine": 0.2984446883201599
+        },
+        {
+          "id": "p16",
+          "cosine": 0.2844485640525818
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": false,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q06",
+      "text": "少来一个人以后，每个人要分摊多少，需要依据哪些数字？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "p07"
+        ]
+      ],
+      "lexical_top8": [
+        "party_noise_08",
+        "party_noise_05",
+        "p13",
+        "p15",
+        "p07",
+        "p02",
+        "p08",
+        "party_noise_10"
+      ],
+      "qwen_top8": [
+        "p07",
+        "p01",
+        "p02",
+        "party_noise_10",
+        "p08",
+        "p04",
+        "party_noise_07",
+        "p15"
+      ],
+      "hybrid_top8": [
+        "p07",
+        "p02",
+        "p15",
+        "party_noise_10",
+        "p08",
+        "p04",
+        "party_noise_07",
+        "p03"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p07",
+          "cosine": 0.49531975388526917
+        },
+        {
+          "id": "p01",
+          "cosine": 0.41433781385421753
+        },
+        {
+          "id": "p02",
+          "cosine": 0.4048478305339813
+        },
+        {
+          "id": "party_noise_10",
+          "cosine": 0.3827246427536011
+        },
+        {
+          "id": "p08",
+          "cosine": 0.3708397150039673
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q07",
+      "text": "人减少了，店家的套餐账单会跟着变便宜吗？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "p07"
+        ]
+      ],
+      "lexical_top8": [
+        "p07",
+        "party_noise_04",
+        "party_noise_06",
+        "p14",
+        "p04",
+        "party_noise_01",
+        "party_noise_08",
+        "p09"
+      ],
+      "qwen_top8": [
+        "p07",
+        "p01",
+        "p08",
+        "party_noise_10",
+        "p14",
+        "party_noise_06",
+        "p04",
+        "party_noise_07"
+      ],
+      "hybrid_top8": [
+        "p07",
+        "party_noise_06",
+        "p14",
+        "p08",
+        "p04",
+        "p01",
+        "party_noise_01",
+        "p09"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p07",
+          "cosine": 0.6672241687774658
+        },
+        {
+          "id": "p01",
+          "cosine": 0.42543524503707886
+        },
+        {
+          "id": "p08",
+          "cosine": 0.4216049313545227
+        },
+        {
+          "id": "party_noise_10",
+          "cosine": 0.41536515951156616
+        },
+        {
+          "id": "p14",
+          "cosine": 0.3835352063179016
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q08",
+      "text": "备选室内活动在什么情况下才启用？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "p10"
+        ]
+      ],
+      "lexical_top8": [
+        "party_noise_05",
+        "p10",
+        "party_noise_02",
+        "party_noise_10",
+        "party_noise_08",
+        "p09",
+        "p12",
+        "p01"
+      ],
+      "qwen_top8": [
+        "p10",
+        "party_noise_05",
+        "p02",
+        "p09",
+        "p16",
+        "p04",
+        "p08",
+        "party_noise_01"
+      ],
+      "hybrid_top8": [
+        "p10",
+        "party_noise_05",
+        "p09",
+        "p02",
+        "p01",
+        "party_noise_02",
+        "party_noise_10",
+        "p16"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p10",
+          "cosine": 0.4929884672164917
+        },
+        {
+          "id": "party_noise_05",
+          "cosine": 0.4576604962348938
+        },
+        {
+          "id": "p02",
+          "cosine": 0.44393378496170044
+        },
+        {
+          "id": "p09",
+          "cosine": 0.40992093086242676
+        },
+        {
+          "id": "p16",
+          "cosine": 0.3696855306625366
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q09",
+      "text": "场地乙现在真的已经订好了吗？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "p09"
+        ]
+      ],
+      "lexical_top8": [
+        "p09",
+        "p08",
+        "p14",
+        "p02",
+        "p16",
+        "party_noise_01",
+        "party_noise_04",
+        "party_noise_07"
+      ],
+      "qwen_top8": [
+        "p09",
+        "p02",
+        "p08",
+        "p16",
+        "p11",
+        "party_noise_01",
+        "p03",
+        "p04"
+      ],
+      "hybrid_top8": [
+        "p09",
+        "p08",
+        "p02",
+        "p16",
+        "party_noise_01",
+        "p14",
+        "p11",
+        "p03"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p09",
+          "cosine": 0.7636276483535767
+        },
+        {
+          "id": "p02",
+          "cosine": 0.6580167412757874
+        },
+        {
+          "id": "p08",
+          "cosine": 0.606980562210083
+        },
+        {
+          "id": "p16",
+          "cosine": 0.5570253729820251
+        },
+        {
+          "id": "p11",
+          "cosine": 0.44773343205451965
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q10",
+      "text": "我们从哪个门进去，具体门牌是多少？",
+      "category": "literal",
+      "groups": [
+        [
+          "p11"
+        ]
+      ],
+      "lexical_top8": [
+        "p11",
+        "p02",
+        "p15",
+        "party_noise_08",
+        "p10",
+        "party_noise_11",
+        "p03",
+        "p09"
+      ],
+      "qwen_top8": [
+        "p11",
+        "party_noise_07",
+        "p02",
+        "p16",
+        "party_noise_01",
+        "party_noise_06",
+        "party_noise_03",
+        "p09"
+      ],
+      "hybrid_top8": [
+        "p11",
+        "p02",
+        "p09",
+        "p07",
+        "party_noise_07",
+        "p15",
+        "p16",
+        "party_noise_08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p11",
+          "cosine": 0.6551466584205627
+        },
+        {
+          "id": "party_noise_07",
+          "cosine": 0.3481009006500244
+        },
+        {
+          "id": "p02",
+          "cosine": 0.33059161901474
+        },
+        {
+          "id": "p16",
+          "cosine": 0.2920333743095398
+        },
+        {
+          "id": "party_noise_01",
+          "cosine": 0.28726083040237427
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q11",
+      "text": "小周花牛过敏，订菜要注惫什么？",
+      "category": "ocr",
+      "groups": [
+        [
+          "p05"
+        ]
+      ],
+      "lexical_top8": [
+        "p05",
+        "p06",
+        "p09",
+        "p13",
+        "p03",
+        "p15",
+        "p10",
+        "p08"
+      ],
+      "qwen_top8": [
+        "p05",
+        "p06",
+        "p01",
+        "p07",
+        "p04",
+        "p14",
+        "p16",
+        "p09"
+      ],
+      "hybrid_top8": [
+        "p05",
+        "p06",
+        "p09",
+        "p01",
+        "p04",
+        "p03",
+        "p10",
+        "p07"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p05",
+          "cosine": 0.7560151219367981
+        },
+        {
+          "id": "p06",
+          "cosine": 0.553171694278717
+        },
+        {
+          "id": "p01",
+          "cosine": 0.42091280221939087
+        },
+        {
+          "id": "p07",
+          "cosine": 0.4080924689769745
+        },
+        {
+          "id": "p04",
+          "cosine": 0.36932823061943054
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q12",
+      "text": "张敏带什么，张明又承担什么任务？",
+      "category": "entity",
+      "groups": [
+        [
+          "p15"
+        ]
+      ],
+      "lexical_top8": [
+        "p15",
+        "p05",
+        "party_noise_03",
+        "party_noise_00",
+        "p06",
+        "p12",
+        "p16"
+      ],
+      "qwen_top8": [
+        "p15",
+        "p03",
+        "p01",
+        "p04",
+        "party_noise_00",
+        "party_noise_11",
+        "party_noise_03",
+        "p02"
+      ],
+      "hybrid_top8": [
+        "p15",
+        "party_noise_00",
+        "party_noise_03",
+        "p12",
+        "p03",
+        "p05",
+        "p01",
+        "p04"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p15",
+          "cosine": 0.7381919026374817
+        },
+        {
+          "id": "p03",
+          "cosine": 0.3144777715206146
+        },
+        {
+          "id": "p01",
+          "cosine": 0.30929023027420044
+        },
+        {
+          "id": "p04",
+          "cosine": 0.3080088496208191
+        },
+        {
+          "id": "party_noise_00",
+          "cosine": 0.2915065884590149
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q13",
+      "text": "小林从犹豫能否到场，到明确缺席，分别留下了哪些说法？",
+      "category": "multi_evidence",
+      "groups": [
+        [
+          "p03"
+        ],
+        [
+          "p04"
+        ]
+      ],
+      "lexical_top8": [
+        "p16",
+        "p04",
+        "p03",
+        "p01",
+        "p15",
+        "p09",
+        "p02",
+        "p05"
+      ],
+      "qwen_top8": [
+        "p03",
+        "p04",
+        "p01",
+        "party_noise_03",
+        "p02",
+        "p09",
+        "p16",
+        "p15"
+      ],
+      "hybrid_top8": [
+        "p03",
+        "p04",
+        "p01",
+        "p16",
+        "p02",
+        "p09",
+        "p15",
+        "party_noise_03"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p03",
+          "cosine": 0.7443075776100159
+        },
+        {
+          "id": "p04",
+          "cosine": 0.6788091659545898
+        },
+        {
+          "id": "p01",
+          "cosine": 0.5810116529464722
+        },
+        {
+          "id": "party_noise_03",
+          "cosine": 0.3516392111778259
+        },
+        {
+          "id": "p02",
+          "cosine": 0.33347904682159424
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": false,
+      "hybrid_all@1": false,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q14",
+      "text": "点火用的东西是谁负责备齐？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "p12"
+        ]
+      ],
+      "lexical_top8": [
+        "p01",
+        "p15",
+        "p11",
+        "p04",
+        "p12",
+        "party_noise_02",
+        "p14",
+        "p06"
+      ],
+      "qwen_top8": [
+        "p12",
+        "p01",
+        "p15",
+        "p04",
+        "party_noise_00",
+        "p10",
+        "p13",
+        "party_noise_02"
+      ],
+      "hybrid_top8": [
+        "p01",
+        "p15",
+        "p12",
+        "p04",
+        "p11",
+        "party_noise_02",
+        "party_noise_07",
+        "party_noise_00"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p12",
+          "cosine": 0.5969579219818115
+        },
+        {
+          "id": "p01",
+          "cosine": 0.3896348178386688
+        },
+        {
+          "id": "p15",
+          "cosine": 0.36154910922050476
+        },
+        {
+          "id": "p04",
+          "cosine": 0.33393949270248413
+        },
+        {
+          "id": "party_noise_00",
+          "cosine": 0.33184757828712463
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": false,
+      "lexical_all@3": false,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q15",
+      "text": "演示前的文件最迟什么时候交？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "s03",
+          "s07"
+        ]
+      ],
+      "lexical_top8": [
+        "schedule_noise_07",
+        "s07",
+        "schedule_noise_04",
+        "s08",
+        "s03",
+        "s14",
+        "s01",
+        "schedule_noise_10"
+      ],
+      "qwen_top8": [
+        "s03",
+        "s13",
+        "schedule_noise_07",
+        "s07",
+        "schedule_noise_03",
+        "s05",
+        "s04",
+        "s06"
+      ],
+      "hybrid_top8": [
+        "schedule_noise_07",
+        "s03",
+        "s07",
+        "s08",
+        "s05",
+        "s16",
+        "s09",
+        "s13"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s03",
+          "cosine": 0.6595911979675293
+        },
+        {
+          "id": "s13",
+          "cosine": 0.44900649785995483
+        },
+        {
+          "id": "schedule_noise_07",
+          "cosine": 0.44746193289756775
+        },
+        {
+          "id": "s07",
+          "cosine": 0.41287651658058167
+        },
+        {
+          "id": "schedule_noise_03",
+          "cosine": 0.4123184382915497
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": false,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q16",
+      "text": "报吿的截上时间是几点？",
+      "category": "ocr",
+      "groups": [
+        [
+          "s03",
+          "s07"
+        ]
+      ],
+      "lexical_top8": [
+        "s07",
+        "s08",
+        "s05",
+        "schedule_noise_07",
+        "s12",
+        "s11",
+        "s01",
+        "s02"
+      ],
+      "qwen_top8": [
+        "s07",
+        "s08",
+        "schedule_noise_06",
+        "s03",
+        "schedule_noise_03",
+        "schedule_noise_05",
+        "schedule_noise_07",
+        "schedule_noise_11"
+      ],
+      "hybrid_top8": [
+        "s07",
+        "s08",
+        "schedule_noise_07",
+        "s01",
+        "s02",
+        "schedule_noise_01",
+        "s05",
+        "schedule_noise_06"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s07",
+          "cosine": 0.6042391061782837
+        },
+        {
+          "id": "s08",
+          "cosine": 0.3945881724357605
+        },
+        {
+          "id": "schedule_noise_06",
+          "cosine": 0.3711935579776764
+        },
+        {
+          "id": "s03",
+          "cosine": 0.37025022506713867
+        },
+        {
+          "id": "schedule_noise_03",
+          "cosine": 0.36515820026397705
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q17",
+      "text": "老师还没确定要不要外出，我们现在就应该把组会延期吗？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "s09"
+        ]
+      ],
+      "lexical_top8": [
+        "s09",
+        "s16",
+        "s05",
+        "s06",
+        "s01",
+        "s02",
+        "s03",
+        "s14"
+      ],
+      "qwen_top8": [
+        "s05",
+        "s09",
+        "s02",
+        "s01",
+        "s06",
+        "s16",
+        "s04",
+        "s08"
+      ],
+      "hybrid_top8": [
+        "s09",
+        "s05",
+        "s16",
+        "s02",
+        "s01",
+        "s06",
+        "s14",
+        "s08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s05",
+          "cosine": 0.7241114377975464
+        },
+        {
+          "id": "s09",
+          "cosine": 0.7142852544784546
+        },
+        {
+          "id": "s02",
+          "cosine": 0.6088420152664185
+        },
+        {
+          "id": "s01",
+          "cosine": 0.5310546159744263
+        },
+        {
+          "id": "s06",
+          "cosine": 0.5280817747116089
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": false,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q18",
+      "text": "是不是不用开组会，也不用做汇报了？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "s05"
+        ]
+      ],
+      "lexical_top8": [
+        "s05",
+        "s12",
+        "s06",
+        "s01",
+        "s02",
+        "s10",
+        "s09",
+        "s07"
+      ],
+      "qwen_top8": [
+        "s05",
+        "s02",
+        "s06",
+        "s01",
+        "s16",
+        "s04",
+        "s09",
+        "s15"
+      ],
+      "hybrid_top8": [
+        "s05",
+        "s06",
+        "s02",
+        "s01",
+        "s09",
+        "s04",
+        "s12",
+        "s16"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s05",
+          "cosine": 0.6730054616928101
+        },
+        {
+          "id": "s02",
+          "cosine": 0.5428571701049805
+        },
+        {
+          "id": "s06",
+          "cosine": 0.48526111245155334
+        },
+        {
+          "id": "s01",
+          "cosine": 0.4823042154312134
+        },
+        {
+          "id": "s16",
+          "cosine": 0.42382973432540894
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q19",
+      "text": "国外通知里的早上九点，在我们这里几点参加？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "s08"
+        ]
+      ],
+      "lexical_top8": [
+        "s08",
+        "schedule_noise_07",
+        "schedule_noise_10",
+        "s10",
+        "s01",
+        "s03",
+        "s06",
+        "schedule_noise_11"
+      ],
+      "qwen_top8": [
+        "s08",
+        "s02",
+        "s01",
+        "s16",
+        "s14",
+        "s06",
+        "s05",
+        "s09"
+      ],
+      "hybrid_top8": [
+        "s08",
+        "s01",
+        "s06",
+        "s10",
+        "s03",
+        "s07",
+        "s11",
+        "s02"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s08",
+          "cosine": 0.6654415726661682
+        },
+        {
+          "id": "s02",
+          "cosine": 0.5216981172561646
+        },
+        {
+          "id": "s01",
+          "cosine": 0.5195280313491821
+        },
+        {
+          "id": "s16",
+          "cosine": 0.5134631991386414
+        },
+        {
+          "id": "s14",
+          "cosine": 0.4914020597934723
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q20",
+      "text": "12月10日下午五点是否已有不能移动的预约？",
+      "category": "literal",
+      "groups": [
+        [
+          "s10"
+        ]
+      ],
+      "lexical_top8": [
+        "s10",
+        "s08",
+        "s06",
+        "s01",
+        "s07",
+        "s14",
+        "schedule_noise_11",
+        "s02"
+      ],
+      "qwen_top8": [
+        "s10",
+        "s02",
+        "s08",
+        "s09",
+        "s07",
+        "s14",
+        "s16",
+        "s01"
+      ],
+      "hybrid_top8": [
+        "s10",
+        "s08",
+        "s02",
+        "s07",
+        "s01",
+        "s14",
+        "s09",
+        "s16"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s10",
+          "cosine": 0.6668739318847656
+        },
+        {
+          "id": "s02",
+          "cosine": 0.46409547328948975
+        },
+        {
+          "id": "s08",
+          "cosine": 0.4603583514690399
+        },
+        {
+          "id": "s09",
+          "cosine": 0.4600154757499695
+        },
+        {
+          "id": "s07",
+          "cosine": 0.45653122663497925
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q21",
+      "text": "培训签到用AB-1207还是AB-1270？",
+      "category": "entity",
+      "groups": [
+        [
+          "s11"
+        ]
+      ],
+      "lexical_top8": [
+        "s11",
+        "s12",
+        "s14",
+        "schedule_noise_02",
+        "schedule_noise_10",
+        "s04",
+        "schedule_noise_11",
+        "s01"
+      ],
+      "qwen_top8": [
+        "s12",
+        "s11",
+        "s08",
+        "s04",
+        "schedule_noise_01",
+        "s07",
+        "s14",
+        "schedule_noise_07"
+      ],
+      "hybrid_top8": [
+        "s11",
+        "s12",
+        "s14",
+        "s04",
+        "schedule_noise_11",
+        "s02",
+        "s10",
+        "s08"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s12",
+          "cosine": 0.7102324366569519
+        },
+        {
+          "id": "s11",
+          "cosine": 0.6507347226142883
+        },
+        {
+          "id": "s08",
+          "cosine": 0.3409491181373596
+        },
+        {
+          "id": "s04",
+          "cosine": 0.33756133913993835
+        },
+        {
+          "id": "schedule_noise_01",
+          "cosine": 0.33203232288360596
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": false,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q22",
+      "text": "答辩电子演示和纸上文件分别找谁准备？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "s13"
+        ]
+      ],
+      "lexical_top8": [
+        "schedule_noise_07",
+        "s05",
+        "s13",
+        "s03",
+        "schedule_noise_00",
+        "s06",
+        "schedule_noise_02",
+        "s11"
+      ],
+      "qwen_top8": [
+        "s13",
+        "s03",
+        "s06",
+        "s04",
+        "schedule_noise_07",
+        "s05",
+        "s15",
+        "schedule_noise_03"
+      ],
+      "hybrid_top8": [
+        "s13",
+        "schedule_noise_07",
+        "s03",
+        "s05",
+        "s06",
+        "schedule_noise_00",
+        "schedule_noise_05",
+        "s04"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s13",
+          "cosine": 0.6856193542480469
+        },
+        {
+          "id": "s03",
+          "cosine": 0.592292070388794
+        },
+        {
+          "id": "s06",
+          "cosine": 0.46024513244628906
+        },
+        {
+          "id": "s04",
+          "cosine": 0.4404338300228119
+        },
+        {
+          "id": "schedule_noise_07",
+          "cosine": 0.4198899269104004
+        }
+      ],
+      "lexical_all@1": false,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q23",
+      "text": "彩排也是周四在第二会议室吗？",
+      "category": "entity",
+      "groups": [
+        [
+          "s06"
+        ]
+      ],
+      "lexical_top8": [
+        "s06",
+        "s04",
+        "s02",
+        "s15",
+        "s01",
+        "s05",
+        "s09",
+        "s16"
+      ],
+      "qwen_top8": [
+        "s06",
+        "s02",
+        "s04",
+        "s15",
+        "s01",
+        "s05",
+        "schedule_noise_03",
+        "s16"
+      ],
+      "hybrid_top8": [
+        "s06",
+        "s02",
+        "s04",
+        "s15",
+        "s01",
+        "s05",
+        "s16",
+        "s09"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s06",
+          "cosine": 0.7003897428512573
+        },
+        {
+          "id": "s02",
+          "cosine": 0.63498854637146
+        },
+        {
+          "id": "s04",
+          "cosine": 0.610784113407135
+        },
+        {
+          "id": "s15",
+          "cosine": 0.5868948101997375
+        },
+        {
+          "id": "s01",
+          "cosine": 0.5742136836051941
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q24",
+      "text": "周日跑步还需要去签到吗？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "s14"
+        ]
+      ],
+      "lexical_top8": [
+        "s14",
+        "s11",
+        "s05",
+        "s07",
+        "s01",
+        "s03",
+        "s02",
+        "s10"
+      ],
+      "qwen_top8": [
+        "s14",
+        "schedule_noise_05",
+        "schedule_noise_06",
+        "s11",
+        "s07",
+        "s16",
+        "s05",
+        "s06"
+      ],
+      "hybrid_top8": [
+        "s14",
+        "s11",
+        "s07",
+        "s05",
+        "s06",
+        "s10",
+        "schedule_noise_05",
+        "schedule_noise_06"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s14",
+          "cosine": 0.836173951625824
+        },
+        {
+          "id": "schedule_noise_05",
+          "cosine": 0.47347280383110046
+        },
+        {
+          "id": "schedule_noise_06",
+          "cosine": 0.4700615406036377
+        },
+        {
+          "id": "s11",
+          "cosine": 0.46061673760414124
+        },
+        {
+          "id": "s07",
+          "cosine": 0.4044696092605591
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q25",
+      "text": "G102这班去程应该去武汉站还是汉口站？",
+      "category": "entity",
+      "groups": [
+        [
+          "t01"
+        ]
+      ],
+      "lexical_top8": [
+        "t01",
+        "t11",
+        "t12",
+        "trip_noise_11",
+        "t05",
+        "t09",
+        "t08",
+        "t04"
+      ],
+      "qwen_top8": [
+        "t01",
+        "t11",
+        "t12",
+        "t05",
+        "t02",
+        "t07",
+        "trip_noise_10",
+        "t06"
+      ],
+      "hybrid_top8": [
+        "t01",
+        "t11",
+        "t12",
+        "t05",
+        "t08",
+        "t04",
+        "trip_noise_11",
+        "t02"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t01",
+          "cosine": 0.8510319590568542
+        },
+        {
+          "id": "t11",
+          "cosine": 0.497511625289917
+        },
+        {
+          "id": "t12",
+          "cosine": 0.4665587544441223
+        },
+        {
+          "id": "t05",
+          "cosine": 0.4415285587310791
+        },
+        {
+          "id": "t02",
+          "cosine": 0.3637338876724243
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q26",
+      "text": "夜里十一点才到住处，要提前做什么才能保留房间？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "t02"
+        ]
+      ],
+      "lexical_top8": [
+        "t02",
+        "t07",
+        "t05",
+        "t04",
+        "trip_noise_07",
+        "trip_noise_09",
+        "t03",
+        "t10"
+      ],
+      "qwen_top8": [
+        "t02",
+        "t03",
+        "t05",
+        "trip_noise_03",
+        "t07",
+        "trip_noise_02",
+        "trip_noise_09",
+        "t12"
+      ],
+      "hybrid_top8": [
+        "t02",
+        "t05",
+        "t07",
+        "t03",
+        "trip_noise_09",
+        "trip_noise_07",
+        "t04",
+        "trip_noise_03"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t02",
+          "cosine": 0.5763014554977417
+        },
+        {
+          "id": "t03",
+          "cosine": 0.43121010065078735
+        },
+        {
+          "id": "t05",
+          "cosine": 0.4089275002479553
+        },
+        {
+          "id": "trip_noise_03",
+          "cosine": 0.3784797191619873
+        },
+        {
+          "id": "t07",
+          "cosine": 0.3725210130214691
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q27",
+      "text": "住店时吃早饭和停汽车都不用再付钱吗？",
+      "category": "condition_negation",
+      "groups": [
+        [
+          "t03"
+        ]
+      ],
+      "lexical_top8": [
+        "t03",
+        "t07",
+        "t08",
+        "trip_noise_00",
+        "trip_noise_03",
+        "trip_noise_02",
+        "trip_noise_10",
+        "t11"
+      ],
+      "qwen_top8": [
+        "t03",
+        "trip_noise_10",
+        "t02",
+        "t07",
+        "t05",
+        "t12",
+        "trip_noise_06",
+        "t11"
+      ],
+      "hybrid_top8": [
+        "t03",
+        "t07",
+        "trip_noise_10",
+        "t08",
+        "t11",
+        "trip_noise_06",
+        "t09",
+        "t02"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t03",
+          "cosine": 0.691098690032959
+        },
+        {
+          "id": "trip_noise_10",
+          "cosine": 0.5265416502952576
+        },
+        {
+          "id": "t02",
+          "cosine": 0.49692660570144653
+        },
+        {
+          "id": "t07",
+          "cosine": 0.4597243070602417
+        },
+        {
+          "id": "t05",
+          "cosine": 0.4315717816352844
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q28",
+      "text": "12月21日能进博物馆参观吗？",
+      "category": "literal",
+      "groups": [
+        [
+          "t04"
+        ]
+      ],
+      "lexical_top8": [
+        "t04",
+        "t01",
+        "t02"
+      ],
+      "qwen_top8": [
+        "t04",
+        "trip_noise_05",
+        "t02",
+        "t07",
+        "t01",
+        "t05",
+        "t06",
+        "t10"
+      ],
+      "hybrid_top8": [
+        "t04",
+        "t02",
+        "t01",
+        "trip_noise_05",
+        "t07",
+        "t05",
+        "t06",
+        "t10"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t04",
+          "cosine": 0.6975576877593994
+        },
+        {
+          "id": "trip_noise_05",
+          "cosine": 0.35390132665634155
+        },
+        {
+          "id": "t02",
+          "cosine": 0.33857297897338867
+        },
+        {
+          "id": "t07",
+          "cosine": 0.33485549688339233
+        },
+        {
+          "id": "t01",
+          "cosine": 0.32311320304870605
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q29",
+      "text": "晚上八点以后回来，还能坐最后一趟去机场的公交吗？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "t05"
+        ]
+      ],
+      "lexical_top8": [
+        "t05",
+        "t02",
+        "trip_noise_10",
+        "trip_noise_05",
+        "t12",
+        "trip_noise_01",
+        "trip_noise_04",
+        "trip_noise_07"
+      ],
+      "qwen_top8": [
+        "t05",
+        "t12",
+        "t01",
+        "t02",
+        "t11",
+        "trip_noise_10",
+        "t03",
+        "trip_noise_06"
+      ],
+      "hybrid_top8": [
+        "t05",
+        "t02",
+        "t12",
+        "trip_noise_10",
+        "t01",
+        "t11",
+        "t08",
+        "trip_noise_05"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t05",
+          "cosine": 0.7883683443069458
+        },
+        {
+          "id": "t12",
+          "cosine": 0.5510919690132141
+        },
+        {
+          "id": "t01",
+          "cosine": 0.5218304395675659
+        },
+        {
+          "id": "t02",
+          "cosine": 0.5206739902496338
+        },
+        {
+          "id": "t11",
+          "cosine": 0.4963661730289459
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q30",
+      "text": "为什么不能按原路线爬山，有什么替代走法？",
+      "category": "paraphrase",
+      "groups": [
+        [
+          "t06"
+        ]
+      ],
+      "lexical_top8": [
+        "t06",
+        "t04",
+        "trip_noise_08",
+        "t08",
+        "t10",
+        "t09",
+        "t02",
+        "t05"
+      ],
+      "qwen_top8": [
+        "t06",
+        "t05",
+        "t09",
+        "t01",
+        "trip_noise_11",
+        "t10",
+        "trip_noise_00",
+        "t12"
+      ],
+      "hybrid_top8": [
+        "t06",
+        "t09",
+        "t05",
+        "t10",
+        "t02",
+        "t04",
+        "trip_noise_08",
+        "t01"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t06",
+          "cosine": 0.5753520131111145
+        },
+        {
+          "id": "t05",
+          "cosine": 0.3746570944786072
+        },
+        {
+          "id": "t09",
+          "cosine": 0.3623269498348236
+        },
+        {
+          "id": "t01",
+          "cosine": 0.31080761551856995
+        },
+        {
+          "id": "trip_noise_11",
+          "cosine": 0.28778010606765747
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q31",
+      "text": "HX-2048的退订时限和损失怎么规定？",
+      "category": "entity",
+      "groups": [
+        [
+          "t07"
+        ]
+      ],
+      "lexical_top8": [
+        "t07",
+        "t08",
+        "trip_noise_00",
+        "t01",
+        "t12",
+        "t06",
+        "trip_noise_01",
+        "trip_noise_04"
+      ],
+      "qwen_top8": [
+        "t07",
+        "t08",
+        "t02",
+        "t01",
+        "trip_noise_10",
+        "trip_noise_07",
+        "t05",
+        "t04"
+      ],
+      "hybrid_top8": [
+        "t07",
+        "t08",
+        "t01",
+        "trip_noise_07",
+        "trip_noise_01",
+        "t02",
+        "trip_noise_00",
+        "t12"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t07",
+          "cosine": 0.704645037651062
+        },
+        {
+          "id": "t08",
+          "cosine": 0.5878669619560242
+        },
+        {
+          "id": "t02",
+          "cosine": 0.4193563461303711
+        },
+        {
+          "id": "t01",
+          "cosine": 0.35653454065322876
+        },
+        {
+          "id": "trip_noise_10",
+          "cosine": 0.3461843729019165
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "q32",
+      "text": "返程坐在哪个车厢哪个位置？",
+      "category": "literal",
+      "groups": [
+        [
+          "t11"
+        ]
+      ],
+      "lexical_top8": [
+        "t11",
+        "t01",
+        "t05",
+        "trip_noise_08",
+        "t08",
+        "t10",
+        "t03",
+        "t12"
+      ],
+      "qwen_top8": [
+        "t11",
+        "t01",
+        "t05",
+        "t12",
+        "t08",
+        "trip_noise_07",
+        "t09",
+        "t07"
+      ],
+      "hybrid_top8": [
+        "t11",
+        "t01",
+        "t05",
+        "t08",
+        "t12",
+        "trip_noise_08",
+        "trip_noise_07",
+        "t09"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t11",
+          "cosine": 0.7419049739837646
+        },
+        {
+          "id": "t01",
+          "cosine": 0.43928438425064087
+        },
+        {
+          "id": "t05",
+          "cosine": 0.41724610328674316
+        },
+        {
+          "id": "t12",
+          "cosine": 0.35244739055633545
+        },
+        {
+          "id": "t08",
+          "cosine": 0.34246960282325745
+        }
+      ],
+      "lexical_all@1": true,
+      "qwen_all@1": true,
+      "hybrid_all@1": true,
+      "lexical_all@3": true,
+      "qwen_all@3": true,
+      "hybrid_all@3": true,
+      "lexical_all@5": true,
+      "qwen_all@5": true,
+      "hybrid_all@5": true,
+      "lexical_all@8": true,
+      "qwen_all@8": true,
+      "hybrid_all@8": true
+    },
+    {
+      "id": "u01",
+      "text": "聚会组织者的身份证号码是什么？",
+      "category": "unanswerable",
+      "groups": [],
+      "lexical_top8": [
+        "p11",
+        "p04",
+        "party_noise_01",
+        "party_noise_04",
+        "party_noise_07",
+        "p14",
+        "party_noise_11",
+        "p15"
+      ],
+      "qwen_top8": [
+        "p11",
+        "p04",
+        "p02",
+        "p15",
+        "p16",
+        "party_noise_05",
+        "p07",
+        "party_noise_07"
+      ],
+      "hybrid_top8": [
+        "p11",
+        "p04",
+        "p15",
+        "party_noise_07",
+        "party_noise_01",
+        "p07",
+        "p09",
+        "p02"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p11",
+          "cosine": 0.479208767414093
+        },
+        {
+          "id": "p04",
+          "cosine": 0.39378488063812256
+        },
+        {
+          "id": "p02",
+          "cosine": 0.38555455207824707
+        },
+        {
+          "id": "p15",
+          "cosine": 0.366977721452713
+        },
+        {
+          "id": "p16",
+          "cosine": 0.3557097613811493
+        }
+      ],
+      "lexical_all@1": null,
+      "qwen_all@1": null,
+      "hybrid_all@1": null,
+      "lexical_all@3": null,
+      "qwen_all@3": null,
+      "hybrid_all@3": null,
+      "lexical_all@5": null,
+      "qwen_all@5": null,
+      "hybrid_all@5": null,
+      "lexical_all@8": null,
+      "qwen_all@8": null,
+      "hybrid_all@8": null
+    },
+    {
+      "id": "u02",
+      "text": "这次会议的视频密码是什么？",
+      "category": "unanswerable",
+      "groups": [],
+      "lexical_top8": [
+        "s04",
+        "schedule_noise_07",
+        "s01",
+        "s02",
+        "s05",
+        "s06",
+        "s10",
+        "s16"
+      ],
+      "qwen_top8": [
+        "s04",
+        "s16",
+        "s05",
+        "s15",
+        "s08",
+        "s02",
+        "schedule_noise_01",
+        "schedule_noise_05"
+      ],
+      "hybrid_top8": [
+        "s04",
+        "s05",
+        "s16",
+        "s02",
+        "s01",
+        "s15",
+        "s08",
+        "schedule_noise_11"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "s04",
+          "cosine": 0.4483957886695862
+        },
+        {
+          "id": "s16",
+          "cosine": 0.44459623098373413
+        },
+        {
+          "id": "s05",
+          "cosine": 0.3968232274055481
+        },
+        {
+          "id": "s15",
+          "cosine": 0.38883495330810547
+        },
+        {
+          "id": "s08",
+          "cosine": 0.38868409395217896
+        }
+      ],
+      "lexical_all@1": null,
+      "qwen_all@1": null,
+      "hybrid_all@1": null,
+      "lexical_all@3": null,
+      "qwen_all@3": null,
+      "hybrid_all@3": null,
+      "lexical_all@5": null,
+      "qwen_all@5": null,
+      "hybrid_all@5": null,
+      "lexical_all@8": null,
+      "qwen_all@8": null,
+      "hybrid_all@8": null
+    },
+    {
+      "id": "u03",
+      "text": "接送司机的手机号码是多少？",
+      "category": "unanswerable",
+      "groups": [],
+      "lexical_top8": [
+        "t12",
+        "t08",
+        "t01",
+        "trip_noise_11",
+        "t05",
+        "trip_noise_01",
+        "trip_noise_04",
+        "trip_noise_07"
+      ],
+      "qwen_top8": [
+        "t12",
+        "t02",
+        "t01",
+        "trip_noise_10",
+        "t11",
+        "t05",
+        "trip_noise_11",
+        "trip_noise_07"
+      ],
+      "hybrid_top8": [
+        "t12",
+        "t01",
+        "trip_noise_11",
+        "t05",
+        "t08",
+        "trip_noise_07",
+        "t02",
+        "trip_noise_10"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "t12",
+          "cosine": 0.5851569771766663
+        },
+        {
+          "id": "t02",
+          "cosine": 0.37720316648483276
+        },
+        {
+          "id": "t01",
+          "cosine": 0.36948108673095703
+        },
+        {
+          "id": "trip_noise_10",
+          "cosine": 0.35310184955596924
+        },
+        {
+          "id": "t11",
+          "cosine": 0.3402789533138275
+        }
+      ],
+      "lexical_all@1": null,
+      "qwen_all@1": null,
+      "hybrid_all@1": null,
+      "lexical_all@3": null,
+      "qwen_all@3": null,
+      "hybrid_all@3": null,
+      "lexical_all@5": null,
+      "qwen_all@5": null,
+      "hybrid_all@5": null,
+      "lexical_all@8": null,
+      "qwen_all@8": null,
+      "hybrid_all@8": null
+    },
+    {
+      "id": "u04",
+      "text": "这次聚会酒店HX-2048订单的退款金额是多少？",
+      "category": "unanswerable",
+      "groups": [],
+      "lexical_top8": [
+        "p11",
+        "p04",
+        "party_noise_07",
+        "p09",
+        "party_noise_11",
+        "p08",
+        "p14",
+        "p03"
+      ],
+      "qwen_top8": [
+        "p07",
+        "p09",
+        "p08",
+        "p02",
+        "party_noise_10",
+        "party_noise_07",
+        "p14",
+        "p11"
+      ],
+      "hybrid_top8": [
+        "p09",
+        "p11",
+        "p08",
+        "party_noise_07",
+        "p07",
+        "p04",
+        "p02",
+        "p14"
+      ],
+      "qwen_top_scores": [
+        {
+          "id": "p07",
+          "cosine": 0.5120152235031128
+        },
+        {
+          "id": "p09",
+          "cosine": 0.48638802766799927
+        },
+        {
+          "id": "p08",
+          "cosine": 0.4811057448387146
+        },
+        {
+          "id": "p02",
+          "cosine": 0.414866179227829
+        },
+        {
+          "id": "party_noise_10",
+          "cosine": 0.3754659593105316
+        }
+      ],
+      "lexical_all@1": null,
+      "qwen_all@1": null,
+      "hybrid_all@1": null,
+      "lexical_all@3": null,
+      "qwen_all@3": null,
+      "hybrid_all@3": null,
+      "lexical_all@5": null,
+      "qwen_all@5": null,
+      "hybrid_all@5": null,
+      "lexical_all@8": null,
+      "qwen_all@8": null,
+      "hybrid_all@8": null
+    }
+  ],
+  "limitations": [
+    "Synthetic authored labels, not held-out human relevance judgments",
+    "Quality evaluation uses 32 answerable questions; 4 unanswerable queries are diagnostic only",
+    "No threshold calibrated for abstention; top-k cannot prove an answer exists",
+    "No end-to-end answer evaluation; no LoCoMo or MTEB reproduction",
+    "One Windows CPU machine; process measurements do not predict Ubuntu/server latency",
+    "OS file cache not cleared; background applications may affect memory/latency",
+    "Memory includes Python/framework; unquantized model; no multiuser load test",
+    "Scope isolation enforced by candidate prefilter, not learned by embedding model",
+    "Vectors use exact cosine search over a small corpus; no LanceDB/storage benchmark"
+  ],
+  "lexical.json_sha256": "06776b556cd6a3612e00fad4d9840ae644ac424e6182b4349c85c99460b5fa92",
+  "qwen.json_sha256": "ccb3a7dd1efd06b27a6e7556043d6309b3c21e1b28c788685f33d5f910eff92f"
+}

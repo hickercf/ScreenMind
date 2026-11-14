@@ -35,6 +35,12 @@ import kotlin.coroutines.resumeWithException
 data class CalendarEntry(val title: String, val text: String, val startsAt: String)
 
 class CaptureService(private val context: Context) {
+    suspend fun structured(uri: Uri): com.chronocapsule.contract.ScreenContract.Payload = withContext(Dispatchers.IO) {
+        val bitmap = context.contentResolver.openInputStream(uri).use { input ->
+            requireNotNull(android.graphics.BitmapFactory.decodeStream(requireNotNull(input))) { "无法打开图片" }
+        }
+        try { ChronoCapture.recognize(context, bitmap) } finally { bitmap.recycle() }
+    }
     suspend fun recognize(uri: Uri): String = withContext(Dispatchers.IO) {
         val recognizer = TextRecognition.getClient(ChineseTextRecognizerOptions.Builder().build())
         try {

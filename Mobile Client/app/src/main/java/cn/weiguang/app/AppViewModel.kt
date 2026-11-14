@@ -23,7 +23,8 @@ import java.time.Instant
 import java.util.Locale
 import java.util.UUID
 
-data class EditorDraft(val text: String = "", val source: String = "manual", val type: String = "note", val id: String? = null, val upload: Boolean = false, val occurredAt: String? = null, val uploaded: Boolean = false, val imageUri: Uri? = null)
+data class EditorDraft(val text: String = "", val source: String = "manual", val type: String = "note", val id: String? = null, val upload: Boolean = false, val occurredAt: String? = null, val uploaded: Boolean = false, val imageUri: Uri? = null,
+    val screenJson: String? = null)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
     val updater = AppUpdater(application, viewModelScope)
@@ -64,6 +65,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var selectedWorkId by mutableStateOf<String?>(null)
         private set
+    var captureWorkId by mutableStateOf<String?>(null)
+        private set
     private var selectedTaskId: String? = null
     private var pollingAgent = false
 
@@ -82,6 +85,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
         agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentTask = null; agentReceipt = null
         selectedWorkId = null; selectedTaskId = null; agentError = null; agentMode = "正在连接"
+        captureWorkId = null
     }
 
     private suspend fun loadAgent() {
@@ -95,6 +99,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val health = snapshot.getJSONObject("health")
         agentMode = if (health.optString("provider") == "mock") "模拟模型 · 验证流程" else "真实模型 · ${health.optString("model")}"
         agentError = null
+        captureWorkId = repository.captureTarget(account)
     }
     suspend fun pollAgent() {
         if (busy || pollingAgent) return
@@ -106,6 +111,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         finally { pollingAgent = false }
     }
     fun refreshAgent() = action { loadAgent() }
+    fun setAutoCapture(enabled: Boolean) = action {
+        repository.setCaptureTarget(selectedWorkId, enabled)
+        captureWorkId = repository.captureTarget(requireNotNull(session.value).accountKey)
+        message = if (enabled) "已允许将聊天文字整理到当前事项，请在系统设置开启微光聊天记录" else "已关闭事项自动记录"
+    }
     fun selectAgentWork(id: String) = action { selectedWorkId = id; selectedTaskId = null; agentWork = null; agentTask = null; agentReceipt = null; loadAgent() }
     fun selectAgentTask(task: JSONObject) = action {
         selectedTaskId = task.getString("id"); selectedWorkId = task.getString("work_id")
@@ -176,7 +186,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun saveEndpoint(value: String) = action { repository.setEndpoint(value); message = "服务地址已保存" }
     fun setTheme(value: String) = action { repository.setTheme(value) }
-    fun recognize(uri: Uri) = action { editor = EditorDraft(text = capture.recognize(uri), source = "screenshot_ocr", type = "message", imageUri = uri) }
+    fun recognize(uri: Uri) = action {
+        val account = requireNotNull(session.value).accountKey
+        val payload = capture.structured(uri)
+        check(account == session.value?.accountKey) { "账号已变化，请重新导入" }
+        editor = EditorDraft(text = payload.blocks.joinToString("\n") { it.text }, source = "screenshot_ocr", type = "message",
+            imageUri = uri, screenJson = payload.toJson().toString())
+    }
     fun readCalendar() = action { calendarEntries = capture.calendar() }
     fun location() = action {
         val point = capture.location()
@@ -191,7 +207,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         editor = EditorDraft(event.text, event.sourceKind, event.eventType, event.eventId, event.consentToUpload, event.occurredAt, event.serverRevision > 0)
     }
     fun saveEditor(value: EditorDraft) = action {
-        repository.saveEvent(value.text, value.source, value.type, value.upload, value.id, value.occurredAt)
+        if (value.screenJson != null && value.id == null) {
+            val payload = com.chronocapsule.contract.ScreenContract.Payload.fromJson(JSONObject(value.screenJson))
+            cn.weiguang.app.capture.ChronoCapture.save(getApplication(), payload, requireNotNull(session.value).accountKey,
+                upload = value.upload, occurredAt = value.occurredAt)
+        } else repository.saveEvent(value.text, value.source, value.type, value.upload, value.id, value.occurredAt)
         editor = null
         message = if (value.upload && session.value?.endpoint != "offline") "已保存，等待网络上传" else "已保存在本机"
     }

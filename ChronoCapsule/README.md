@@ -1,5 +1,11 @@
 # ChronoCapsule
 
+## 与 ScreenMind 集成
+
+`core/` 已作为 Android Library 被相邻 Mobile Client 引用，共享本工程的 OCR、结构化、屏幕契约和去重源代码。统一用户入口为微光 v0.4，使用账号认证、事项关联、持久化补传与 cloud-v1 确认。具体见 [三部分集成协议](../Mobile%20Client/docs/THREE_PART_INTEGRATION.md)。
+
+下文保留本目录独立调试 APP 的使用说明，`/api/*` 和 legacy 客户端仅用于独立 Cloud Agent 调试；不能仅修改地址后接入现有公网认证网关。集成后的模块测试从 Mobile Client 的构建脚本运行 `:chronocore:testDebugUnitTest`。
+
 Android 端侧屏幕感知模块：**无障碍自动抓屏 → 端侧 OCR → 结构化 → 跨屏去重 → 按契约上传 → 建任务取卡片**。
 
 整条流水线在本机完成，云端只接收结构化文本，不上传截图。
@@ -88,7 +94,7 @@ app/src/main/assets/models/      OCR 模型与字典
 
 ## 已知限制
 
-- 真机微信 / QQ 尚未实测（模拟器上用系统短信 App 验证了同一条代码路径）。
+- 原交付说明记载了 Android16 微信/QQ 试运行；统一 APP 的新一轮模拟器结果见集成验收，群聊、深色模式和不同 ROM 仍需独立验证。
 - 只在窗口切换时采集；停留在同一会话期间的新消息等下一次切换才记录。
 - 只抓聊天页：微信的网页 / 图片查看器 / 公众号文章、QQ 的相册 / 空间 / 支付页会按类名跳过。
 - 输入法弹出时的事件包名为输入法，不做兜底采集（会把键盘按键当聊天内容）。

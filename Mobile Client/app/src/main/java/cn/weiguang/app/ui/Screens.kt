@@ -315,6 +315,12 @@ private fun EventCard(model: AppViewModel, event: LocalEvent) {
         Mark(Icons.Outlined.Description, "${SourceLabels[event.sourceKind]} · ${SyncLabels[event.syncState]}")
         Text(event.text, maxLines = 6, overflow = TextOverflow.Ellipsis)
         Note("记录于 ${formatTime(event.capturedAt)}")
+        if (event.screenJson != null) Note("已保留聊天来源、发言人、时间与位置")
+        if (event.agentWorkId != null) Note(when {
+            event.agentError != null -> "自动整理未完成：${event.agentError}；可在云端事项中重新选择线索处理。"
+            event.agentTaskId != null -> "已提交到关联事项，请到云端事项查看候选"
+            else -> "同步成功后将继续整理到关联事项"
+        })
         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             TextButton(onClick = { model.edit(event) }, enabled = !model.busy) { Text("纠错") }
             if (event.syncState == "local") TextButton(onClick = { confirmUpload = true }, enabled = !model.busy && session?.endpoint != "offline") { Text("上传") }
@@ -351,7 +357,8 @@ private fun EditorSheet(model: AppViewModel, initial: EditorDraft) {
             Text("核对这条线索", style = MaterialTheme.typography.headlineSmall)
             Note("${SourceLabels[draft.source]} · 文字可修改")
             draft.imageUri?.let { AsyncImage(it, "本次导入的原始截图", Modifier.fillMaxWidth().heightIn(max = 210.dp)) }
-            OutlinedTextField(draft.text, { draft = draft.copy(text = it) }, modifier = Modifier.fillMaxWidth(), label = { Text("识别或记录内容") }, minLines = 4, maxLines = 8, enabled = !model.busy, shape = RoundedCornerShape(16.dp))
+            OutlinedTextField(draft.text, { draft = draft.copy(text = it, screenJson = if (it == draft.text) draft.screenJson else null) }, modifier = Modifier.fillMaxWidth(), label = { Text("识别或记录内容") }, minLines = 4, maxLines = 8, enabled = !model.busy, shape = RoundedCornerShape(16.dp))
+            if (draft.screenJson != null) Note("已保留发言人、消息时间与文字位置。修改文字后将作为普通线索保存。")
             OutlinedButton(onClick = {
                 val base = ZonedDateTime.now()
                 DatePickerDialog(context, { _, year, month, day ->
@@ -394,7 +401,7 @@ private fun ColumnScope.DevicesScreen(model: AppViewModel, onCalendar: () -> Uni
         TextButton(onClick = onCalendar, enabled = !model.busy) { Text("选择系统日历记录") }
         TextButton(onClick = onLocation, enabled = !model.busy) { Text("获取一次大致位置") }
         TextButton(onClick = { context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}"))) }) { Text("管理系统授权") }
-        Note("后台聊天通知采集与连续屏幕采集预留给后续版本，当前没有运行这两项服务。")
+        Note("聊天自动记录请在「云端事项」中选择事项并授权，再开启系统聊天采集权限。通知采集尚未接入。")
     }
 }
 

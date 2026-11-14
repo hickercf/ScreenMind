@@ -1,0 +1,3 @@
+<resources>
+    <string name="chat_capture_description">仅在你开启事项自动记录后，切换微信或QQ聊天页时识别文字并同步到所选事项。不会上传图片；可在云端事项页关闭。</string>
+</resources>

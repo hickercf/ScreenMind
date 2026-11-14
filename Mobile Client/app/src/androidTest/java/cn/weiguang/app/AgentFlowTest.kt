@@ -8,6 +8,7 @@ import androidx.test.ext.junit.runners.AndroidJUnit4
 import cn.weiguang.app.data.AgentCommand
 import cn.weiguang.app.data.AppDatabase
 import cn.weiguang.app.data.MIGRATION_1_2
+import cn.weiguang.app.data.MIGRATION_2_3
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.*
 import org.junit.Rule
@@ -47,7 +48,7 @@ class AgentFlowTest {
         compose.onNodeWithTag("agent-start").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
         ready()
-        compose.onNodeWithText("已确认状态 v0", substring = true).assertExists()
+        compose.onNodeWithTag("agent-state-version").assertTextContains("已确认状态 v0", substring = true)
         compose.onNodeWithTag("agent-accept-state").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("已确认状态 v1", substring = true).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("agent-accept-state").assertCountEquals(0)
@@ -64,13 +65,14 @@ class AgentFlowTest {
             db.execSQL("INSERT INTO events VALUES ('a','e',1,'note','manual','保留原文','2026-11-09T12:00:00Z',NULL,'Asia/Shanghai','local',0,0,0)")
             db.version = 1
         }
-        fun open() = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(MIGRATION_1_2).build()
+        fun open() = Room.databaseBuilder(context, AppDatabase::class.java, name).addMigrations(MIGRATION_1_2, MIGRATION_2_3).build()
         val command = AgentCommand("a", "/v1/agent/tasks", """{"request_id":"same-id"}""")
         try {
             val first = open()
             try {
                 val db = first
                 assertEquals("保留原文", db.events().get("a", "e")?.text)
+                db.events().save(requireNotNull(db.events().get("a", "e")).copy(screenJson="{\"blocks\":[]}", agentWorkId="work-test", agentRequestId="stable-request"))
                 db.agentCommands().save(command)
             } finally { first.close() }
             val second = open()
@@ -79,6 +81,8 @@ class AgentFlowTest {
                 assertEquals(command, db.agentCommands().get("a", command.path))
                 assertNull(db.agentCommands().get("b", command.path))
                 assertEquals("保留原文", db.events().get("a", "e")?.text)
+                assertEquals("stable-request", db.events().get("a", "e")?.agentRequestId)
+                assertNotNull(db.events().get("a", "e")?.screenJson)
             } finally { second.close() }
         } finally { context.deleteDatabase(name) }
     }

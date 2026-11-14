@@ -2417,6 +2417,79 @@
         ],
         "title": "Answer"
       },
+      "Block": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Id"
+          },
+          "text": {
+            "type": "string",
+            "maxLength": 4000,
+            "minLength": 1,
+            "title": "Text"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "paragraph",
+              "chat",
+              "card",
+              "key_value"
+            ],
+            "title": "Kind",
+            "default": "paragraph"
+          },
+          "speaker": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Speaker"
+          },
+          "message_at": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Message At"
+          },
+          "bbox": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "number"
+                },
+                "type": "array",
+                "maxItems": 4,
+                "minItems": 4
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bbox"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "id",
+          "text"
+        ],
+        "title": "Block"
+      },
       "CalendarRequest": {
         "properties": {
           "event_id": {
@@ -2686,9 +2759,19 @@
         "properties": {
           "text": {
             "type": "string",
-            "maxLength": 10000,
+            "maxLength": 25000,
             "minLength": 1,
             "title": "Text"
+          },
+          "screen": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ScreenInput"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "additionalProperties": false,
@@ -2713,6 +2796,63 @@
           "refresh_token"
         ],
         "title": "Refresh"
+      },
+      "ScreenInput": {
+        "properties": {
+          "event_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Event Id"
+          },
+          "session_id": {
+            "type": "string",
+            "pattern": "^[a-zA-Z0-9_.:-]{1,100}$",
+            "title": "Session Id"
+          },
+          "app_package": {
+            "type": "string",
+            "maxLength": 150,
+            "minLength": 1,
+            "title": "App Package"
+          },
+          "app_name": {
+            "type": "string",
+            "maxLength": 100,
+            "minLength": 1,
+            "title": "App Name"
+          },
+          "page_title": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Page Title"
+          },
+          "captured_at": {
+            "type": "string",
+            "format": "date-time",
+            "title": "Captured At"
+          },
+          "blocks": {
+            "items": {
+              "$ref": "#/components/schemas/Block"
+            },
+            "type": "array",
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Blocks"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "event_id",
+          "session_id",
+          "app_package",
+          "app_name",
+          "page_title",
+          "captured_at",
+          "blocks"
+        ],
+        "title": "ScreenInput"
       },
       "ShareInput": {
         "properties": {

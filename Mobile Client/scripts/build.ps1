@@ -10,10 +10,10 @@ if ($projectRoot -match '[^\x00-\x7F]') {
     $used = @([IO.DriveInfo]::GetDrives() | ForEach-Object { $_.Name.Substring(0,1) })
     $letter = @('Z','Y','X','W','V','U','T','S','R') | Where-Object { $_ -notin $used } | Select-Object -First 1
     if (-not $letter) { throw 'No free drive letter for the temporary build alias. Use an ASCII checkout path.' }
-    & "$env:SystemRoot/System32/subst.exe" "${letter}:" $projectRoot
+    & "$env:SystemRoot/System32/subst.exe" "${letter}:" (Split-Path $projectRoot -Parent)
     if ($LASTEXITCODE -ne 0) { throw 'Could not create a temporary build alias. Use an ASCII checkout path.' }
     $ownedDrive = "${letter}:"
-    $projectRoot = "${letter}:\"
+    $projectRoot = Join-Path "${letter}:\" (Split-Path $sourceRoot -Leaf)
 }
 try {
 $env:ANDROID_HOME = Join-Path $projectRoot '.tools/sdk'

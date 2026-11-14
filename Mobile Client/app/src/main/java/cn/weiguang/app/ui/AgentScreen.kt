@@ -58,9 +58,21 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
         }
     }
     model.agentWork?.let { work ->
+        if (android.os.Build.VERSION.SDK_INT >= 30) AgentPanel {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val enabled = model.captureWorkId == work.getString("id")
+            Text("聊天自动记录", style = MaterialTheme.typography.titleMedium)
+            Text("开启后，切换微信或QQ聊天页时在本机识别文字，同步并整理到此事项；原始图片不上传。", style = MaterialTheme.typography.bodySmall)
+            Button(onClick = { model.setAutoCapture(!enabled) }, enabled = !model.busy, modifier = Modifier.testTag("capture-toggle")) {
+                Text(if (enabled) "关闭此事项自动记录" else "允许自动记录到此事项")
+            }
+            if (enabled) OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
+                Text("开启系统聊天采集权限")
+            }
+        }
         AgentPanel {
             Text(work.getString("title"), style = MaterialTheme.typography.titleLarge)
-            Text("已确认状态 v${work.getInt("memory_version")} · 新方案确认前保持此版本")
+            Text("已确认状态 v${work.getInt("memory_version")} · 新方案确认前保持此版本", modifier = Modifier.testTag("agent-state-version"))
             val state = work.optJSONObject("state") ?: JSONObject()
             val items = state.optJSONObject("items")
             if (items != null) items.keys().forEach { key ->
@@ -91,7 +103,7 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
     if (model.agentTasks.isNotEmpty()) AgentPanel {
         Text("任务记录", style = MaterialTheme.typography.titleMedium)
         model.agentTasks.filter { model.selectedWorkId == null || it.optString("work_id") == model.selectedWorkId }.forEach { task ->
-            TextButton(onClick = { model.selectAgentTask(task) }, enabled = !model.busy) {
+            TextButton(onClick = { model.selectAgentTask(task) }, enabled = !model.busy, modifier = Modifier.testTag("agent-task-${task.getString("id")}")) {
                 Text("${taskLabels[task.optString("status")] ?: task.optString("status")} · ${task.optString("instruction")}")
             }
         }
