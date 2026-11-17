@@ -34,6 +34,8 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
     var instruction by remember(model.selectedWorkId) { mutableStateOf("请整理所选线索；缺少必要信息时向我提问，方案确认后再生效。") }
     var selected by remember(model.selectedWorkId, events.map { it.eventId to it.revision }) { mutableStateOf(setOf<String>()) }
     val session by model.session.collectAsStateWithLifecycle()
+    val captureGrant by model.captureGrant.collectAsStateWithLifecycle()
+    val captureStatus by cn.weiguang.app.capture.CaptureRuntime.status.collectAsStateWithLifecycle()
     val account = session?.accountKey
     LaunchedEffect(account) { while (true) { model.pollAgent(); delay(2000) } }
     Text("云端事项", style = MaterialTheme.typography.headlineLarge)
@@ -60,14 +62,21 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
     model.agentWork?.let { work ->
         if (android.os.Build.VERSION.SDK_INT >= 30) AgentPanel {
             val context = androidx.compose.ui.platform.LocalContext.current
-            val enabled = model.captureWorkId == work.getString("id")
+            val enabled = captureGrant?.workId == work.getString("id")
             Text("聊天自动记录", style = MaterialTheme.typography.titleMedium)
-            Text("开启后，切换微信或QQ聊天页时在本机识别文字，同步并整理到此事项；原始图片不上传。", style = MaterialTheme.typography.bodySmall)
+            Text("开启后，微信或QQ聊天页的新消息和滚动内容会在本机识别、去重并同步到此事项。悬浮窗可暂停或结束；原始图片不上传。", style = MaterialTheme.typography.bodySmall)
             Button(onClick = { model.setAutoCapture(!enabled) }, enabled = !model.busy, modifier = Modifier.testTag("capture-toggle")) {
                 Text(if (enabled) "关闭此事项自动记录" else "允许自动记录到此事项")
             }
-            if (enabled) OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
-                Text("开启系统聊天采集权限")
+            if (enabled) {
+                Text(if (captureGrant?.paused == true) "已暂停采集，已保存材料仍可同步" else captureStatus.detail,
+                    style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = model::pauseAutoCapture, enabled = !model.busy, modifier = Modifier.testTag("capture-pause")) {
+                    Text(if (captureGrant?.paused == true) "继续采集" else "暂停采集")
+                }
+                OutlinedButton(onClick = { context.startActivity(android.content.Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS)) }) {
+                    Text(if (captureStatus.connected) "查看系统聊天采集权限" else "开启系统聊天采集权限")
+                }
             }
         }
         AgentPanel {

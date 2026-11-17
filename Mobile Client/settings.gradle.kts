@@ -15,3 +15,5 @@ rootProject.name = "Weiguang"
 include(":app")
 include(":chronocore")
 project(":chronocore").projectDir = file("../ChronoCapsule/core")
+// Standalone synthetic chat surface for service-level emulator QA; never an app dependency.
+include(":capturefixture")

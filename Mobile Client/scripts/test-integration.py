@@ -10,7 +10,8 @@ ROOT=Path(__file__).resolve().parents[1]
 
 def run(args):
     adb=str(ROOT/'.tools/sdk/platform-tools/adb.exe')
-    out=ROOT/'artifacts/emulator-integration';out.mkdir(parents=True,exist_ok=True)
+    out=Path(args.output_dir).resolve() if args.output_dir else ROOT/'artifacts/emulator-integration'
+    out.mkdir(parents=True,exist_ok=True)
     command=[adb,'-s',args.serial]
     def call(*tail):
         return subprocess.run(command+list(tail),check=True,capture_output=True,text=True,encoding='utf-8',errors='replace').stdout
@@ -45,4 +46,5 @@ def run(args):
 
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--serial',default='emulator-5560')
+    parser.add_argument('--output-dir',help='Keep this run separate from previous integration artifacts')
     run(parser.parse_args())

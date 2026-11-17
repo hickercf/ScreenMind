@@ -1,3 +1,4 @@
 <resources>
-    <string name="chat_capture_description">仅在你开启事项自动记录后，切换微信或QQ聊天页时识别文字并同步到所选事项。不会上传图片；可在云端事项页关闭。</string>
+    <string name="capture_overlay_work">事项：%1$s</string>
+    <string name="chat_capture_description">仅在你开启事项自动记录后，识别当前微信或QQ聊天页中出现和滚动显示的文字，并同步到所选事项。原始图片不上传；可在悬浮窗暂停、结束，或在云端事项页关闭。开启服务会显示采集控制悬浮窗。</string>
 </resources>

@@ -8,265 +8,227 @@ import android.os.Handler
 import android.os.Looper
 import android.os.PowerManager
 import android.os.SystemClock
-import android.util.Log
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
+import android.view.accessibility.AccessibilityWindowInfo
+import cn.weiguang.app.BuildConfig
 import cn.weiguang.app.WeiguangApp
-import kotlinx.coroutines.runBlocking
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import kotlinx.coroutines.cancel
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.combine
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
-/** Chat-only capture adapted from ChronoCapsule; account/work upload opt-in is checked before saving. */
+/** Event-driven OCR, with one frame in flight and a durable account/work authorization. */
+@androidx.annotation.RequiresApi(30)
 class ChatCaptureService : AccessibilityService() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
-    private var windowGeneration = 0L
-
     private val repository get() = (applicationContext as WeiguangApp).repository
-
-    @Volatile
-    private var lastCaptureAt = 0L
-
-    /** 一张图还没处理完就不再抓新的 */
-    @Volatile
-    private var busy = false
-
-    /** 每次开始抓图的时刻，看门狗用来判断 busy 卡了多久 */
-    @Volatile
-    private var busySince = 0L
-
-    /** 最近一分钟内的抓图时刻，用来限制总频率 */
-    private val recentCaptures = ArrayDeque<Long>()
-
     private val handler = Handler(Looper.getMainLooper())
-
-    /** 等待界面稳定后再截的那一屏，只保留最新一次 */
-    private var pendingPkg: String? = null
-    private var pendingAppName: String? = null
-
-    private val pendingCapture = Runnable { capturePending() }
-
-    private val powerManager by lazy { getSystemService(PowerManager::class.java) }
-    private val keyguard by lazy { getSystemService(KeyguardManager::class.java) }
+    private val schedule = CaptureSchedule()
+    private var grant: CaptureGrant? = null
+    private var pending: ChatWindow? = null
+    private var busy = false
+    private var changing = false
+    private var generation = 0L
+    private val blockedWindows = linkedSetOf<Int>()
+    private var settleRetries = 0
+    private var status = CaptureStatus(connected = true, detail = "等待微信或QQ聊天页")
+    private var queueSummary = ""
+    private lateinit var overlay: CaptureOverlay
+    private val runPending = Runnable { capturePending() }
+    private data class ChatWindow(val id: Int, val pkg: String, val name: String)
 
     override fun onServiceConnected() {
         super.onServiceConnected()
+        overlay = CaptureOverlay(this, { changeControl(stop = false) }, { changeControl(stop = true) })
+        publish("等待微信或QQ聊天页")
+        scope.launch {
+            combine(repository.captureGrants, repository.events) { target, events -> target to events }.collect { (target, events) ->
+                val changed = target != grant
+                if (changed) {
+                    grant = target; generation++; clearPending(); changing = false
+                    status = status.copy(detail = if (target?.paused == true) "已暂停" else "等待微信或QQ聊天页")
+                }
+                val relevant = events.filter { it.agentWorkId == target?.workId && !it.deleted }
+                val waiting = relevant.count { it.syncState in listOf("pending", "failed") }
+                val failed = relevant.count { it.syncState == "conflict" || it.agentError != null }
+                queueSummary = "待同步 $waiting · 已交给Agent ${relevant.count { it.agentTaskId != null }}" + if (failed > 0) " · 需检查 $failed" else ""
+                render()
+                if (changed && target != null && !target.paused) requestActive()
+            }
+        }
         repository.session.value?.let { repository.scheduleSync(it.accountKey) }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        if (Build.VERSION.SDK_INT < 30) return
-        val e = event ?: return
-        val rawPkg = e.packageName?.toString() ?: return
-        val className = e.className?.toString().orEmpty()
-        // 真机上 logcat 常常读不到，先落盘再判断，才能看到事件到底有没有来
-        Log.d(TAG, "事件 type=${e.eventType} $rawPkg / $className")
-
-        if (e.eventType != AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED) return
-        val generation = ++windowGeneration
-
-        // 只认聊天 App 自己的窗口事件。输入法弹出时事件包名是输入法，
-        // 拿"最近一次聊天 App"去猜键盘底下是谁，实测会把键盘按键当成聊天内容
-        // 传上云（整屏 36 条里 35 条是 Gboard 的键），比漏一屏更糟。
-        val appName = CHAT_PACKAGES[rawPkg] ?: run { clearPending(); return }
-        if (!isChatWindow(className)) {
-            Log.d(TAG, "非聊天页面，跳过：$className")
-            clearPending()
-            return
+        if (event == null || !::overlay.isInitialized) return
+        val pkg = event.packageName?.toString() ?: return
+        val name = appName(pkg) ?: return
+        val target = grant ?: return
+        if (repository.session.value?.accountKey != target.account) return
+        when (event.eventType) {
+            AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                generation++
+                val className = event.className?.toString().orEmpty()
+                if (isBlocked(className)) {
+                    blockedWindows.add(event.windowId)
+                    if (blockedWindows.size > 32) blockedWindows.remove(blockedWindows.first())
+                } else if (className.startsWith("$pkg.") && (className.endsWith("Activity") || className.endsWith("UI"))) {
+                    // A real application page transition may clear the classification. Generic
+                    // FrameLayout/TextView events must not turn a known browser into a chat.
+                    blockedWindows.remove(event.windowId)
+                }
+                if (event.windowId in blockedWindows) { clearPending(); publish("当前页面不采集"); return }
+            }
+            AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED, AccessibilityEvent.TYPE_VIEW_SCROLLED -> Unit
+            else -> return
         }
-        Log.d(TAG, "命中聊天窗口：$appName / $className")
-
-        // 不立刻抓：等动画结束、页面渲染完再抓，否则经常截到空白会话页
-        scope.launch {
-            val account = repository.session.value?.accountKey ?: return@launch
-            if (repository.captureTarget(account) == null || windowGeneration != generation) return@launch
-            pendingPkg = rawPkg
-            pendingAppName = appName
-            handler.removeCallbacks(pendingCapture)
-            handler.postDelayed(pendingCapture, SETTLE_MS)
-        }
+        // Keep page classification current while paused, so resume cannot capture a browser opened meanwhile.
+        if (target.paused || changing) return
+        if (event.windowId < 0 || event.windowId in blockedWindows) return
+        request(ChatWindow(event.windowId, pkg, name))
     }
 
-    /**
-     * 同一个 App 里不全是聊天：微信的网页、图片查看器，QQ 的相册/空间/支付页
-     * 都会发同样的窗口事件。这些页面抓下来会把网页内容当成聊天消息上传，
-     * 真机实测一屏相册能出 60 个垃圾块。按类名挡掉，宁可少抓一屏。
-     */
-    private fun isChatWindow(className: String): Boolean {
-        if (className.isEmpty()) return true
-        val lower = className.lowercase()
-        return BLOCKED_WINDOW_CLASSES.none { lower.contains(it) }
+    private fun appName(pkg: String): String? = when (pkg) {
+        "com.tencent.mm" -> "微信"
+        "com.tencent.mobileqq" -> "QQ"
+        "cn.weiguang.capturefixture" -> if (BuildConfig.DEBUG) "合成聊天测试" else null
+        else -> null
     }
 
-    /** 界面已稳定，真正执行截图前的最后一轮检查 */
+    private fun isBlocked(name: String) = listOf("webview", "gallery", "winkhome", "qbasealbum", "dialog",
+        "imageviewer", "browser", "brandservice", "flutter", "plugin.").any { name.lowercase().contains(it) }
+
+    /** Check the real foreground window, not a remembered package from an old accessibility event. */
+    private fun activeChat(): ChatWindow? {
+        val power = getSystemService(PowerManager::class.java)
+        if (!power.isInteractive || getSystemService(KeyguardManager::class.java).isKeyguardLocked) return null
+        val visible = windows
+        if (visible.any { it.type == AccessibilityWindowInfo.TYPE_INPUT_METHOD }) return null
+        val active = visible.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isFocused }
+            ?: visible.firstOrNull { it.type == AccessibilityWindowInfo.TYPE_APPLICATION && it.isActive } ?: return null
+        if (active.id in blockedWindows) return null
+        val root = active.root ?: return null
+        val pkg = root.packageName?.toString() ?: return null
+        return appName(pkg)?.let { ChatWindow(active.id, pkg, it) }
+    }
+
+    private fun requestActive() { activeChat()?.let(::request) }
+    private fun request(window: ChatWindow) {
+        if (grant == null || grant?.paused == true || changing) return
+        settleRetries = 0
+        pending = window
+        schedule.request(SystemClock.elapsedRealtime())
+        enqueue()
+    }
+    private fun enqueue() {
+        handler.removeCallbacks(runPending)
+        if (busy) return // Keep the latest pending frame; completion schedules it.
+        schedule.delay(SystemClock.elapsedRealtime())?.let { delay -> handler.postDelayed(runPending, delay) }
+    }
+    private fun clearPending() { pending = null; schedule.cancel(); handler.removeCallbacks(runPending) }
+
+    private fun current(expected: CaptureGrant, epoch: Long) = !changing && grant == expected && !expected.paused &&
+        generation == epoch && repository.session.value?.accountKey == expected.account
+
     private fun capturePending() {
-        val pkg = pendingPkg ?: return
-        val appName = pendingAppName ?: return
-        val now = SystemClock.elapsedRealtime()
-
-        if (busy) {
-            // 上一张还在流水线里。不要丢：pending 还留着，process 结束时会补抓
-            if (now - busySince < BUSY_TIMEOUT_MS) {
-                Log.d(TAG, "上一张还在处理，稍后补抓")
-                return
+        val target = grant?.takeUnless { it.paused || changing } ?: return
+        val frame = pending ?: return
+        if (busy) return
+        val wait = schedule.delay(SystemClock.elapsedRealtime()) ?: return
+        if (wait > 0) { enqueue(); return }
+        val active = activeChat()
+        if (active != frame) {
+            // Old windows can emit a final content event after a new Activity is visible.
+            // Resolve the actual foreground again instead of losing the new page's only trigger.
+            if (active != null) { clearPending(); request(active) }
+            else if (settleRetries++ < 2) {
+                // Window roots may lag the transition event. Retry only this settling request.
+                schedule.cancel(); schedule.request(SystemClock.elapsedRealtime()); enqueue()
+            } else { clearPending(); publish("等待可采集的聊天页，键盘和锁屏不采集") }
+            return
+        }
+        schedule.start(SystemClock.elapsedRealtime()); pending = null; busy = true
+        val epoch = generation
+        scope.launch {
+            var bitmap: Bitmap? = null
+            try {
+                publish("正在识别屏幕文字")
+                // API34+ captures the chat window only. Earlier versions briefly hide our overlay.
+                if (Build.VERSION.SDK_INT < 34) { overlay.hideForScreenshot(); delay(100) }
+                if (!current(target, epoch) || activeChat() != frame) return@launch
+                bitmap = withTimeout(10_000) { screenshot(frame.id) }
+                status = status.copy(screenshots = status.screenshots + 1)
+                if (!current(target, epoch) || activeChat() != frame) return@launch
+                val payload = ChronoCapture.recognize(applicationContext, bitmap, frame.pkg, frame.name)
+                if (!current(target, epoch) || activeChat() != frame) return@launch
+                val saved = ChronoCapture.save(applicationContext, payload, target.account, target.workId,
+                    automatic = true, expectedCaptureToken = target.token)
+                status = if (saved == null) status.copy(duplicates = status.duplicates + 1) else status.copy(saved = status.saved + 1)
+                publish(if (saved == null) "没有新增消息 · 已去重" else "新消息已保存，正在同步")
+            } catch (_: TimeoutCancellationException) { if (current(target, epoch)) publish("截屏超时，请检查系统聊天采集权限") }
+            catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { if (current(target, epoch)) publish("本次未采集成功，可检查页面、权限或同步状态") }
+            finally {
+                bitmap?.recycle()
+                overlay.restore(); busy = false; enqueue()
             }
-            Log.d(TAG, "上一张处理超过 ${BUSY_TIMEOUT_MS / 1000} 秒未结束，强制复位")
-            busy = false
         }
-        if (!screenReady()) {
-            Log.d(TAG, "息屏或锁屏，跳过")
-            clearPending()
-            return
-        }
-        if (now - lastCaptureAt < MIN_INTERVAL_MS) {
-            // 还没冷却完，按剩余时间再排一次（期间有新事件会覆盖成更新的那一屏）
-            handler.removeCallbacks(pendingCapture)
-            handler.postDelayed(pendingCapture, MIN_INTERVAL_MS - (now - lastCaptureAt))
-            return
-        }
-        if (!allowByRateLimit(now)) {
-            clearPending()
-            return
-        }
-
-        clearPending()
-        lastCaptureAt = now
-        Log.d(TAG, "开始截图：$appName")
-        capture(pkg, appName)
     }
 
-    private fun clearPending() {
-        pendingPkg = null
-        pendingAppName = null
-        handler.removeCallbacks(pendingCapture)
-    }
-
-    /** 息屏、锁屏时不抓：拿到的是黑屏或锁屏页，没有结构化价值，白耗电 */
-    private fun screenReady(): Boolean {
-        if (powerManager?.isInteractive != true) return false
-        return keyguard?.isKeyguardLocked != true
-    }
-
-    /** 滑动窗口限流：一分钟最多 MAX_CAPTURES_PER_MINUTE 张 */
-    private fun allowByRateLimit(now: Long): Boolean {
-        while (recentCaptures.isNotEmpty() && now - recentCaptures.first() >= RATE_WINDOW_MS) {
-            recentCaptures.removeFirst()
-        }
-        if (recentCaptures.size >= MAX_CAPTURES_PER_MINUTE) {
-            Log.w(TAG, "一分钟内已抓 ${recentCaptures.size} 张，丢弃本次事件")
-            return false
-        }
-        recentCaptures.addLast(now)
-        return true
-    }
-
-    @android.annotation.TargetApi(30)
-    private fun capture(pkg: String, appName: String) {
-        val account = repository.session.value?.accountKey ?: return
-        val generation = windowGeneration
-        busy = true
-        busySince = SystemClock.elapsedRealtime()
-        takeScreenshot(
-            Display.DEFAULT_DISPLAY,
-            mainExecutor,
-            object : TakeScreenshotCallback {
-                override fun onSuccess(result: ScreenshotResult) {
-                    val buffer = result.hardwareBuffer
-                    // wrapHardwareBuffer 得到的是 HARDWARE 位图，必须 copy 成软件位图才能读像素
-                    val software = runCatching {
-                        Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
-                            ?.copy(Bitmap.Config.ARGB_8888, false)
+    private suspend fun screenshot(windowId: Int): Bitmap = suspendCancellableCoroutine { continuation ->
+        status = status.copy(requests = status.requests + 1)
+        CaptureRuntime.publish(status)
+        val callback = object : TakeScreenshotCallback {
+            override fun onSuccess(result: ScreenshotResult) {
+                val buffer = result.hardwareBuffer
+                var wrapped: Bitmap? = null
+                val bitmap = try {
+                    runCatching {
+                        wrapped = Bitmap.wrapHardwareBuffer(buffer, result.colorSpace)
+                        wrapped?.copy(Bitmap.Config.ARGB_8888, false)
                     }.getOrNull()
-                    buffer.close()
-
-                    if (software == null) {
-                        Log.d(TAG, "截图转换失败")
-                        busy = false
-                        return
-                    }
-                    if (windowGeneration != generation || repository.session.value?.accountKey != account) {
-                        software.recycle()
-                        busy = false
-                        return
-                    }
-                    Log.d(TAG, "截图成功 ${software.width}×${software.height}")
-                    Thread { process(software, pkg, appName, account) }.start()
-                }
-
-                override fun onFailure(errorCode: Int) {
-                    // 1 = 服务没被授予截图能力；2 = 被系统限流
-                    Log.d(TAG, "截图失败 code=$errorCode")
-                    busy = false
-                }
+                } finally { wrapped?.recycle(); buffer.close() }
+                if (bitmap == null) {
+                    if (continuation.isActive) continuation.resumeWithException(IllegalStateException("截图转换失败"))
+                } else if (continuation.isActive) continuation.resume(bitmap) { _, image, _ -> image.recycle() }
+                else bitmap.recycle()
             }
-        )
+            override fun onFailure(errorCode: Int) {
+                if (continuation.isActive) continuation.resumeWithException(IllegalStateException("截图失败：$errorCode"))
+            }
+        }
+        if (Build.VERSION.SDK_INT >= 34) takeScreenshotOfWindow(windowId, mainExecutor, callback)
+        else takeScreenshot(Display.DEFAULT_DISPLAY, mainExecutor, callback)
     }
 
-    private fun process(bitmap: Bitmap, pkg: String, appName: String, account: String) {
-        try {
-            runBlocking {
-                val target = repository.captureTarget(account) ?: return@runBlocking
-                val payload = ChronoCapture.recognize(applicationContext, bitmap, pkg, appName)
-                ChronoCapture.save(applicationContext, payload, account, target, automatic = true)
-            }
-        } catch (_: Exception) {
-            // No raw chat text in logs. Persisted evidence is retried by the authenticated outbox.
-            Log.w(TAG, "聊天采集未完成，请在事项页面检查授权和同步状态")
-        } finally {
-            bitmap.recycle()
-            busy = false
-            handler.post { if (pendingPkg != null) handler.post(pendingCapture) }
+    private fun changeControl(stop: Boolean) {
+        val target = grant ?: return
+        if (changing) return
+        changing = true; generation++; clearPending(); render()
+        scope.launch {
+            try {
+                if (stop) repository.setCaptureTarget(null, false, target.token)
+                else repository.setCapturePaused(!target.paused, target.token)
+                // Stay blocked until the grant collector observes the new authorization.
+            } catch (cancelled: CancellationException) { throw cancelled }
+            catch (_: Exception) { changing = false; publish("控制未完成，请在微光中检查事项") }
         }
     }
 
-    override fun onInterrupt() {
-        Log.w(TAG, "无障碍服务被中断")
+    private fun publish(detail: String) { status = status.copy(detail = detail); render() }
+    private fun render() {
+        CaptureRuntime.publish(status)
+        if (!::overlay.isInitialized) return
+        val target = grant
+        if (target == null) overlay.close() else overlay.render(target, status.detail, queueSummary, changing)
     }
 
+    override fun onInterrupt() { generation++; clearPending(); publish("系统中断采集，请检查无障碍权限") }
     override fun onDestroy() {
-        Log.w(TAG, "无障碍服务已断开")
-        clearPending()
-        scope.cancel()
+        generation++; clearPending(); scope.cancel()
+        if (::overlay.isInitialized) overlay.close()
+        CaptureRuntime.publish(CaptureStatus())
         super.onDestroy()
-    }
-
-    companion object {
-        private const val TAG = "ChatCapture"
-
-        /** 只在这些应用里自动记录。加新应用只需要往这张表里加一行 */
-        private val CHAT_PACKAGES = mapOf(
-            "com.tencent.mm" to "微信",
-            "com.tencent.mobileqq" to "QQ"
-        )
-
-        /** 窗口事件后等这么久再抓，避开切换动画，保证拿到渲染完的页面 */
-        private const val SETTLE_MS = 350L
-
-        /**
-         * 类名里带这些片段的窗口不是聊天页：
-         * webview 网页、gallery 图片查看、相册、系统对话框、QQ 空间/插件页。
-         * 小写比较，微信/QQ 的类名大小写不统一。
-         */
-        private val BLOCKED_WINDOW_CLASSES = listOf(
-            "webview", "gallery", "winkhome", "qbasealbum",
-            "dialog", "imageviewer", "browser",
-            // 公众号文章是 Flutter 页面，类名里没有 webview
-            "brandservice", "flutter", "plugin."
-        )
-
-        /**
-         * 两次采集的最小间隔。系统建屏硬限 1 秒 1 张，这里留 1.5 倍余量；
-         * 单次流水线本身就要 0.3~1 秒，再密也处理不过来。
-         */
-        private const val MIN_INTERVAL_MS = 1_500L
-
-        /** 一分钟内最多抓几张，防止微信高频弹窗把 CPU 吃满、发热耗电 */
-        private const val MAX_CAPTURES_PER_MINUTE = 20
-        private const val RATE_WINDOW_MS = 60_000L
-
-        /** busy 超过这个时长仍未复位，判定为卡死，强制放行下一次抓图 */
-        private const val BUSY_TIMEOUT_MS = 20_000L
     }
 }

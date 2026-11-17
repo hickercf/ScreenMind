@@ -3,9 +3,12 @@ package cn.weiguang.app.data
 import android.content.Context
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.work.*
 import cn.weiguang.app.WeiguangApp
+import cn.weiguang.app.capture.CaptureGrant
 import com.chronocapsule.contract.ScreenContract
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.sync.Mutex
@@ -30,6 +33,9 @@ class Repository(private val context: Context, val database: AppDatabase) {
     val theme = settings.data.map { it[stringPreferencesKey("theme")] ?: "system" }
     val events = session.flatMapLatest { current -> current?.let { database.events().observe(it.accountKey) } ?: flowOf(emptyList()) }
     val decisions = session.flatMapLatest { current -> current?.let { database.decisions().observe(it.accountKey) } ?: flowOf(emptyList()) }
+    val captureGrants: Flow<CaptureGrant?> = combine(session, settings.data) { current, prefs ->
+        current?.takeUnless { it.endpoint == "offline" }?.let { captureGrant(it.accountKey, prefs) }
+    }.distinctUntilChanged()
 
     suspend fun setEndpoint(value: String) {
         check(session.value == null) { "请退出当前账号后切换服务" }
@@ -85,7 +91,7 @@ class Repository(private val context: Context, val database: AppDatabase) {
         catch (_: ApiFailure) { /* A rejected/expired session is removed locally. */ }
         finally {
             WorkManager.getInstance(context).cancelUniqueWork("sync:${current.accountKey}")
-            settings.edit { it.remove(stringPreferencesKey("capture:${current.accountKey}")) }
+            settings.edit { clearCapture(it, current.accountKey) }
             sessions.clear()
             sessionState.value = null
         }
@@ -113,10 +119,12 @@ class Repository(private val context: Context, val database: AppDatabase) {
 
     /** Durable evidence + stable task request are saved together before any network call. */
     suspend fun saveCapture(payload: ScreenContract.Payload, expectedAccount: String, workId: String? = null,
-                            upload: Boolean = false, requireTarget: Boolean = false, occurredAt: String? = null): LocalEvent = mutex.withLock {
+                            upload: Boolean = false, requireTarget: Boolean = false, occurredAt: String? = null,
+                            expectedCaptureToken: String? = null): LocalEvent = mutex.withLock {
         val current = requireNotNull(session.value) { "请先登录" }
         check(current.accountKey == expectedAccount) { "账号已变化，请重新采集" }
         if (requireTarget) check(captureTarget(expectedAccount) == workId) { "自动记录授权已关闭或事项已变化" }
+        if (expectedCaptureToken != null) check(captureGrant(expectedAccount)?.token == expectedCaptureToken) { "采集已暂停或授权已变化" }
         check(payload.validate().isEmpty() && payload.blocks.isNotEmpty()) { "识别结果不符合输入要求" }
         val send = upload && current.endpoint != "offline"
         val event = LocalEvent(accountKey = current.accountKey, sourceKind = "screenshot_ocr", eventType = "message",
@@ -128,22 +136,54 @@ class Repository(private val context: Context, val database: AppDatabase) {
         event
     }
 
-    suspend fun setCaptureTarget(workId: String?, enabled: Boolean) = mutex.withLock {
+    suspend fun setCaptureTarget(workId: String?, enabled: Boolean, expectedToken: String? = null) = mutex.withLock {
         val current = requireNotNull(session.value)
         check(current.endpoint != "offline") { "请先登录云端账号" }
+        if (expectedToken != null) check(captureGrant(current.accountKey)?.token == expectedToken) { "采集授权已变化" }
+        var title = ""
         if (enabled) {
             check(workId != null) { "请先选择事项" }
-            authenticated("/v1/agent/works/$workId")
+            title = authenticated("/v1/agent/works/$workId").getJSONObject("work").getString("title")
         }
         settings.edit {
-            val key = stringPreferencesKey("capture:${current.accountKey}")
-            if (enabled && workId != null) it[key] = workId else it.remove(key)
+            clearCapture(it, current.accountKey)
+            if (enabled && workId != null) {
+                it[stringPreferencesKey("capture:${current.accountKey}")] = workId
+                it[stringPreferencesKey("captureTitle:${current.accountKey}")] = title
+                it[stringPreferencesKey("captureToken:${current.accountKey}")] = UUID.randomUUID().toString()
+            }
         }
     }
 
-    suspend fun captureTarget(account: String): String? {
+    suspend fun setCapturePaused(paused: Boolean, expectedToken: String) = mutex.withLock {
+        val current = requireNotNull(session.value)
+        val grant = requireNotNull(captureGrant(current.accountKey)) { "请先开启事项自动记录" }
+        check(grant.token == expectedToken) { "事项已变化，请重试" }
+        settings.edit {
+            it[booleanPreferencesKey("capturePaused:${current.accountKey}")] = paused
+            it[stringPreferencesKey("captureToken:${current.accountKey}")] = UUID.randomUUID().toString()
+        }
+    }
+
+    private fun clearCapture(prefs: androidx.datastore.preferences.core.MutablePreferences, account: String) {
+        for (prefix in listOf("capture", "captureTitle", "captureToken")) prefs.remove(stringPreferencesKey("$prefix:$account"))
+        prefs.remove(booleanPreferencesKey("capturePaused:$account"))
+    }
+
+    private fun captureGrant(account: String, prefs: Preferences): CaptureGrant? {
+        val work = prefs[stringPreferencesKey("capture:$account")] ?: return null
+        return CaptureGrant(account, work, prefs[stringPreferencesKey("captureTitle:$account")] ?: "当前事项",
+            prefs[stringPreferencesKey("captureToken:$account")] ?: "legacy:$work",
+            prefs[booleanPreferencesKey("capturePaused:$account")] ?: false)
+    }
+
+    suspend fun captureGrant(account: String): CaptureGrant? {
         if (session.value?.accountKey != account || session.value?.endpoint == "offline") return null
-        return settings.data.first()[stringPreferencesKey("capture:$account")]
+        return captureGrant(account, settings.data.first())
+    }
+
+    suspend fun captureTarget(account: String): String? {
+        return captureGrant(account)?.takeUnless { it.paused }?.workId
     }
 
     fun scheduleSync(accountKey: String) {

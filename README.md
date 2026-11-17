@@ -2,6 +2,8 @@
 
 端侧 OCR → 结构化信息过滤 → 云端 SuperAgent → 移动端交互体验。
 
+手机端0.4.1开发版新增采集悬浮窗、聊天内容变化/滚动触发、暂停恢复和授权标识校验。使用与验证边界见 [悬浮窗与后台OCR](Mobile%20Client/docs/CAPTURE_OVERLAY.md)；本轮未发布到公网更新渠道。
+
 ## 三部分统一接入 · 手机 v0.4
 
 `ChronoCapsule/core` 提供共享 PP-OCRv6 tiny、消息结构化与去重；`Mobile Client` 负责统一账号、上传授权、持久化队列和事项交互；`Cloud Agent` 复用通用执行与记忆。请完整检出三个目录后构建手机端。接口和模拟器测试见 [三部分集成说明](Mobile%20Client/docs/THREE_PART_INTEGRATION.md)。

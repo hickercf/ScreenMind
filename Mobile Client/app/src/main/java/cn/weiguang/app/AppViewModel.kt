@@ -31,6 +31,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val repository = (application as WeiguangApp).repository
     private val capture = CaptureService(application)
     val session = repository.session
+    val captureGrant = repository.captureGrants.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val events = repository.events.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val decisions = repository.decisions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val endpoint = repository.endpoint.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "http://127.0.0.1:8765")
@@ -65,8 +66,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var selectedWorkId by mutableStateOf<String?>(null)
         private set
-    var captureWorkId by mutableStateOf<String?>(null)
-        private set
     private var selectedTaskId: String? = null
     private var pollingAgent = false
 
@@ -85,7 +84,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
         agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentTask = null; agentReceipt = null
         selectedWorkId = null; selectedTaskId = null; agentError = null; agentMode = "正在连接"
-        captureWorkId = null
     }
 
     private suspend fun loadAgent() {
@@ -99,7 +97,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val health = snapshot.getJSONObject("health")
         agentMode = if (health.optString("provider") == "mock") "模拟模型 · 验证流程" else "真实模型 · ${health.optString("model")}"
         agentError = null
-        captureWorkId = repository.captureTarget(account)
     }
     suspend fun pollAgent() {
         if (busy || pollingAgent) return
@@ -113,8 +110,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun refreshAgent() = action { loadAgent() }
     fun setAutoCapture(enabled: Boolean) = action {
         repository.setCaptureTarget(selectedWorkId, enabled)
-        captureWorkId = repository.captureTarget(requireNotNull(session.value).accountKey)
         message = if (enabled) "已允许将聊天文字整理到当前事项，请在系统设置开启微光聊天记录" else "已关闭事项自动记录"
+    }
+    fun pauseAutoCapture() = action {
+        val target = requireNotNull(captureGrant.value)
+        repository.setCapturePaused(!target.paused, target.token)
     }
     fun selectAgentWork(id: String) = action { selectedWorkId = id; selectedTaskId = null; agentWork = null; agentTask = null; agentReceipt = null; loadAgent() }
     fun selectAgentTask(task: JSONObject) = action {

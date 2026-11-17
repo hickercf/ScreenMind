@@ -27,7 +27,8 @@ object ChronoCapture {
         }
 
     suspend fun save(context: Context, payload: ScreenContract.Payload, account: String, workId: String? = null,
-                     upload: Boolean = false, automatic: Boolean = false, occurredAt: String? = null): LocalEvent? = lock.withLock {
+                     upload: Boolean = false, automatic: Boolean = false, occurredAt: String? = null,
+                     expectedCaptureToken: String? = null): LocalEvent? = lock.withLock {
         val repository = (context.applicationContext as WeiguangApp).repository
         if (!automatic) return@withLock repository.saveCapture(payload, account, workId, upload, occurredAt = occurredAt)
         check(workId != null && repository.captureTarget(account) == workId) { "请先为当前事项开启自动记录" }
@@ -41,7 +42,8 @@ object ChronoCapture {
             if (result.blocks.isEmpty()) return@withContext null
             val filtered = payload.copy(blocks = ScreenContract.renumber(result.blocks))
             // Commit dedupe only after Room has durably accepted the upload/task outbox.
-            val event = repository.saveCapture(filtered, account, workId, upload = true, requireTarget = true)
+            val event = repository.saveCapture(filtered, account, workId, upload = true, requireTarget = true,
+                expectedCaptureToken = expectedCaptureToken)
             history.parentFile?.mkdirs()
             CrossScreenDeduper.saveTo(history)
             event
