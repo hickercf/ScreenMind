@@ -1,0 +1,40 @@
+{
+  "published": true,
+  "verified": true,
+  "verified_at": "2026-11-17T10:44:39+08:00",
+  "version": "0.4.1",
+  "version_code": 5,
+  "package_name": "cn.weiguang.app",
+  "channel": "debug",
+  "source_commit": "ea1910901ba683f48ffa6b28ebf27bc5e28a4ade",
+  "source_commit_url": "https://github.com/hickercf/ScreenMind/commit/ea1910901ba683f48ffa6b28ebf27bc5e28a4ade",
+  "download_page": "https://agent.qwertyuiopasdf.asia/download",
+  "apk_url": "https://agent.qwertyuiopasdf.asia/v1/app/releases/187f1a1b9f193cd7bd193827976469064876250e8f563533149e48e935b4eb5e.apk",
+  "apk_sha256": "187f1a1b9f193cd7bd193827976469064876250e8f563533149e48e935b4eb5e",
+  "apk_bytes": 182059100,
+  "signature_verified": true,
+  "signature_matches_previous": true,
+  "signer_certificate_sha256": "f3edfb2a919472bdc28966682dc476f0cf6b8bb53aad07093c248078ca8c3358",
+  "previous_version": "0.4.0",
+  "previous_version_code": 4,
+  "checks": {
+    "health": 200,
+    "v4_update": {
+      "status": 200,
+      "version_code": 5,
+      "sha256": "187f1a1b9f193cd7bd193827976469064876250e8f563533149e48e935b4eb5e"
+    },
+    "v5_no_update": 204,
+    "download_page": 200,
+    "range": {
+      "status": 206,
+      "content_range": "bytes 0-1023/182059100"
+    },
+    "public_full_download": {
+      "bytes": 182059100,
+      "sha256": "187f1a1b9f193cd7bd193827976469064876250e8f563533149e48e935b4eb5e"
+    }
+  },
+  "phone_installation_verified": false,
+  "notes": "Actual phone installation, WeChat/QQ behavior, ROM compatibility and power use remain for device validation."
+}

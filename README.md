@@ -2,7 +2,7 @@
 
 端侧 OCR → 结构化信息过滤 → 云端 SuperAgent → 移动端交互体验。
 
-手机端0.4.1开发版新增采集悬浮窗、聊天内容变化/滚动触发、暂停恢复和授权标识校验。使用与验证边界见 [悬浮窗与后台OCR](Mobile%20Client/docs/CAPTURE_OVERLAY.md)；本轮未发布到公网更新渠道。
+手机端0.4.1内测版新增采集悬浮窗、聊天内容变化/滚动触发、暂停恢复和授权标识校验，已发布到debug手机更新渠道。使用与验证边界见 [悬浮窗与后台OCR](Mobile%20Client/docs/CAPTURE_OVERLAY.md)，更新入口和真机操作见 [0.4.1发布记录](Mobile%20Client/docs/APP_041_RELEASE.md)。
 
 ## 三部分统一接入 · 手机 v0.4
 
