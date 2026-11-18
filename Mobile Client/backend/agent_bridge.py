@@ -16,6 +16,8 @@ from uuid import UUID
 
 import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, Query
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import Field
 from screenmind.api import create_app
 from screenmind.config import Settings
@@ -180,6 +182,17 @@ class AgentHub:
 
 
 def install(app, main):
+    plan_assets = Path(__file__).with_name("plan_web")
+
+    @app.get("/plans", include_in_schema=False)
+    async def plan_page():
+        return FileResponse(plan_assets / "index.html", headers={
+            "Cache-Control": "no-store",
+            "Content-Security-Policy": "default-src 'self'; object-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+            "Referrer-Policy": "no-referrer",
+        })
+
+    app.mount("/plan-assets", StaticFiles(directory=plan_assets), name="plan_assets")
     router = APIRouter(prefix='/v1/agent', tags=['Agent integration'])
 
     def authenticated_user(authorization: str | None = Header(default=None)):
@@ -216,6 +229,11 @@ def install(app, main):
     @router.get('/works/{wid}')
     async def work(wid: Identifier, request: Request, user=Depends(authenticated_user)):
         return await forward(request, user, 'GET', 'works/' + wid)
+
+    @router.get('/works/{wid}/plan')
+    async def plan(wid: Identifier, request: Request, response: Response, user=Depends(authenticated_user)):
+        response.headers["Cache-Control"] = "no-store"
+        return await forward(request, user, 'GET', f'works/{wid}/plan')
 
     @router.get('/works/{wid}/memory-index')
     async def memory_status(wid: Identifier, request: Request, user=Depends(authenticated_user)):

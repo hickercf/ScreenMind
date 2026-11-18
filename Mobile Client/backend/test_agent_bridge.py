@@ -93,6 +93,30 @@ class AgentBridgeTests(unittest.TestCase):
         self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations").status_code, 200)
         self.assertEqual(self.req('GET', f"agent/tasks/{task['id']}/delegations", user=self.b).status_code, 404)
 
+    def test_plan_is_account_scoped_and_hides_superseded_candidates(self):
+        work, _, first = self.schedule()
+        url = f"agent/works/{work['id']}/plan"
+        self.assertEqual(self.req("GET", url, user=self.b).status_code, 404)
+        self.assertEqual(self.client.get("/v1/" + url).status_code, 401)
+        result = self.req("GET", url)
+        self.assertEqual(result.headers["cache-control"], "no-store")
+        plan = result.json()
+        self.assertEqual(plan["version"], 0)
+        self.assertEqual(plan["confirmed"], [])
+        self.assertEqual(plan["candidate"]["task_id"], first["id"])
+        self.assertEqual(plan["candidate"]["cards"][0]["value"], "组会")
+        second, _ = self.start(work, [self.upload(json.dumps({
+            'schedule_changes': [{'id':'other', 'title':'讨论', 'at':'2026-12-10T19:00:00+08:00'}]
+        }))])
+        second = self.wait(second["id"])
+        self.assertEqual(self.req("GET", url).json()["candidate"]["task_id"], second["id"])
+        body = self.response(first, "accept_state", proposal_id=first["interaction"]["proposal_id"])
+        self.assertEqual(self.req("POST", f"agent/tasks/{first['id']}/responses", body).status_code, 202)
+        plan = self.req("GET", url).json()
+        self.assertEqual(plan["version"], 1)
+        self.assertIsNone(plan["candidate"])
+        self.assertEqual(plan["confirmed"][0]["value"], "组会")
+
     def structured_event(self):
         text = '周五在A302讨论，记得带电脑'
         screen = {'event_id': 'evt-capture', 'session_id': 'sess-capture', 'app_package': 'com.tencent.mm',

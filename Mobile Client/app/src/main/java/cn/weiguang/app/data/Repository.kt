@@ -331,7 +331,14 @@ class Repository(private val context: Context, val database: AppDatabase) {
             .put("subagents", authenticated("/v1/agent/subagents").getJSONArray("subagents"))
             .put("works", authenticated("/v1/agent/works").getJSONArray("works"))
             .put("tasks", authenticated("/v1/agent/tasks").getJSONArray("tasks"))
-        if (workId != null) result.put("work", authenticated("/v1/agent/works/$workId").getJSONObject("work"))
+        if (workId != null) {
+            result.put("work", authenticated("/v1/agent/works/$workId").getJSONObject("work"))
+            try {
+                result.put("plan", authenticated("/v1/agent/works/$workId/plan"))
+            } catch (error: ApiFailure) {
+                if (error.status != 404) throw error
+            }
+        }
         if (taskId != null) {
             val task = authenticated("/v1/agent/tasks/$taskId").getJSONObject("task")
             result.put("task", task)

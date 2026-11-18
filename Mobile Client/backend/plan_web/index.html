@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>方案看板 · 微光</title>
+  <link rel="stylesheet" href="/plan-assets/plan.css">
+  <script src="/plan-assets/plan.js" defer></script>
+</head>
+<body>
+  <header class="mast"><a href="/plans" class="brand">微光 <span>方案看板</span></a><button id="logout" hidden>退出登录</button></header>
+  <main>
+    <section id="login-panel" class="login">
+      <h1>接着办你的事项</h1>
+      <p>用手机里的微光账号登录，查看同一事项的已确认安排和最新调整。</p>
+      <form id="login" method="post">
+        <label>账号<input id="username" autocomplete="username" required maxlength="32"></label>
+        <label>密码<input id="password" type="password" autocomplete="current-password" required maxlength="128"></label>
+        <button class="primary" id="sign-in" type="submit">登录</button>
+      </form>
+    </section>
+    <section id="workspace" hidden>
+      <label class="work-label">事项<select id="work-select" aria-label="切换事项"></select></label>
+      <p id="empty" hidden>这个账号还没有事项。请先在微光 App 创建一个事项。</p>
+      <section id="board" class="board" hidden aria-labelledby="work-title">
+        <header class="board-head">
+          <div><p class="eyebrow" id="kind"></p><h1 id="work-title"></h1></div>
+          <div class="modes"><button id="confirmed" aria-pressed="true"></button><button id="candidate" aria-pressed="false" hidden>待确认更新</button></div>
+        </header>
+        <p id="change" class="change" hidden></p>
+        <p id="no-cards" class="no-cards" hidden>确认第一份方案后会显示在这里。</p>
+        <div id="deck" class="deck" tabindex="0" aria-label="方案卡片"></div>
+        <footer class="board-footer">
+          <output id="position"></output>
+          <div class="arrows"><button id="prev" aria-label="上一张">←</button><button id="next" aria-label="下一张">→</button></div>
+        </footer>
+      </section>
+    </section>
+    <p id="status" class="status" role="status"></p>
+  </main>
+</body>
+</html>

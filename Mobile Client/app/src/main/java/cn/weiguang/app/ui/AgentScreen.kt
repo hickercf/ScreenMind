@@ -60,6 +60,8 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
         }
     }
     model.agentWork?.let { work ->
+        val planView = model.agentPlan?.takeIf { it.optString("work_id") == work.optString("id") }
+        if (planView != null) PlanDeck(planView, model::selectAgentTask)
         if (android.os.Build.VERSION.SDK_INT >= 30) AgentPanel {
             val context = androidx.compose.ui.platform.LocalContext.current
             val enabled = captureGrant?.workId == work.getString("id")
@@ -84,11 +86,11 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
             Text("已确认状态 v${work.getInt("memory_version")} · 新方案确认前保持此版本", modifier = Modifier.testTag("agent-state-version"))
             val state = work.optJSONObject("state") ?: JSONObject()
             val items = state.optJSONObject("items")
-            if (items != null) items.keys().forEach { key ->
+            if (planView == null && items != null) items.keys().forEach { key ->
                 val item = items.getJSONObject(key)
                 Text("${item.optString("title")}\n${item.optString("at")} · ${if (item.optString("status") == "completed") "已完成" else "待完成"}")
             }
-            state.optJSONObject("plan")?.let { plan ->
+            if (planView == null) state.optJSONObject("plan")?.let { plan ->
                 Text(plan.itemObjects("participants").joinToString("、") { "${it.optString("name")}（${mapOf("attending" to "参加", "declined" to "退出", "tentative" to "待确认")[it.optString("status")] ?: it.optString("status")}）" })
             }
             if (work.getInt("memory_version") > 0 && items != null) CalendarPreview(model, items)

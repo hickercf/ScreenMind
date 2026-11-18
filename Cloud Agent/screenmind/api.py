@@ -174,6 +174,11 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
     async def work(wid: str):
         return {"work": app.state.store.work(wid), "history": app.state.store.memory_history(wid)}
 
+    @app.get("/api/works/{wid}/plan")
+    async def plan(wid: str):
+        from .plan_view import read_plan
+        return read_plan(app.state.store, wid)
+
     @app.get("/api/works/{wid}/memory-index")
     async def memory_index(wid: str):
         return {"jobs": app.state.store.memory_status(wid), "enabled": app.state.store.memory_service is not None}
@@ -307,6 +312,6 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
 
     @app.get("/", include_in_schema=False)
     async def index():
-        return FileResponse(static / "index.html")
+        return FileResponse(static / "workbench" / "index.html")
 
     return app

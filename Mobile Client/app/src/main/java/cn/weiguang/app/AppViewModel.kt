@@ -56,6 +56,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     var agentWork by mutableStateOf<JSONObject?>(null)
         private set
+    var agentPlan by mutableStateOf<JSONObject?>(null)
+        private set
     var agentTask by mutableStateOf<JSONObject?>(null)
         private set
     var agentReceipt by mutableStateOf<JSONObject?>(null)
@@ -82,7 +84,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
-        agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentTask = null; agentReceipt = null
+        agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentPlan = null; agentTask = null; agentReceipt = null
         selectedWorkId = null; selectedTaskId = null; agentError = null; agentMode = "正在连接"
     }
 
@@ -94,6 +96,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (account != session.value?.accountKey || selectedTaskId != taskId || selectedWorkId != workId) return
         agentWorks = snapshot.itemObjects("works"); agentCapabilities = snapshot.itemObjects("subagents"); agentTasks = snapshot.itemObjects("tasks")
         agentWork = snapshot.optJSONObject("work"); agentTask = snapshot.optJSONObject("task"); agentReceipt = snapshot.optJSONObject("action")
+        val nextPlan = snapshot.optJSONObject("plan")
+        if (agentPlan?.toString() != nextPlan?.toString()) agentPlan = nextPlan
         val health = snapshot.getJSONObject("health")
         agentMode = if (health.optString("provider") == "mock") "模拟模型 · 验证流程" else "真实模型 · ${health.optString("model")}"
         agentError = null
