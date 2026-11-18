@@ -49,7 +49,7 @@ class ChatCaptureService : AccessibilityService() {
                     grant = target; generation++; clearPending(); changing = false
                     status = status.copy(detail = if (target?.paused == true) "已暂停" else "等待微信或QQ聊天页")
                 }
-                val relevant = events.filter { it.agentWorkId == target?.workId && !it.deleted }
+                val relevant = events.filter { target != null && it.agentWorkId == target.workId && !it.deleted }
                 val waiting = relevant.count { it.syncState in listOf("pending", "failed") }
                 val failed = relevant.count { it.syncState == "conflict" || it.agentError != null }
                 queueSummary = "待同步 $waiting · 已交给Agent ${relevant.count { it.agentTaskId != null }}" + if (failed > 0) " · 需检查 $failed" else ""
@@ -165,7 +165,7 @@ class ChatCaptureService : AccessibilityService() {
                 val saved = ChronoCapture.save(applicationContext, payload, target.account, target.workId,
                     automatic = true, expectedCaptureToken = target.token)
                 status = if (saved == null) status.copy(duplicates = status.duplicates + 1) else status.copy(saved = status.saved + 1)
-                publish(if (saved == null) "没有新增消息 · 已去重" else "新消息已保存，正在同步")
+                publish(if (saved == null) "没有新增消息 · 已去重" else "已存到本机「线索」，请核对后上传")
             } catch (_: TimeoutCancellationException) { if (current(target, epoch)) publish("截屏超时，请检查系统聊天采集权限") }
             catch (cancelled: CancellationException) { throw cancelled }
             catch (_: Exception) { if (current(target, epoch)) publish("本次未采集成功，可检查页面、权限或同步状态") }

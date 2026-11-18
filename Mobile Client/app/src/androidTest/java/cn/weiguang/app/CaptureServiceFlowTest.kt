@@ -107,6 +107,14 @@ class CaptureServiceFlowTest {
             waitFor("scroll event screenshot", 30_000) { CaptureRuntime.status.value.screenshots > scrollScreens }
             stages += "view_scrolled_event_triggers_screenshot"
 
+            click("切聊天")
+            waitFor("same-window unrelated chat processed locally", 30_000) { events(account).any { it.text.contains("C909") } }
+            runBlocking { repo.sync() }
+            assertTrue(events(account).all { it.syncState == "local" && !it.consentToUpload && it.agentWorkId == null })
+            val emptySnapshot = runBlocking { repo.agentSnapshot(null, wid) }
+            assertEquals(0, emptySnapshot.getJSONArray("tasks").length())
+            stages += "different_conversation_in_same_window_stays_local_and_unassigned"
+            click("切聊天")
             val blockedCount = events(account).size
             launchFixture("BlockedBrowserActivity")
             Thread.sleep(2200)
@@ -146,17 +154,22 @@ class CaptureServiceFlowTest {
             assertEquals(secureCount, events(account).size)
             stages += "secure_window_not_captured_or_uploaded"
 
-            runBlocking { repo.sync() }
-            waitFor("durable events delivered to agent", 30_000) {
+            val approved = events(account).first { it.text.contains("A302") }
+            runBlocking { repo.uploadEvent(approved.eventId) }
+            waitFor("approved event synced", 30_000) {
                 runBlocking { repo.sync() }
-                events(account).all { it.syncState == "synced" && it.agentTaskId != null }
+                events(account).any { it.eventId == approved.eventId && it.syncState == "synced" }
             }
-            val delivered = events(account)
-            assertEquals(delivered.size, delivered.map { it.agentTaskId }.toSet().size)
-            val snapshot = runBlocking { repo.agentSnapshot(delivered.first().agentTaskId, wid) }
-            assertEquals(delivered.size, snapshot.getJSONArray("tasks").length())
+            val synced = events(account).first { it.eventId == approved.eventId }
+            val agentTask = runBlocking { repo.agentMutation("tasks", JSONObject()
+                .put("request_id", UUID.randomUUID().toString()).put("work_id", wid).put("instruction", "整理所选测试线索")
+                .put("events", org.json.JSONArray().put(JSONObject().put("event_id", synced.eventId)
+                    .put("revision", synced.revision)))) }.getJSONObject("task")
+            val snapshot = runBlocking { repo.agentSnapshot(agentTask.getString("id"), wid) }
+            assertEquals(1, snapshot.getJSONArray("tasks").length())
+            assertTrue(events(account).filter { it.eventId != synced.eventId }.all { it.syncState == "local" })
             assertEquals(0, snapshot.getJSONObject("work").getInt("memory_version"))
-            stages += "unique_agent_tasks_and_unconfirmed_state_unchanged"
+            stages += "only_explicitly_approved_evidence_synced_and_selected"
 
             clickDescription("结束屏幕采集")
             waitFor("stop removes authorization") { runBlocking { repo.captureGrant(account) == null } }

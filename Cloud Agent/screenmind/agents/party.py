@@ -18,6 +18,7 @@ class Participant(StrictModel):
 class Responsibility(StrictModel):
     title: str = Field(min_length=1, max_length=80)
     owner_id: Identifier | None = None
+    status: Literal["pending", "completed"] = "pending"
 
 
 class PartyState(StrictModel):
@@ -65,6 +66,7 @@ class PartyAgent:
 明确不来 -> declined；可能不来 -> tentative；明确参加 -> attending。无法确定说话人则要求用户补充，不冒认成员。
 金额以整数分表示。fixed_cost_cents 是明确的固定总价，不能将人均价格当总价。未知价格填 null。
 职责的 owner_id 保留原负责人，由业务规则指出缺口，不能凭空指定替代者。
+职责 status 默认为 pending。分配和承诺均不是完成。只有本轮证据或用户补充明确说已完成同一件职责才标记 completed，引用该证据；保留未变化职责已确认的完成状态。
 source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 authenticated_user_inputs 的引用。
 根据用户补充修改的计划应引用相应 input 引用；方案也必须引用本次屏幕。
 标题/时间/地点缺失时标注待确认。记忆是当前工作独立快照，不能读取其他工作。
@@ -108,7 +110,9 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
             add("budget", "人均预算", "¥" + money(plan.budget_per_person_cents))
         for index, responsibility in enumerate(plan.responsibilities):
             person = people.get(responsibility.owner_id)
-            if person is None or person.status == "declined":
+            if responsibility.status == "completed":
+                value = (person.name + " · " if person else "") + "已完成"
+            elif person is None or person.status == "declined":
                 value = "待重新分配" + (f"（原负责人：{person.name}，已退出）" if person else "")
                 risks.append(responsibility.title + "需要确认新负责人")
             elif person.status == "tentative":
@@ -124,7 +128,13 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
         add("next_steps", "待办与影响", "；".join(risks) if risks else "暂无已识别的责任缺口；仍需人工核对时间、地点与价格")
         old = ((context.memory or {}).get("state") or {}).get("plan")
         before = sum(p["status"] == "attending" for p in old["participants"]) if old else None
-        summary = (f"确定参加人数：{before} → {len(attending)}。" if before is not None else "已生成初始聚会方案。") + "确认后才更新该事项记忆。费用与责任影响由规则计算。"
+        summary = f"确定参加人数：{before} → {len(attending)}。" if before is not None else "已生成初始聚会方案。"
+        if old and before and attending and old.get("fixed_cost_cents") is not None and plan.fixed_cost_cents is not None:
+            old_share = money(old["fixed_cost_cents"], before)
+            new_share = money(plan.fixed_cost_cents, len(attending))
+            if old_share != new_share:
+                summary += f"按确定人数估算，人均 ¥{old_share} → ¥{new_share}。"
+        summary += "确认后更新事项。"
         seen = list(dict.fromkeys((((context.memory or {}).get("state") or {}).get("processed_sources", [])) + sorted(screen_refs)))
         if len(seen) > 2000:
             raise ToolError("该聚会已达到示例记忆容量，请归档后创建新事项")
@@ -162,6 +172,14 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
                 plan["responsibilities"] = [r for r in plan["responsibilities"] if r["title"] != assignment[1]]
                 plan["responsibilities"].append({"title": assignment[1], "owner_id": people[assignment[2]]["id"]})
                 return
+            completion = re.fullmatch(r"(.{1,80})：已完成", text)
+            if completion:
+                for responsibility in plan["responsibilities"]:
+                    owner = next((p for p in people.values() if p["id"] == responsibility["owner_id"]), None)
+                    if responsibility["title"] == completion[1] and (speaker is None or (owner and owner["name"] == speaker)):
+                        responsibility["status"] = "completed"
+                        return
+                raise ProviderError("未能核对已完成的职责或报告人")
             status = {"我今晚不去了": "declined", "我不来了": "declined", "我可能来不了": "tentative", "我又能来了": "attending"}.get(text)
             explicit = re.fullmatch(r"(.{1,40})：(退出|待确认|参加)", text)
             if explicit:

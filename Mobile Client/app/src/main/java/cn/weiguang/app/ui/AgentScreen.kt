@@ -64,9 +64,9 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
             val context = androidx.compose.ui.platform.LocalContext.current
             val enabled = captureGrant?.workId == work.getString("id")
             Text("聊天自动记录", style = MaterialTheme.typography.titleMedium)
-            Text("开启后，微信或QQ聊天页的新消息和滚动内容会在本机识别、去重并同步到此事项。悬浮窗可暂停或结束；原始图片不上传。", style = MaterialTheme.typography.bodySmall)
+            Text("前台微信或QQ内容会在本机识别并存为线索。在「线索」核对并上传后，再回此处选中要交给事项的内容。悬浮窗可暂停或结束。", style = MaterialTheme.typography.bodySmall)
             Button(onClick = { model.setAutoCapture(!enabled) }, enabled = !model.busy, modifier = Modifier.testTag("capture-toggle")) {
-                Text(if (enabled) "关闭此事项自动记录" else "允许自动记录到此事项")
+                Text(if (enabled) "停止本机记录" else "开启本机记录")
             }
             if (enabled) {
                 Text(if (captureGrant?.paused == true) "已暂停采集，已保存材料仍可同步" else captureStatus.detail,

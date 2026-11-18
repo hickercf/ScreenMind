@@ -18,6 +18,7 @@ public class CaptureFixtureActivity extends Activity {
     private ChatView chat;
     private boolean newMessage;
     private boolean scrolled;
+    private boolean otherChat;
 
     @Override public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -29,6 +30,7 @@ public class CaptureFixtureActivity extends Activity {
         button(controls, "新消息", () -> { newMessage = true; changed(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED); });
         button(controls, "滚动", () -> { scrolled = true; changed(AccessibilityEvent.TYPE_VIEW_SCROLLED); });
         button(controls, "重复", () -> changed(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED));
+        button(controls, "切聊天", () -> { otherChat = !otherChat; changed(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED); });
         button(controls, "安全页", () -> {
             getWindow().addFlags(WindowManager.LayoutParams.FLAG_SECURE);
             changed(AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED);
@@ -51,6 +53,10 @@ public class CaptureFixtureActivity extends Activity {
         @Override protected void onDraw(Canvas canvas) {
             canvas.drawColor(Color.WHITE);
             paint.setColor(Color.BLACK); paint.setTextSize(getWidth() * 0.050f);
+            if (otherChat) {
+                canvas.drawText("无关聊天代号C909", getWidth()*.10f, getHeight()*.34f, paint);
+                return;
+            }
             canvas.drawText("12:00", getWidth()*.04f, getHeight()*.04f, paint);
             canvas.drawText("小林", getWidth()*.20f, getHeight()*.12f, paint);
             paint.setTextSize(getWidth()*.041f);

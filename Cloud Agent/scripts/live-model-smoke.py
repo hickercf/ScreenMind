@@ -18,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--run", action="store_true", help="Explicitly enable billed model requests")
     parser.add_argument("--db", default="data/live-model-check.sqlite3")
+    parser.add_argument("--output", default="artifacts/real-model-report.json")
     args = parser.parse_args()
     if not args.run:
         parser.error("Pass --run to invoke the real model")
@@ -27,8 +28,8 @@ def main():
     settings = replace(settings, db_path=Path(args.db), allowed_hosts=("testserver",), api_key="")
     report = {"model": settings.model, "base_url": settings.base_url,
               "at": datetime.now(timezone.utc).isoformat(), "passed": False, "stages": []}
-    output = Path("artifacts/real-model-report.json")
-    output.parent.mkdir(exist_ok=True)
+    output = Path(args.output)
+    output.parent.mkdir(parents=True, exist_ok=True)
 
     def record():
         output.write_text(json.dumps(report, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -116,8 +117,16 @@ def main():
             check(any("蛋糕" in r["title"] and r["owner_id"] == people(revised)["小王"]["id"] for r in revised["memory_proposal"]["plan"]["responsibilities"]), "reassignment to Xiaowang")
             act(revised, "confirm", card_version=revised["card_version"])
             check(state(wid)["memory_version"] == 2, "final memory version")
+            check(all(r["status"] == "pending" for r in state(wid)["state"]["plan"]["responsibilities"]),
+                  "assignment alone is not completion")
+            completed = create(screen([("小王", "聚会用的生日蛋糕我已经订好了，店家确认接单。")]), "actual_completion")
+            check(any("蛋糕" in r["title"] and r["status"] == "completed"
+                      for r in completed["memory_proposal"]["plan"]["responsibilities"]), "actual cake completion")
+            check(state(wid)["memory_version"] == 2, "completion draft does not commit")
+            act(completed, "confirm", card_version=completed["card_version"])
+            check(state(wid)["memory_version"] == 3, "completion confirmed")
             report["passed"] = True
-            report["final_memory_version"] = 2
+            report["final_memory_version"] = 3
             record()
             print(json.dumps({"passed": True, "model": settings.model, "work_id": wid, "report": str(output)}), flush=True)
         except Exception as exc:

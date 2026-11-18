@@ -93,6 +93,19 @@ def test_tentative_is_not_declined_and_cancel_does_not_commit(client):
     assert confirm(client, change).status_code == 409
 
 
+def test_party_completion_needs_separate_evidence_and_confirmation(client):
+    w = initialized(client)
+    wid = w["id"]
+    assignment = task(client, wid, evidence(client, ["蛋糕负责人：小王"]))
+    assert confirm(client, assignment).status_code == 202
+    assert memory(client, wid)["state"]["plan"]["responsibilities"][0]["status"] == "pending"
+    completed = task(client, wid, evidence(client, ["蛋糕：已完成"], "小王"))
+    assert value(completed, "responsibility_0") == "小王 · 已完成"
+    assert memory(client, wid)["state"]["plan"]["responsibilities"][0]["status"] == "pending"
+    assert confirm(client, completed).status_code == 202
+    assert memory(client, wid)["state"]["plan"]["responsibilities"][0]["status"] == "completed"
+
+
 def test_memory_conflict_requires_regeneration(client):
     w = initialized(client)
     one = task(client, w["id"], evidence(client, ["我今晚不去了"], "小林"))

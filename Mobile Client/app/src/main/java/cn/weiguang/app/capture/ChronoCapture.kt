@@ -41,8 +41,8 @@ object ChronoCapture {
             val result = CrossScreenDeduper.filter(payload.blocks, payload.appPackage, payload.pageTitle)
             if (result.blocks.isEmpty()) return@withContext null
             val filtered = payload.copy(blocks = ScreenContract.renumber(result.blocks))
-            // Commit dedupe only after Room has durably accepted the upload/task outbox.
-            val event = repository.saveCapture(filtered, account, workId, upload = true, requireTarget = true,
+            // A recording grant selects the session, but does not verify which conversation is visible.
+            val event = repository.saveCapture(filtered, account, workId, requireTarget = true,
                 expectedCaptureToken = expectedCaptureToken)
             history.parentFile?.mkdirs()
             CrossScreenDeduper.saveTo(history)

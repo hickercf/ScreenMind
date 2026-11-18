@@ -13,11 +13,10 @@ ROOT = Path(__file__).resolve().parents[1]
 SERVICE = 'cn.weiguang.app/cn.weiguang.app.capture.ChatCaptureService'
 
 
-def run(serial):
+def run(serial, out):
     if not serial.startswith('emulator-'):
         raise SystemExit('This runner is restricted to synthetic emulator testing.')
     adb = [str(ROOT / '.tools/sdk/platform-tools/adb.exe'), '-s', serial]
-    out = ROOT / 'artifacts/capture-service'
     out.mkdir(parents=True, exist_ok=True)
 
     def call(*args):
@@ -85,4 +84,6 @@ def run(serial):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('--serial', default='emulator-5560')
-    run(parser.parse_args().serial)
+    parser.add_argument('--output-dir', type=Path, default=ROOT / 'artifacts/capture-service')
+    args = parser.parse_args()
+    run(args.serial, args.output_dir)

@@ -126,11 +126,12 @@ class Repository(private val context: Context, val database: AppDatabase) {
         if (requireTarget) check(captureTarget(expectedAccount) == workId) { "自动记录授权已关闭或事项已变化" }
         if (expectedCaptureToken != null) check(captureGrant(expectedAccount)?.token == expectedCaptureToken) { "采集已暂停或授权已变化" }
         check(payload.validate().isEmpty() && payload.blocks.isNotEmpty()) { "识别结果不符合输入要求" }
-        val send = upload && current.endpoint != "offline"
+        val send = upload && !requireTarget && current.endpoint != "offline"
+        val destination = workId.takeUnless { requireTarget }
         val event = LocalEvent(accountKey = current.accountKey, sourceKind = "screenshot_ocr", eventType = "message",
             text = payload.blocks.joinToString("\n") { it.text }, capturedAt = payload.capturedAt, occurredAt = occurredAt,
             screenJson = payload.toJson().toString(), consentToUpload = send, syncState = if (send) "pending" else "local",
-            agentWorkId = workId, agentRequestId = if (workId != null) UUID.randomUUID().toString() else null)
+            agentWorkId = destination, agentRequestId = if (destination != null) UUID.randomUUID().toString() else null)
         database.events().save(event)
         if (send) scheduleSync(current.accountKey)
         event

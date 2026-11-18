@@ -70,15 +70,18 @@ def test_structured_retrieval_scoped_fallback_and_budget(tmp_path):
     try:
         work, other=make_work(store),make_work(store)
         _,old=make_task(store,work['id'],'甲场地只有六个座位，因此八人的聚会没有选择它。')
+        _,other_venue=make_task(store,work['id'],'乙场地要求至少八人订套餐，当时未选择，需重新确认商家的条件。')
         for i in range(14): make_task(store,work['id'],f'杂项{i}：记得带纸巾和水。')
         _,secret=make_task(store,other['id'],'甲场地跨事项秘密')
         async def build():
             while await service.index_one(): pass
         asyncio.run(build())
-        task,_=make_task(store,work['id'],'为什么没有选甲场地？')
+        task,_=make_task(store,work['id'],'当时为什么没有选择甲场地和乙场地？现在7人，哪些条件要重新核实？')
         task=store.claim(task['id'])
+        assert all(item['screen']['id'] not in {old['id'],other_venue['id']} for item in task['memory_context']['history'])
         enriched=asyncio.run(service.enrich(task))['memory_context']
-        assert old['id'] in encode(enriched['history']) and secret['id'] not in encode(enriched)
+        assert {old['id'],other_venue['id']} <= {item['screen']['id'] for item in enriched['history']}
+        assert secret['id'] not in encode(enriched)
         assert enriched['mode']=='structured-degraded'
         assert enriched['retrieval']['semantic_vectors'] is False
         assert enriched['history_chars_used']<=enriched['history_char_budget']
