@@ -2,6 +2,8 @@
 
 ## 用户体验
 
+从 0.4.3 起，手机内测发布包固定使用 `https://agent.qwertyuiopasdf.asia` 登录、同步和检查更新。原来使用该地址的用户覆盖安装后可以继续用原账号和事项。此前连接其他服务器的用户需要登录微光云端账号，已有本机记录仍按原账户保存。开发机的普通调试构建仍可连接本地网关。
+
 debug / pilot 内测版新增右上角“更新”入口，登录前也可访问。应用启动或回到前台时检查版本，同一服务地址每 4 小时最多自动检查一次；也可手动检查。
 
 发现新版本后展示版本号、大小、更新说明。用户发起下载，APP 显示进度并检查大小、SHA-256、包名、实际版本和签名。通过后打开系统安装页。首次可能需要允许本应用安装软件，返回后再次点击安装。正常消费设备的系统安装确认仍由用户完成。
@@ -46,7 +48,7 @@ v0.2 及更早版本没有更新入口，需要先安装一次 v0.3。后续仍�
 3. 构建并准备发布文件，在 `Mobile Client` 执行：
 
 ```powershell
-& ./scripts/build.ps1 -Tasks @('assembleDebug','testDebugUnitTest','lintDebug')
+& ./scripts/build.ps1 -Tasks @('-PscreenmindPublished=true','assembleDebug','testDebugUnitTest','lintDebug')
 & ./.venv/Scripts/python.exe ./scripts/prepare-update.py ./app/build/outputs/apk/debug/app-debug.apk --channel debug --notes '本次更新说明'
 ```
 
@@ -56,6 +58,8 @@ v0.2 及更早版本没有更新入口，需要先安装一次 v0.3。后续仍�
 5. 手机打开 APP 等待自动检查，或“更新 → 检查更新 → 下载新版 → 安装更新”。
 
 构建 pilot 时使用 `assemblePilot` 与 `--channel pilot`，发布 ARM64 APK。不同渠道不自动切换。
+
+发布构建使用 `-PscreenmindPublished=true`，关闭服务器选择和明文连接。该模式要求更新包由同一个阿里云域名提供，发布清单使用默认的同站点下载地址。
 
 ## 对象存储分发
 

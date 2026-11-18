@@ -172,7 +172,7 @@ fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () ->
         }
     }
 
-    if (showEndpoint) EndpointDialog(model) { showEndpoint = false }
+    if (showEndpoint && !BuildConfig.LOCK_CLOUD_ENDPOINT) EndpointDialog(model) { showEndpoint = false }
     model.editor?.let { draft -> EditorSheet(model, draft) }
     model.calendarEntries?.let { entries ->
         AlertDialog(onDismissRequest = { model.calendarEntries = null }, title = { Text("选择一条日历记录") }, text = {
@@ -207,7 +207,7 @@ private fun ColumnScope.LoginScreen(model: AppViewModel, onEndpoint: () -> Unit)
     }, enabled = !model.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp), shape = RoundedCornerShape(16.dp)) { Text(if (register) "注册并登录" else "登录") }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         TextButton(onClick = { register = !register }, enabled = !model.busy) { Text(if (register) "已有账号，去登录" else "创建测试账号") }
-        TextButton(onClick = onEndpoint, enabled = !model.busy) { Text("服务连接") }
+        if (!BuildConfig.LOCK_CLOUD_ENDPOINT) TextButton(onClick = onEndpoint, enabled = !model.busy) { Text("服务连接") }
     }
     OutlinedButton(onClick = model::offline, enabled = !model.busy, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("先离线体验 OCR 与页面") }
     Note("测试账号由联调服务器验证。离线体验的数据只保存在这台手机中。")

@@ -34,7 +34,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val captureGrant = repository.captureGrants.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val events = repository.events.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val decisions = repository.decisions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
-    val endpoint = repository.endpoint.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "http://127.0.0.1:8765")
+    val endpoint = repository.endpoint.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), CloudEndpoint.default)
     val theme = repository.theme.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), "system")
     var busy by mutableStateOf(false)
         private set

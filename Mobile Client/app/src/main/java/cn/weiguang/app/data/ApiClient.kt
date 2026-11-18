@@ -19,7 +19,7 @@ class ApiClient {
         .followRedirects(false).followSslRedirects(false).build()
 
     suspend fun call(endpoint: String, path: String, method: String = "GET", body: JSONObject? = null, token: String? = null): JSONObject = withContext(Dispatchers.IO) {
-        val request = Request.Builder().url(endpoint + path)
+        val request = Request.Builder().url(CloudEndpoint.request(endpoint) + path)
         if (token != null) request.header("Authorization", "Bearer $token")
         val requestBody = body?.toString()?.toRequestBody("application/json; charset=utf-8".toMediaType())
         request.method(method, if (method in listOf("POST", "PUT")) requestBody ?: "{}".toRequestBody("application/json".toMediaType()) else null)

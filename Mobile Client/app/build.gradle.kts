@@ -5,6 +5,8 @@ plugins {
     id("com.google.devtools.ksp")
 }
 
+val publishedChannel = providers.gradleProperty("screenmindPublished").map(String::toBoolean).orElse(false)
+
 android {
     namespace = "cn.weiguang.app"
     compileSdk = 35
@@ -12,15 +14,18 @@ android {
         applicationId = "cn.weiguang.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 6
-        versionName = "0.4.2"
+        versionCode = 7
+        versionName = "0.4.3"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "false")
         buildConfigField("boolean", "ENABLE_SELF_UPDATE", "false")
+        buildConfigField("boolean", "LOCK_CLOUD_ENDPOINT", "true")
     }
     buildTypes {
         debug {
-            buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "true")
+            buildConfigField("boolean", "ALLOW_LOCAL_HTTP", (!publishedChannel.get()).toString())
+            buildConfigField("boolean", "LOCK_CLOUD_ENDPOINT", publishedChannel.get().toString())
+            manifestPlaceholders["debugCleartext"] = (!publishedChannel.get()).toString()
             buildConfigField("boolean", "ENABLE_SELF_UPDATE", "true")
         }
         release {
@@ -33,7 +38,9 @@ android {
             signingConfig = signingConfigs.getByName("debug")
             matchingFallbacks += "release"
             ndk { abiFilters += (project.findProperty("targetAbi") as String? ?: "arm64-v8a") }
-            buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "true")
+            buildConfigField("boolean", "ALLOW_LOCAL_HTTP", (!publishedChannel.get()).toString())
+            buildConfigField("boolean", "LOCK_CLOUD_ENDPOINT", publishedChannel.get().toString())
+            manifestPlaceholders["debugCleartext"] = (!publishedChannel.get()).toString()
             buildConfigField("boolean", "ENABLE_SELF_UPDATE", "true")
         }
     }

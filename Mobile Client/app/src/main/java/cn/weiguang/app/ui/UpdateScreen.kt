@@ -15,8 +15,10 @@ fun UpdateScreen(model: AppViewModel, endpoint: String, onEndpoint: () -> Unit) 
     val busy = state.phase == "checking" || state.phase == "downloading"
     Text("应用更新", style = MaterialTheme.typography.headlineLarge)
     Text("当前版本 ${BuildConfig.VERSION_NAME}", style = MaterialTheme.typography.titleMedium)
-    Text("服务地址：$endpoint", style = MaterialTheme.typography.bodySmall)
-    OutlinedButton(onClick = onEndpoint, enabled = !busy) { Text("设置服务地址") }
+    if (!BuildConfig.LOCK_CLOUD_ENDPOINT) {
+        Text("服务地址：$endpoint", style = MaterialTheme.typography.bodySmall)
+        OutlinedButton(onClick = onEndpoint, enabled = !busy) { Text("设置服务地址") }
+    }
     Text(state.message)
     state.release?.let { release ->
         ElevatedCard(Modifier.fillMaxWidth()) {

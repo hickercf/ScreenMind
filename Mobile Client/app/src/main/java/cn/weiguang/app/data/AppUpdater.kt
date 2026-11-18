@@ -58,14 +58,15 @@ class AppUpdater(private val context: Context, private val scope: CoroutineScope
 
     fun check(rawEndpoint: String, manual: Boolean = true) {
         if (!BuildConfig.ENABLE_SELF_UPDATE || operation?.isActive == true) return
+        val updateEndpoint = CloudEndpoint.selected(rawEndpoint)
         val now = System.currentTimeMillis()
-        if (!manual && now - (checkedAt[rawEndpoint] ?: 0) < 4 * 60 * 60 * 1000L) return
-        checkedAt[rawEndpoint] = now
+        if (!manual && now - (checkedAt[updateEndpoint] ?: 0) < 4 * 60 * 60 * 1000L) return
+        checkedAt[updateEndpoint] = now
         val prior = mutable.value
         operation = scope.launch {
             mutable.value = prior.copy(phase = "checking", message = "正在检查更新…")
             try {
-                val endpoint = ApiClient.validateEndpoint(rawEndpoint)
+                val endpoint = ApiClient.validateEndpoint(updateEndpoint)
                 val release = withContext(Dispatchers.IO) {
                     val call = client.newCall(Request.Builder().url("$endpoint/v1/app/update?channel=${BuildConfig.BUILD_TYPE}&version_code=${BuildConfig.VERSION_CODE}").build())
                     activeCall = call
@@ -85,7 +86,9 @@ class AppUpdater(private val context: Context, private val scope: CoroutineScope
                             buffer.copyOf(total)
                         }
                         require(bytes.size <= 20000) { "更新信息过大" }
-                        AppRelease.parse(JSONObject(String(bytes, Charsets.UTF_8)), endpoint, BuildConfig.BUILD_TYPE, BuildConfig.ALLOW_LOCAL_HTTP)
+                        AppRelease.parse(JSONObject(String(bytes, Charsets.UTF_8)), endpoint, BuildConfig.BUILD_TYPE, BuildConfig.ALLOW_LOCAL_HTTP).also {
+                            require(CloudEndpoint.acceptsDownload(it.url)) { "安装包地址与微光云端不一致" }
+                        }
                     }
                 }
                 if (release == null || release.code <= BuildConfig.VERSION_CODE) {

@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
 import androidx.work.*
 import cn.weiguang.app.WeiguangApp
+import cn.weiguang.app.BuildConfig
 import cn.weiguang.app.capture.CaptureGrant
 import com.chronocapsule.contract.ScreenContract
 import kotlinx.coroutines.flow.*
@@ -26,10 +27,15 @@ class Repository(private val context: Context, val database: AppDatabase) {
     private val sessions = SessionStore(context)
     private val api = ApiClient()
     private val mutex = Mutex()
-    private val sessionState = MutableStateFlow(sessions.load())
+    private val sessionState = MutableStateFlow(sessions.load()?.let {
+        if (CloudEndpoint.acceptsSession(it.endpoint)) it else {
+            sessions.clear()
+            null
+        }
+    })
     val session: StateFlow<UserSession?> = sessionState.asStateFlow()
     private val settings = context.settingsDataStore
-    val endpoint = settings.data.map { it[stringPreferencesKey("endpoint")] ?: "http://127.0.0.1:8765" }
+    val endpoint = settings.data.map { CloudEndpoint.selected(it[stringPreferencesKey("endpoint")]) }
     val theme = settings.data.map { it[stringPreferencesKey("theme")] ?: "system" }
     val events = session.flatMapLatest { current -> current?.let { database.events().observe(it.accountKey) } ?: flowOf(emptyList()) }
     val decisions = session.flatMapLatest { current -> current?.let { database.decisions().observe(it.accountKey) } ?: flowOf(emptyList()) }
@@ -38,6 +44,7 @@ class Repository(private val context: Context, val database: AppDatabase) {
     }.distinctUntilChanged()
 
     suspend fun setEndpoint(value: String) {
+        check(!BuildConfig.LOCK_CLOUD_ENDPOINT) { "此版本已连接微光云端" }
         check(session.value == null) { "请退出当前账号后切换服务" }
         val address = ApiClient.validateEndpoint(value)
         settings.edit { it[stringPreferencesKey("endpoint")] = address }
