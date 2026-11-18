@@ -12,8 +12,8 @@ android {
         applicationId = "cn.weiguang.app"
         minSdk = 29
         targetSdk = 35
-        versionCode = 5
-        versionName = "0.4.1"
+        versionCode = 6
+        versionName = "0.4.2"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         buildConfigField("boolean", "ALLOW_LOCAL_HTTP", "false")
         buildConfigField("boolean", "ENABLE_SELF_UPDATE", "false")
