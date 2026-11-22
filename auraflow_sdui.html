@@ -1,0 +1,3310 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>灵枢 · AURAFLOW — 极简流光多场景原型 & SDUI 架构监视器</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- D3.js v7 for Real-Coordinate Beijing-Shanghai geoMercator Map -->
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+
+  <!-- Typography: Inter + Noto Sans SC + JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Noto+Sans+SC:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          fontFamily: {
+            sans: ['Inter', '"PingFang SC"', '"Noto Sans SC"', 'system-ui', 'sans-serif'],
+            mono: ['"JetBrains Mono"', 'ui-monospace', 'SFMono-Regular', 'monospace'],
+          },
+          colors: {
+            obsidian: '#05070B',
+            travel: '#00E5FF',
+            dining: '#FF914D',
+            shopping: '#00E676',
+            explore: '#C084FC',
+            exploreGold: '#FBBF24',
+            rest: '#94A3B8',
+            alert: '#FF4D6D',
+          },
+        },
+      },
+    };
+  </script>
+
+  <style>
+    /* ==========================================================================
+       DESIGN TOKENS & DYNAMIC SCENARIO AURORA VARIABLES
+       ========================================================================== */
+    :root {
+      --studio-bg: #05070B;
+      --accent: #00E5FF;
+      --accent-alt: #3B82F6;
+      --accent-rgb: 0, 229, 255;
+      --spring: cubic-bezier(0.22, 1, 0.36, 1);
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    html, body {
+      margin: 0;
+      padding: 0;
+      background-color: var(--studio-bg);
+      color: #F8FAFC;
+      font-family: 'Inter', 'PingFang SC', 'Noto Sans SC', system-ui, sans-serif;
+      overflow-x: hidden;
+      min-height: 100vh;
+    }
+
+    /* Full-Viewport Kinetic Aurora Background Canvas */
+    #studio-aurora-canvas {
+      position: fixed;
+      inset: 0;
+      width: 100vw;
+      height: 100vh;
+      z-index: 0;
+      pointer-events: none;
+    }
+
+    /* Cyber-Organic Glassmorphic Right Studio Panel */
+    .glass-studio {
+      background: linear-gradient(155deg, rgba(16, 21, 34, 0.72), rgba(8, 10, 18, 0.88));
+      backdrop-filter: blur(26px);
+      -webkit-backdrop-filter: blur(26px);
+      border: 1px solid rgba(255, 255, 255, 0.09);
+      box-shadow: 0 28px 70px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+
+    /* ==========================================================================
+       ANDROID FLAGSHIP HARDWARE FRAME (RESPONSIVE HEIGHT-FIT)
+       ========================================================================== */
+    .phone-frame {
+      position: relative;
+      width: 100%;
+      max-width: 396px;
+      height: min(824px, calc(100vh - 36px));
+      min-height: 670px;
+      border-radius: 50px;
+      padding: 9px;
+      background: linear-gradient(145deg, #364054 0%, #151924 28%, #262E3F 68%, #0E1118 100%);
+      box-shadow:
+        0 38px 95px rgba(0, 0, 0, 0.85),
+        0 0 0 1px rgba(255, 255, 255, 0.16),
+        0 0 75px rgba(var(--accent-rgb), 0.14),
+        inset 0 0 12px rgba(0, 0, 0, 0.92);
+      transition: box-shadow 0.8s var(--spring);
+    }
+
+    /* Titanium hardware buttons */
+    .phone-frame::before {
+      content: '';
+      position: absolute;
+      right: -3px;
+      top: 158px;
+      width: 3px;
+      height: 52px;
+      border-radius: 0 3px 3px 0;
+      background: linear-gradient(180deg, #4B556B, #1D2230);
+    }
+    .phone-frame::after {
+      content: '';
+      position: absolute;
+      right: -3px;
+      top: 228px;
+      width: 3px;
+      height: 88px;
+      border-radius: 0 3px 3px 0;
+      background: linear-gradient(180deg, #4B556B, #1D2230);
+    }
+
+    .phone-screen {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      border-radius: 41px;
+      background-color: #06080F;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .screen-glare {
+      position: absolute;
+      inset: 0;
+      background: linear-gradient(125deg, rgba(255, 255, 255, 0.04) 0%, transparent 32%, transparent 74%, rgba(255, 255, 255, 0.015) 100%);
+      pointer-events: none;
+      z-index: 48;
+      border-radius: 41px;
+    }
+
+    .phone-ambient-glow {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 88% 42% at 50% -6%, rgba(var(--accent-rgb), 0.2), transparent 68%),
+        radial-gradient(ellipse 68% 36% at 88% 92%, rgba(var(--accent-rgb), 0.1), transparent 65%);
+      transition: background 0.7s var(--spring);
+    }
+
+    /* Hidden Native-Style Scrollbars */
+    .no-scrollbar {
+      overflow-y: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      scroll-behavior: smooth;
+    }
+    .no-scrollbar::-webkit-scrollbar { display: none; }
+
+    .no-scrollbar-x {
+      overflow-x: auto;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      scroll-snap-type: x mandatory;
+    }
+    .no-scrollbar-x::-webkit-scrollbar { display: none; }
+
+    /* ==========================================================================
+       L2 · DYNAMIC PERCEPTION PILL (TOP STATUS ISLAND)
+       ========================================================================== */
+    .aura-pill {
+      transition: all 0.5s var(--spring);
+      background: rgba(11, 15, 25, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.55);
+    }
+    .aura-pill.sensing {
+      border-color: rgba(var(--accent-rgb), 0.65);
+      box-shadow: 0 0 30px rgba(var(--accent-rgb), 0.32), 0 10px 30px rgba(0, 0, 0, 0.75);
+    }
+
+    @keyframes waveBeat {
+      0%, 100% { transform: scaleY(0.25); opacity: 0.55; }
+      50% { transform: scaleY(1); opacity: 1; }
+    }
+    .sense-bar {
+      width: 2.2px;
+      border-radius: 99px;
+      background: var(--accent);
+      animation: waveBeat 0.9s ease-in-out infinite;
+    }
+
+    /* ==========================================================================
+       L0 · MINIMALIST POSTER CARDS & STATE MATERIALS
+       ========================================================================== */
+    @keyframes nowBreathe {
+      0%, 100% { box-shadow: 0 14px 34px rgba(0,0,0,0.45), 0 0 0 0 rgba(var(--accent-rgb), 0.0), inset 0 1px 0 rgba(255,255,255,0.1); }
+      50% { box-shadow: 0 14px 36px rgba(0,0,0,0.48), 0 0 26px -4px rgba(var(--accent-rgb), 0.24), inset 0 1px 0 rgba(255,255,255,0.14); }
+    }
+    .now-card {
+      background: linear-gradient(145deg, rgba(19, 26, 44, 0.9), rgba(10, 14, 24, 0.95));
+      border: 1px solid rgba(var(--accent-rgb), 0.34);
+      animation: nowBreathe 4.2s ease-in-out infinite;
+      transition: transform 0.26s var(--spring), border-color 0.26s ease;
+    }
+    .now-card:hover { transform: translateY(-1px); border-color: rgba(var(--accent-rgb), 0.6); }
+    .now-card:active { transform: scale(0.985); }
+
+    .card-confirmed {
+      background: linear-gradient(150deg, rgba(21, 27, 42, 0.94), rgba(12, 16, 26, 0.97));
+      border: 1px solid rgba(255, 255, 255, 0.11);
+      box-shadow: 0 10px 24px rgba(0, 0, 0, 0.36), inset 0 1px 0 rgba(255, 255, 255, 0.07);
+      transition: transform 0.26s var(--spring), border-color 0.26s ease, box-shadow 0.26s ease;
+    }
+    .card-confirmed:hover {
+      border-color: rgba(var(--card-rgb), 0.45);
+      box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), 0 0 18px rgba(var(--card-rgb), 0.12);
+      transform: translateY(-1px);
+    }
+
+    @keyframes proposalPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(var(--card-rgb), 0), inset 0 0 16px rgba(var(--card-rgb), 0.04); }
+      50% { box-shadow: 0 0 22px -2px rgba(var(--card-rgb), 0.18), inset 0 0 24px rgba(var(--card-rgb), 0.09); }
+    }
+    .card-proposal {
+      background: linear-gradient(150deg, rgba(var(--card-rgb), 0.07), rgba(11, 14, 24, 0.68));
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px dashed rgba(var(--card-rgb), 0.5);
+      animation: proposalPulse 3.2s ease-in-out infinite;
+      transition: transform 0.26s var(--spring), border-color 0.26s ease;
+    }
+    .card-proposal:hover {
+      border-color: rgba(var(--card-rgb), 0.85);
+      transform: translateY(-1px);
+    }
+
+    @keyframes cardEnter {
+      0% { opacity: 0; transform: translateY(-12px) scale(0.96); filter: blur(4px); }
+      100% { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+    }
+    .anim-enter { animation: cardEnter 0.55s var(--spring) forwards; }
+
+    @keyframes crimsonPulse {
+      0%, 100% { box-shadow: 0 0 0 0 rgba(255, 77, 109, 0.12); border-color: rgba(255, 77, 109, 0.5); }
+      50% { box-shadow: 0 0 24px 0 rgba(255, 77, 109, 0.35); border-color: rgba(255, 77, 109, 0.95); }
+    }
+    .alert-pulse-box {
+      animation: crimsonPulse 1.8s ease-in-out infinite;
+    }
+
+    /* ==========================================================================
+       L1 · FLUID DETAIL OVERLAY & MINI BOTTOM SHEET
+       ========================================================================== */
+    .l1-sheet {
+      position: absolute;
+      inset: 0;
+      z-index: 30;
+      background: rgba(6, 9, 17, 0.96);
+      backdrop-filter: blur(22px);
+      -webkit-backdrop-filter: blur(22px);
+      display: flex;
+      flex-direction: column;
+      transform: translateY(104%) scale(0.96);
+      opacity: 0;
+      pointer-events: none;
+      border-radius: 41px;
+      transition: transform 0.5s var(--spring), opacity 0.35s ease;
+    }
+    .l1-sheet.open {
+      transform: translateY(0) scale(1);
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    .mini-sheet-backdrop {
+      position: absolute;
+      inset: 0;
+      z-index: 38;
+      background: rgba(3, 5, 10, 0.72);
+      backdrop-filter: blur(8px);
+      -webkit-backdrop-filter: blur(8px);
+      display: flex;
+      align-items: flex-end;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.28s ease;
+    }
+    .mini-sheet-backdrop.open {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    .mini-sheet-body {
+      width: 100%;
+      background: linear-gradient(180deg, rgba(19, 24, 38, 0.98), rgba(9, 12, 22, 0.99));
+      border-top: 1px solid rgba(255, 255, 255, 0.14);
+      border-radius: 30px 30px 41px 41px;
+      transform: translateY(100%);
+      transition: transform 0.42s var(--spring);
+    }
+    .mini-sheet-backdrop.open .mini-sheet-body {
+      transform: translateY(0);
+    }
+
+    /* ==========================================================================
+       3D HOLOGRAPHIC ARTIFACT CARD
+       ========================================================================== */
+    .holo-stage { perspective: 920px; }
+
+    .holo-card {
+      position: relative;
+      border-radius: 26px;
+      transform-style: preserve-3d;
+      transition: transform 0.13s ease-out, box-shadow 0.25s ease;
+      overflow: hidden;
+      border: 1px solid rgba(var(--accent-rgb), 0.48);
+      box-shadow: 0 24px 52px rgba(0, 0, 0, 0.68), 0 0 38px rgba(var(--accent-rgb), 0.18);
+    }
+
+    .holo-foil {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(
+          circle at var(--gx, 50%) var(--gy, 50%),
+          rgba(255, 255, 255, 0.3) 0%,
+          rgba(var(--accent-rgb), 0.24) 24%,
+          rgba(192, 132, 252, 0.16) 52%,
+          transparent 76%
+        ),
+        linear-gradient(
+          118deg,
+          transparent 18%,
+          rgba(255, 255, 255, 0.14) 42%,
+          rgba(var(--accent-rgb), 0.22) 50%,
+          transparent 74%
+        );
+      mix-blend-mode: screen;
+      opacity: 0.92;
+    }
+
+    .ticket-cut-l, .ticket-cut-r {
+      position: absolute;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: #060911;
+      top: 56%;
+      transform: translateY(-50%);
+      z-index: 12;
+      box-shadow: inset 0 0 6px rgba(var(--accent-rgb), 0.25);
+    }
+    .ticket-cut-l { left: -11px; }
+    .ticket-cut-r { right: -11px; }
+
+    /* Slide-to-Confirm Shimmer Text */
+    @keyframes shimmerSweep {
+      0% { background-position: -200% center; }
+      100% { background-position: 200% center; }
+    }
+    .shimmer-guide {
+      background: linear-gradient(90deg, rgba(255, 255, 255, 0.42) 0%, #FFFFFF 48%, var(--accent) 55%, rgba(255, 255, 255, 0.42) 100%);
+      background-size: 200% auto;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      animation: shimmerSweep 2.5s linear infinite;
+    }
+
+    /* Plan Card Highlight */
+    .plan-card {
+      background: rgba(16, 21, 34, 0.78);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: all 0.28s var(--spring);
+      scroll-snap-align: start;
+    }
+    .plan-card.selected {
+      background: linear-gradient(145deg, rgba(var(--accent-rgb), 0.16), rgba(14, 19, 32, 0.94));
+      border-color: rgba(var(--accent-rgb), 0.78);
+      box-shadow: 0 0 24px rgba(var(--accent-rgb), 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+    }
+
+    @keyframes isoPulse {
+      0%, 100% { opacity: 0.42; }
+      50% { opacity: 0.88; }
+    }
+    .iso-ring { animation: isoPulse 3s ease-in-out infinite; }
+
+    @keyframes restHalo {
+      0%, 100% { transform: scale(0.92); opacity: 0.35; }
+      50% { transform: scale(1.12); opacity: 0.75; }
+    }
+    .rest-halo { animation: restHalo 5.5s ease-in-out infinite; }
+
+    @keyframes lightSweep {
+      0% { transform: translateX(-120%) skewX(-20deg); opacity: 0; }
+      35% { opacity: 0.75; }
+      100% { transform: translateX(220%) skewX(-20deg); opacity: 0; }
+    }
+    .sweep-overlay {
+      position: absolute;
+      inset: 0;
+      z-index: 44;
+      pointer-events: none;
+      background: linear-gradient(90deg, transparent, rgba(192, 132, 252, 0.22), rgba(251, 191, 36, 0.26), transparent);
+      animation: lightSweep 0.95s ease-out forwards;
+    }
+
+    /* Particle Burst & Dissolution Canvas Inside Phone */
+    #fx-canvas {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 45;
+    }
+
+    /* Toast */
+    @keyframes toastPop {
+      from { opacity: 0; transform: translate(-50%, -12px) scale(0.95); }
+      to { opacity: 1; transform: translate(-50%, 0) scale(1); }
+    }
+    .toast-active { animation: toastPop 0.28s var(--spring) forwards; }
+
+    /* Syntax Highlighting for SDUI JSON Viewer */
+    .json-key { color: #7DD3FC; }
+    .json-str { color: #86EFAC; }
+    .json-num { color: #FDBA74; }
+    .json-bool { color: #C084FC; }
+    .json-null { color: #94A3B8; }
+  </style>
+</head>
+
+<body class="antialiased selection:bg-white/20 selection:text-white">
+  <!-- Full-Viewport Obsidian Kinetic Aurora Background -->
+  <canvas id="studio-aurora-canvas"></canvas>
+
+  <!-- Floating System Toast (Zero alert/confirm) -->
+  <div id="toast" class="fixed top-4 left-1/2 -translate-x-1/2 z-50 hidden pointer-events-none">
+    <div class="glass-studio px-4 py-2 rounded-full border border-white/15 flex items-center gap-2.5">
+      <span id="toast-dot" class="w-2 h-2 rounded-full bg-travel animate-pulse"></span>
+      <span id="toast-msg" class="text-xs font-medium text-slate-100 tracking-wide whitespace-nowrap"></span>
+    </div>
+  </div>
+
+  <!-- ==========================================================================
+       MAIN STUDIO WORKSPACE: ANDROID FLAGSHIP SIMULATOR + SDUI DIRECTOR PANEL
+       ========================================================================== -->
+  <main class="relative z-10 min-h-screen w-full max-w-[1320px] mx-auto px-4 sm:px-6 lg:px-8 py-4 lg:py-5 flex flex-col lg:flex-row items-center justify-center gap-6 lg:gap-10">
+
+    <!-- ========================================================================
+         LEFT: REALISTIC ANDROID FLAGSHIP PHONE SIMULATOR
+         ======================================================================== -->
+    <section class="w-full max-w-[396px] flex flex-col items-center shrink-0">
+      <div class="phone-frame" id="phone-frame">
+        <div class="phone-screen" id="phone-screen">
+          <!-- Ambient Hue Glow & Glass Reflection -->
+          <div class="phone-ambient-glow" id="phone-ambient-glow"></div>
+          <div class="screen-glare"></div>
+
+          <!-- Particle FX Canvas (Slide Confirm Burst & Swipe Vaporize) -->
+          <canvas id="fx-canvas"></canvas>
+          <div id="sweep-host"></div>
+
+          <!-- ANDROID STATUS BAR -->
+          <div class="relative z-40 px-6 pt-3 pb-1 flex items-center justify-between text-[11px] font-medium text-slate-200 select-none shrink-0">
+            <span id="status-clock" class="font-mono tracking-tight">10:15</span>
+            <div class="w-3.5 h-3.5 rounded-full bg-[#020307] border border-white/10 shadow-inner flex items-center justify-center">
+              <div class="w-1.5 h-1.5 rounded-full bg-slate-900"></div>
+            </div>
+            <div class="flex items-center gap-1.5 text-slate-300">
+              <span class="text-[10px] font-mono opacity-85">5G</span>
+              <svg class="w-3.5 h-3.5 opacity-85" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/>
+              </svg>
+              <div class="w-5 h-2.5 rounded-[3px] border border-slate-400/80 p-[1.5px] flex items-center">
+                <div class="h-full w-4/5 rounded-[1px] bg-slate-100"></div>
+              </div>
+            </div>
+          </div>
+
+          <!-- L2 · DYNAMIC PERCEPTION PILL (TOP STATUS ISLAND) -->
+          <div class="relative z-40 px-4 pt-1 pb-2 flex justify-center shrink-0">
+            <div id="l2-pill" class="aura-pill rounded-full px-3.5 py-1.5 flex items-center justify-center gap-2 max-w-full">
+              <div id="l2-idle" class="flex items-center gap-2">
+                <span id="l2-idle-dot" class="w-1.5 h-1.5 rounded-full bg-travel shadow-[0_0_8px_#00E5FF] animate-pulse"></span>
+                <span id="l2-idle-label" class="text-[10.5px] text-slate-300/90 tracking-wider font-medium">灵枢感知 · 静默守候</span>
+              </div>
+              <div id="l2-active" class="hidden flex items-center gap-2.5 w-full py-0.5">
+                <div class="flex items-center gap-[2.5px] h-3.5 shrink-0">
+                  <span class="sense-bar h-2" style="animation-delay:0ms"></span>
+                  <span class="sense-bar h-3.5" style="animation-delay:110ms"></span>
+                  <span class="sense-bar h-2.5" style="animation-delay:220ms"></span>
+                  <span class="sense-bar h-3.5" style="animation-delay:70ms"></span>
+                  <span class="sense-bar h-2" style="animation-delay:180ms"></span>
+                </div>
+                <span id="l2-active-text" class="text-[11px] font-medium text-white truncate">正在解析后台消息...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- L0 · MAIN PHONE VIEWPORT (DISPATCHES ACTIVE_TIMELINE / EMPTY_EXPLORE / REST_MODE) -->
+          <div id="l0-viewport" class="relative z-10 flex-1 no-scrollbar px-5 pt-1 pb-7 flex flex-col">
+            <!-- Dynamically rendered by renderPhoneHome() -->
+          </div>
+
+          <!-- L1 · FLUID DETAIL SHEET OVERLAY -->
+          <div id="l1-overlay" class="l1-sheet">
+            <div class="phone-ambient-glow"></div>
+
+            <!-- Sheet Header -->
+            <div class="relative z-10 px-5 pt-11 pb-2 flex items-center justify-between shrink-0">
+              <button onclick="closeL1()"
+                class="w-9 h-9 rounded-full bg-white/[0.06] hover:bg-white/[0.13] border border-white/10 flex items-center justify-center text-slate-200 transition-all active:scale-90"
+                aria-label="返回首屏">
+                <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2.2" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5"/>
+                </svg>
+              </button>
+
+              <div onclick="closeL1()" class="cursor-pointer flex flex-col items-center gap-1">
+                <div class="w-10 h-1 rounded-full bg-white/20"></div>
+                <span id="l1-top-kicker" class="text-[10px] font-mono uppercase tracking-widest text-slate-400">L1 · SDUI DETAIL</span>
+              </div>
+
+              <button id="l1-mode-toggle" onclick="toggleL1SubView()"
+                class="hidden px-2.5 py-1.5 rounded-full text-[10.5px] font-medium bg-white/[0.08] border border-white/15 text-white hover:bg-white/[0.15] transition-all">
+                查看沙盘
+              </button>
+              <div id="l1-right-spacer" class="w-9 h-9"></div>
+            </div>
+
+            <!-- Scrollable SDUI Detail Blocks -->
+            <div id="l1-content" class="relative z-10 flex-1 no-scrollbar px-5 pb-8 space-y-4">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+
+          <!-- MINI BOTTOM SHEET (GAP SUGGESTION & ALERT PLAN B) -->
+          <div id="mini-sheet" class="mini-sheet-backdrop" onclick="closeMiniSheet(event)">
+            <div class="mini-sheet-body p-5 pb-8 space-y-4" onclick="event.stopPropagation()">
+              <div class="w-10 h-1 rounded-full bg-white/20 mx-auto"></div>
+              <div id="mini-sheet-content"></div>
+            </div>
+          </div>
+
+          <!-- Home Gesture Indicator -->
+          <div class="relative z-40 h-4 flex items-center justify-center shrink-0 pointer-events-none">
+            <div class="w-28 h-1 rounded-full bg-white/25"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================================
+         RIGHT: GLASSMORPHIC "原型体验台 & SDUI 架构监视器"
+         ======================================================================== -->
+    <aside class="w-full max-w-[480px] lg:max-w-[490px] flex flex-col">
+      <div class="glass-studio rounded-[30px] p-5 sm:p-6 flex flex-col h-[min(824px,calc(100vh-36px))] min-h-[640px]">
+
+        <!-- Top Brand + Visual Routing Badge -->
+        <div class="flex items-start justify-between gap-3 shrink-0">
+          <div>
+            <div class="flex items-center gap-2">
+              <span id="brand-dot" class="w-2.5 h-2.5 rounded-full bg-travel shadow-[0_0_12px_#00E5FF] transition-colors duration-500"></span>
+              <h1 class="text-base font-semibold tracking-tight text-white">灵枢 · AURAFLOW</h1>
+              <span class="text-[10px] font-mono px-2 py-0.5 rounded-full bg-white/[0.06] text-slate-300 border border-white/10">SDUI 2.0</span>
+            </div>
+            <p class="text-[11.5px] text-slate-400 mt-1">
+              静如极简海报，动如赛博流光 · 后端驱动全生命周期日程架构
+            </p>
+          </div>
+        </div>
+
+        <!-- Two Switchable Studio Tabs -->
+        <div class="mt-4 grid grid-cols-2 gap-1.5 p-1 rounded-2xl bg-black/45 border border-white/[0.08] shrink-0">
+          <button id="tab-btn-console" onclick="switchStudioTab('console')"
+            class="py-2 rounded-xl text-xs font-semibold transition-all bg-white/[0.12] text-white border border-white/15 shadow-sm">
+            体验控制台
+          </button>
+          <button id="tab-btn-sdui" onclick="switchStudioTab('sdui')"
+            class="py-2 rounded-xl text-xs font-medium transition-all text-slate-400 hover:text-white border border-transparent">
+            SDUI 实时协议
+          </button>
+        </div>
+
+        <!-- Compact Live Backend Routing Bar (Always Visible) -->
+        <div class="mt-3.5 px-3 py-2.5 rounded-2xl bg-black/35 border border-white/[0.07] flex flex-wrap items-center gap-1.5 text-[10px] font-mono shrink-0">
+          <span class="text-slate-500">ROUTE:</span>
+          <span id="badge-daymode" class="px-2 py-0.5 rounded-md bg-travel/15 text-travel border border-travel/30">ACTIVE_TIMELINE</span>
+          <span class="text-slate-600">→</span>
+          <span id="badge-stage" class="px-2 py-0.5 rounded-md bg-white/[0.07] text-slate-200 border border-white/10">L0 · HOME</span>
+          <span class="text-slate-600">→</span>
+          <span id="badge-connector" class="px-2 py-0.5 rounded-md bg-dining/15 text-dining border border-dining/30">CONFLICT_DASHED</span>
+        </div>
+
+        <!-- TAB 1: INTERACTIVE CONSOLE -->
+        <div id="tab-panel-console" class="mt-4 flex-1 no-scrollbar space-y-4 pr-0.5">
+
+          <!-- Group 1: Macro Day Mode Dispatcher -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-slate-400">1. 宏观日程模式调度 (dayMode)</span>
+              <span class="text-[10px] text-slate-500">整屏氛围联动</span>
+            </div>
+            <div class="grid grid-cols-3 gap-2">
+              <button onclick="setDayMode('ACTIVE_TIMELINE')" id="btn-mode-active"
+                class="p-2.5 rounded-2xl text-left border transition-all active:scale-95 bg-travel/15 border-travel/50 text-white">
+                <div class="text-[11px] font-semibold">今日日程</div>
+                <div class="text-[9.5px] font-mono text-slate-400 mt-0.5">TIMELINE</div>
+              </button>
+              <button onclick="setDayMode('EMPTY_EXPLORE')" id="btn-mode-explore"
+                class="p-2.5 rounded-2xl text-left border transition-all active:scale-95 bg-white/[0.03] border-white/10 hover:border-explore/50 text-slate-300">
+                <div class="text-[11px] font-semibold">今日无日程</div>
+                <div class="text-[9.5px] font-mono text-explore mt-0.5">出去逛逛</div>
+              </button>
+              <button onclick="setDayMode('REST_MODE')" id="btn-mode-rest"
+                class="p-2.5 rounded-2xl text-left border transition-all active:scale-95 bg-white/[0.03] border-white/10 hover:border-slate-400/50 text-slate-300">
+                <div class="text-[11px] font-semibold">放空态</div>
+                <div class="text-[9.5px] font-mono text-slate-400 mt-0.5">REST_MODE</div>
+              </button>
+            </div>
+            <!-- Weather Toggle for Explore Mode -->
+            <div class="flex items-center justify-between px-3 py-2 rounded-xl bg-white/[0.03] border border-white/[0.07]">
+              <span class="text-[11px] text-slate-400">环境天气（驱动逛逛路线）</span>
+              <div class="flex p-0.5 rounded-lg bg-black/50 border border-white/10 text-[10.5px]">
+                <button id="weather-btn-sunny" onclick="setWeather('sunny')"
+                  class="px-2.5 py-1 rounded-md font-medium bg-exploreGold/20 text-exploreGold transition-all">☀ 晴朗 21°C</button>
+                <button id="weather-btn-rainy" onclick="setWeather('rainy')"
+                  class="px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all">🌧 细雨 15°C</button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Group 2: Lifecycle & Zero-Manual Auto Perception -->
+          <div class="space-y-2">
+            <div class="flex items-center justify-between">
+              <span class="text-[10px] font-mono uppercase tracking-[0.16em] text-slate-400">2. 生命周期变形 & 后台静默感知</span>
+              <span class="text-[10px] text-slate-500">触发 L2 灵动胶囊</span>
+            </div>
+
+            <button onclick="simulateSmsAutoTicket()"
+              class="w-full text-left p-3 rounded-2xl bg-white/[0.03] hover:bg-travel/[0.1] border border-white/[0.08] hover:border-travel/50 transition-all group active:scale-[0.985]">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-travel shadow-[0_0_8px_#00E5FF]"></span>
+                  <span class="text-xs font-semibold text-white">模拟收到出票短信（零手动核销）</span>
+                </div>
+                <span class="text-[10px] font-mono text-travel group-hover:translate-x-0.5 transition-transform">SMS →</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1 pl-4">捕获航旅纵横短信，将虚框推荐卡静默变形为 MU5102 3D登机牌</p>
+            </button>
+
+            <button onclick="triggerEmergencyAlert()"
+              class="w-full text-left p-3 rounded-2xl bg-white/[0.03] hover:bg-alert/[0.1] border border-white/[0.08] hover:border-alert/50 transition-all group active:scale-[0.985]">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-alert shadow-[0_0_8px_#FF4D6D]"></span>
+                  <span class="text-xs font-semibold text-white">模拟突发延误 / 暴雨预警</span>
+                </div>
+                <span class="text-[10px] font-mono text-alert group-hover:translate-x-0.5 transition-transform">ALERT →</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1 pl-4">时间轴切换红色脉冲熔断线，提供 AI 备选 B 计划一键化解</p>
+            </button>
+
+            <button onclick="simulateJokeMisjudgment()"
+              class="w-full text-left p-3 rounded-2xl bg-white/[0.03] hover:bg-explore/[0.1] border border-white/[0.08] hover:border-explore/50 transition-all group active:scale-[0.985]">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-2 h-2 rounded-full bg-explore shadow-[0_0_8px_#C084FC]"></span>
+                  <span class="text-xs font-semibold text-white">模拟群聊玩笑误判（左滑雾化）</span>
+                </div>
+                <span class="text-[10px] font-mono text-explore group-hover:translate-x-0.5 transition-transform">CHAT →</span>
+              </div>
+              <p class="text-[11px] text-slate-400 mt-1 pl-4">捕获「走，明天飞巴黎喝咖啡！」→ 在手机内左滑卡片粒子消散</p>
+            </button>
+          </div>
+
+          <!-- Group 3: Quick Inspection & Reset -->
+          <div class="space-y-2 pt-1">
+            <div class="text-[10px] font-mono uppercase tracking-[0.16em] text-slate-400">3. 快捷测试与复位</div>
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="resetFlightToProposal()"
+                class="py-2.5 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-[11px] font-medium text-slate-200 transition-all active:scale-95">
+                重置航班为未订票态
+              </button>
+              <button onclick="resetAllDemo()"
+                class="py-2.5 px-3 rounded-xl bg-white/[0.04] hover:bg-white/[0.09] border border-white/10 text-[11px] font-medium text-slate-200 transition-all active:scale-95">
+                重置全部演示状态 ↻
+              </button>
+            </div>
+          </div>
+
+          <!-- Visual Material Legend -->
+          <div class="p-3.5 rounded-2xl bg-black/30 border border-white/[0.06] space-y-2 text-[11px] text-slate-300">
+            <div class="text-[10px] font-mono text-slate-500 uppercase tracking-widest">视觉材质与线条语义</div>
+            <div class="grid grid-cols-2 gap-2 pt-0.5">
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-3 rounded bg-slate-800 border border-white/20 shrink-0"></span>
+                <span class="text-[10.5px]">实心卡 · 已履约</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-3 rounded bg-travel/10 border border-dashed border-travel/70 shrink-0"></span>
+                <span class="text-[10.5px]">虚框卡 · 待拍板</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-0.5 bg-dining shrink-0"></span>
+                <span class="text-[10.5px]">琥珀虚线 · 冲突顺延</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <span class="w-5 h-0.5 bg-alert shadow-[0_0_6px_#FF4D6D] shrink-0"></span>
+                <span class="text-[10.5px]">脉冲红线 · 延误熔断</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- TAB 2: REAL-TIME SDUI JSON PROTOCOL VIEWER -->
+        <div id="tab-panel-sdui" class="hidden mt-4 flex-1 flex flex-col min-h-0 space-y-3">
+          <div class="flex items-center justify-between shrink-0">
+            <div class="text-[11px] text-slate-300">
+              实时同步 <code class="font-mono text-travel">SDUI_STATE</code> 后端下发协议
+            </div>
+            <button onclick="copySduiJson()"
+              class="px-2.5 py-1 rounded-lg bg-white/[0.07] hover:bg-white/[0.14] border border-white/10 text-[10.5px] font-mono text-slate-200 active:scale-95 transition-all">
+              复制 JSON
+            </button>
+          </div>
+
+          <div class="flex-1 min-h-0 rounded-2xl bg-[#04060B] border border-white/[0.08] p-3.5 no-scrollbar">
+            <pre id="sdui-json-code" class="text-[11px] leading-relaxed font-mono whitespace-pre-wrap break-words"></pre>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <!-- ==========================================================================
+       CENTRAL SDUI ENGINE, D3.JS CORRIDOR MAP, INTERACTIVE CHARTS & FX
+       ========================================================================== -->
+  <script>
+    /* ========================================================================
+       1. THEME PALETTES & CURATED EXPLORE DATA
+       ======================================================================== */
+    const THEMES = {
+      travel:   { hex: '#00E5FF', alt: '#3B82F6', rgb: '0, 229, 255',   rgbArr: [0, 229, 255],   label: '出行订票' },
+      dining:   { hex: '#FF914D', alt: '#F43F5E', rgb: '255, 145, 77',  rgbArr: [255, 145, 77],  label: '聚餐社交' },
+      shopping: { hex: '#00E676', alt: '#14B8A6', rgb: '0, 230, 118',   rgbArr: [0, 230, 118],   label: '线下购物' },
+      explore:  { hex: '#C084FC', alt: '#FBBF24', rgb: '192, 132, 252', rgbArr: [192, 132, 252], label: '城市漫游' },
+      office:   { hex: '#818CF8', alt: '#6366F1', rgb: '129, 140, 248', rgbArr: [129, 140, 248], label: '事务日程' },
+      rest:     { hex: '#94A3B8', alt: '#818CF8', rgb: '148, 163, 184', rgbArr: [148, 163, 184], label: '静默放空' },
+    };
+
+    const EXPLORE_PRESETS = {
+      sunny: [
+        {
+          id: 'sun_1',
+          title: '西岸滨江 · 落日微风 Citywalk',
+          duration: '2.5 小时 · 步行 3.2 km',
+          tag: '绝佳江景日落',
+          stops: [
+            { time: '14:30', name: '龙美术馆江畔草坪', dist: '起点', note: '秋日微风草坪小憩' },
+            { time: '15:30', name: '滑板公园沿江步道', dist: '1.4 km', note: '黄金光线拍照打卡' },
+            { time: '16:45', name: '油罐艺术中心 · 落日露台', dist: '1.8 km', note: '看 17:12 橘色江面日落' },
+          ],
+        },
+        {
+          id: 'sun_2',
+          title: '衡复风貌区 · 梧桐光影漫游',
+          duration: '2.0 小时 · 步行 2.6 km',
+          tag: '文艺街区摄影',
+          stops: [
+            { time: '14:00', name: '安福路独立买手街区', dist: '起点', note: '逛独立设计小店' },
+            { time: '15:00', name: '武康路老洋房长廊', dist: '1.1 km', note: '梧桐斑驳光影散步' },
+            { time: '16:00', name: '复兴公园 · 露天手冲摊', dist: '1.5 km', note: '听黑胶喝冰美式' },
+          ],
+        },
+        {
+          id: 'sun_3',
+          title: '苏河湾 · 工业遗迹与公园放空',
+          duration: '2.5 小时 · 步行 2.9 km',
+          tag: '人少静谧路线',
+          stops: [
+            { time: '14:30', name: '慎余里红砖里弄', dist: '起点', note: '老建筑改造展厅' },
+            { time: '15:30', name: '苏河湾万象天地绿地', dist: '1.2 km', note: '晒太阳放空 40 分钟' },
+            { time: '16:40', name: '邮政博物馆河岸桥景', dist: '1.7 km', note: '远眺陆家嘴天际线' },
+          ],
+        },
+      ],
+      rainy: [
+        {
+          id: 'rain_1',
+          title: '西岸美术馆特展 · 听雨手冲微行程',
+          duration: '2.5 小时 · 室内连廊直达',
+          tag: '全程不淋雨',
+          stops: [
+            { time: '14:00', name: '西岸美术馆 · 蓬皮杜特展', dist: '室内', note: '免排队电子票直入' },
+            { time: '15:45', name: '滨江玻璃房手冲咖啡馆', dist: '步行 180m', note: '窗边听雨品埃塞瑰夏' },
+            { time: '16:45', name: '设计书店黑胶试听角', dist: '同建筑', note: '挑一本建筑画册' },
+          ],
+        },
+        {
+          id: 'rain_2',
+          title: '上生新所 · 茑屋书店与暖冬茶席',
+          duration: '2.2 小时 · 历史室内空间',
+          tag: '高分静谧治愈',
+          stops: [
+            { time: '14:30', name: '哥伦比亚俱乐部 · 茑屋书店', dist: '室内', note: '百年壁炉旁阅读' },
+            { time: '15:40', name: '中式现代茶室 · 碳焙乌龙', dist: '步行 90m', note: '雨天热茶配手作茶点' },
+            { time: '16:50', name: '地下爵士黑胶体验廊', dist: '室内', note: '沉浸式试听 30 分钟' },
+          ],
+        },
+        {
+          id: 'rain_3',
+          title: '当代艺术博物馆 · 咖啡与胶片展',
+          duration: '2.5 小时 · 地铁直达',
+          tag: '小众灵感补给',
+          stops: [
+            { time: '14:00', name: 'PSA 当代艺术双年展', dist: '室内', note: '沉浸装置艺术空间' },
+            { time: '15:50', name: '顶楼江景玻璃咖啡厅', dist: '电梯直达', note: '俯瞰雨雾黄浦江' },
+            { time: '16:50', name: '艺术商店胶片周边区', dist: '1F', note: '挑一张限量版画' },
+          ],
+        },
+      ],
+    };
+
+    const DINING_FRIENDS = [
+      { name: '你·虹桥机场', short: '你', x: 40,  y: 96  },
+      { name: '林溪·静安寺', short: '林', x: 142, y: 40  },
+      { name: '周明·陆家嘴', short: '周', x: 294, y: 58  },
+      { name: '陈默·徐家汇', short: '陈', x: 132, y: 152 },
+    ];
+
+    /* ========================================================================
+       2. CENTRAL SDUI_STATE FACTORY
+       ======================================================================== */
+    function createInitialSduiState() {
+      return {
+        protocolVersion: '2.4.0',
+        dayMode: 'ACTIVE_TIMELINE', // ACTIVE_TIMELINE | EMPTY_EXPLORE | REST_MODE
+        weatherContext: {
+          mode: 'sunny',
+          label: '晴朗微风 21°C',
+          city: '上海',
+        },
+        exploreIndex: 0,
+        activeTheme: 'travel',
+        activeStudioTab: 'console',
+        activeL1Id: null,
+        l1ForceMapView: false,
+        archivedExpanded: false,
+        travelMapMode: 'corridor', // corridor | intermodal
+        selectedPriceIdx: 4, // Interactive price trend point
+        countdownSeconds: 2 * 3600 + 14 * 60 + 38,
+
+        // Auto-Collapsed Past Events (ARCHIVED)
+        archivedEvents: [
+          {
+            id: 'evt_arch_01',
+            time: '09:00',
+            endTime: '09:45',
+            title: '项目晨会同步',
+            lifecycleStage: 'ARCHIVED',
+            summary: '已确认 Q4 发布节点与设计评审清单，纪要已自动归档至云端。',
+          },
+        ],
+
+        // Active Vertical Timeline Events
+        events: [
+          {
+            id: 'evt_morning_prep',
+            category: 'OFFICE',
+            themeKey: 'office',
+            lifecycleStage: 'CONFIRMED',
+            time: '10:30',
+            title: '行前简报 · 客户端需求对齐',
+            subtitle: '线上腾讯会议 · 30m 速会',
+            badge: '已就绪',
+            reminderStrip: {
+              text: '带好演示稿与 Type-C 转接头 · 距开会 15m',
+              dismissed: false,
+            },
+            connectorToNext: {
+              connectorState: 'GAP_SUGGESTION',
+              gapHours: '3.5h',
+              label: '空档 3.5h · 附近补白 ✦',
+            },
+            entities: ['10:30 速会', '30分钟', '已同步会议纪要模板'],
+            detailBlocks: ['SUMMARY_CARD', 'MEETING_CHECKLIST'],
+            notes: [
+              { text: '核对 SDUI 原子组件 JSON 规范', done: true },
+              { text: '同步上海客户演示环境地址', done: false },
+            ],
+          },
+          {
+            id: 'evt_travel_outbound',
+            category: 'TRAVEL',
+            themeKey: 'travel',
+            direction: 'outbound',
+            lifecycleStage: 'PROPOSAL', // Starts unbooked so user sees PROPOSAL -> CONFIRMED morph!
+            time: '14:30',
+            title: '北京 → 上海 · 差旅出行',
+            subtitle: '待拍板 · 推荐 3 套出行方案',
+            badge: '待拍板',
+            reminderStrip: {
+              text: '上海小雨 14°C · 建议带伞 / 身份证 · 距值机截止 1h',
+              dismissed: false,
+            },
+            connectorToNext: {
+              connectorState: 'CONFLICT_DASHED',
+              label: '打车约 55m · 衔接紧张',
+              actionLabel: '一键顺延 30m',
+            },
+            entities: ['北京→上海', '今日 14:30', '靠窗偏好', '准点率优先'],
+            selectedPlanIdx: 0,
+            plans: [
+              { id: 'mu5102', carrier: '东航 MU5102', mode: 'flight', modeText: '直飞 2h15m', price: 980, punctuality: 96, dep: '14:30', arr: '16:45', depHub: '首都 T2', arrHub: '虹桥 T2', seat: '14A 靠窗', gate: 'B24', note: '降落虹桥距市区最近，AI 匹配靠窗静谧位' },
+              { id: 'g14',    carrier: '复兴号 G14',  mode: 'rail',   modeText: '高铁 4h18m', price: 662, punctuality: 99, dep: '12:00', arr: '16:18', depHub: '北京南站', arrHub: '上海虹桥', seat: '05车 08F', gate: '14A', note: '准点率 99%，全程不断网适合途中处理邮件' },
+              { id: 'ca1519', carrier: '国航 CA1519', mode: 'flight', modeText: '宽体 2h20m', price: 1120, punctuality: 93, dep: '14:00', arr: '16:20', depHub: '首都 T3', arrHub: '虹桥 T2', seat: '32A 靠窗', gate: 'C11', note: '空客 A350 宽体客机，落地时间更从容' },
+            ],
+            detailBlocks: ['MAP_D3_CORRIDOR', 'PLAN_DECK_SELECTOR', 'ACTION_SLIDE_BAR'],
+          },
+          {
+            id: 'evt_dining_bund',
+            category: 'DINING',
+            themeKey: 'dining',
+            lifecycleStage: 'PROPOSAL',
+            time: '18:00',
+            title: '外滩 · 鹿园晚宴（4人）',
+            subtitle: '群聊捕获 · 4人等时圈最优解',
+            badge: '待拍板',
+            connectorToNext: {
+              connectorState: 'NORMAL_SOLID',
+              label: '行程充裕',
+            },
+            entities: ['4人聚餐', '分散在4个区', '静谧包厢', '免长排队'],
+            selectedPlanIdx: 0,
+            plans: [
+              { id: 'luyuan', name: '鹿园 · 外滩店', match: 96, price: 320, queue: '包厢免排队', room: 'B08 江景包厢', address: '黄浦区中山东一路 18 号', avgCommute: 26, target: { x: 244, y: 84 }, commutes: [38, 19, 14, 33], note: '四方地理重心最优解，已预留江景包厢' },
+              { id: 'yongfu', name: '甬府小鲜 · 静安', match: 92, price: 260, queue: '需等 15m', room: 'A04 雅致卡座', address: '静安区南京西路 1266 号', avgCommute: 24, target: { x: 164, y: 78 }, commutes: [28, 8, 30, 29], note: '距恒隆广场步行 5 分钟，顺路后续采购' },
+              { id: 'fuhehui', name: '福和慧 · 愚园路', match: 89, price: 480, queue: '米其林私密', room: '禅意 3 号厅', address: '长宁区愚园路 1037 号', avgCommute: 29, target: { x: 118, y: 92 }, commutes: [22, 16, 46, 31], note: '离虹桥机场更近，商务宴请静谧度满分' },
+            ],
+            detailBlocks: ['MAP_DINING_ISOCHRONE', 'PLAN_DECK_SELECTOR', 'ACTION_SLIDE_BAR'],
+          },
+          {
+            id: 'evt_shopping_plaza66',
+            category: 'SHOPPING',
+            themeKey: 'shopping',
+            lifecycleStage: 'PROPOSAL',
+            time: '20:00',
+            title: '恒隆广场 · 伴手礼采购',
+            subtitle: '已比价省 ¥340 · 3件现货清单',
+            badge: '0/3',
+            connectorToNext: null,
+            entities: ['恒隆广场', '3件现货', '已寻2张满减券', '当前近史低'],
+            priceHistory: [
+              { date: '10/28', price: 380, tag: '日常原价' },
+              { date: '11/03', price: 368, tag: '小幅回落' },
+              { date: '11/11', price: 315, tag: '双11史低' },
+              { date: '11/16', price: 352, tag: '节后回调' },
+              { date: '今日',  price: 328, tag: '叠券到手 · 推荐入手' },
+            ],
+            checklist: [
+              { id: 'c1', floor: 'B1', name: 'B1 焦糖蝴蝶酥礼盒', price: '¥268', save: '省¥40', done: false },
+              { id: 'c2', floor: 'L2', name: 'L2 乌木雪松香氛',   price: '¥980', save: '省¥220', done: false },
+              { id: 'c3', floor: 'L3', name: 'L3 限定纪念随行杯', price: '¥320', save: '省¥80', done: false },
+            ],
+            detailBlocks: ['CHART_PRICE_TREND', 'MAP_INDOOR_ROUTE', 'INTERACTIVE_CHECKLIST', 'ACTION_SLIDE_BAR'],
+          },
+        ],
+
+        // Cross-Day Relay Anchor (Bottom of Timeline)
+        crossDayRelay: {
+          id: 'evt_travel_return',
+          category: 'TRAVEL',
+          themeKey: 'travel',
+          direction: 'return',
+          lifecycleStage: 'PROPOSAL',
+          time: '周日 15:00',
+          title: '上海 → 北京 · 返程提案',
+          subtitle: '未订票（提前48h唤醒）',
+          badge: '未订票',
+          entities: ['周日返程', '上海→北京', '16点前抵京', '往返联动'],
+          selectedPlanIdx: 0,
+          plans: [
+            { id: 'mu5116', carrier: '东航 MU5116', mode: 'flight', modeText: '直飞 2h15m', price: 960, punctuality: 95, dep: '12:40', arr: '14:55', depHub: '虹桥 T2', arrHub: '首都 T2', seat: '14A 靠窗', gate: 'C18', note: '15:00前落地首都，从容衔接周日晚间休息' },
+            { id: 'g18',    carrier: '复兴号 G18',  mode: 'rail',   modeText: '高铁 4h22m', price: 662, punctuality: 99, dep: '10:30', arr: '14:52', depHub: '上海虹桥', arrHub: '北京南站', seat: '06车 06F', gate: '11B', note: '高铁准点不惧晚秋华北阵风' },
+            { id: 'ca1502', carrier: '国航 CA1502', mode: 'flight', modeText: '宽体 2h20m', price: 1080, punctuality: 92, dep: '13:15', arr: '15:35', depHub: '虹桥 T2', arrHub: '首都 T3', seat: '35A 靠窗', gate: 'B09', note: '午后从容退房前往机场' },
+          ],
+          detailBlocks: ['MAP_D3_CORRIDOR', 'PLAN_DECK_SELECTOR', 'ACTION_SLIDE_BAR'],
+        },
+      };
+    }
+
+    let SDUI_STATE = createInitialSduiState();
+
+    /* ========================================================================
+       3. STUDIO KINETIC AURORA CANVAS (SMOOTH HUE SHIFT)
+       ======================================================================== */
+    const auroraTarget = { r: 0, g: 229, b: 255 };
+    const auroraCurrent = { r: 0, g: 229, b: 255 };
+
+    function setTheme(themeKey) {
+      const t = THEMES[themeKey] || THEMES.travel;
+      SDUI_STATE.activeTheme = themeKey;
+      document.documentElement.style.setProperty('--accent', t.hex);
+      document.documentElement.style.setProperty('--accent-alt', t.alt);
+      document.documentElement.style.setProperty('--accent-rgb', t.rgb);
+
+      auroraTarget.r = t.rgbArr[0];
+      auroraTarget.g = t.rgbArr[1];
+      auroraTarget.b = t.rgbArr[2];
+
+      const bDot = document.getElementById('brand-dot');
+      if (bDot) {
+        bDot.style.backgroundColor = t.hex;
+        bDot.style.boxShadow = `0 0 12px ${t.hex}`;
+      }
+      const idleDot = document.getElementById('l2-idle-dot');
+      if (idleDot) {
+        idleDot.style.backgroundColor = t.hex;
+        idleDot.style.boxShadow = `0 0 8px ${t.hex}`;
+      }
+    }
+
+    (function initAuroraCanvas() {
+      const canvas = document.getElementById('studio-aurora-canvas');
+      const ctx = canvas.getContext('2d');
+      let w = 0, h = 0, tick = 0;
+
+      function resize() {
+        w = canvas.width = window.innerWidth;
+        h = canvas.height = window.innerHeight;
+      }
+
+      function render() {
+        tick += 0.0042;
+        auroraCurrent.r += (auroraTarget.r - auroraCurrent.r) * 0.04;
+        auroraCurrent.g += (auroraTarget.g - auroraCurrent.g) * 0.04;
+        auroraCurrent.b += (auroraTarget.b - auroraCurrent.b) * 0.04;
+
+        const r = Math.round(auroraCurrent.r);
+        const g = Math.round(auroraCurrent.g);
+        const b = Math.round(auroraCurrent.b);
+
+        ctx.fillStyle = '#05070B';
+        ctx.fillRect(0, 0, w, h);
+
+        const x1 = w * (0.32 + 0.08 * Math.sin(tick));
+        const y1 = h * (0.28 + 0.06 * Math.cos(tick * 0.85));
+        const g1 = ctx.createRadialGradient(x1, y1, 0, x1, y1, Math.max(w, h) * 0.54);
+        g1.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.13)`);
+        g1.addColorStop(0.55, `rgba(${r}, ${g}, ${b}, 0.035)`);
+        g1.addColorStop(1, 'transparent');
+        ctx.fillStyle = g1;
+        ctx.fillRect(0, 0, w, h);
+
+        const x2 = w * (0.72 + 0.07 * Math.cos(tick * 0.92));
+        const y2 = h * (0.74 + 0.07 * Math.sin(tick * 0.72));
+        const g2 = ctx.createRadialGradient(x2, y2, 0, x2, y2, Math.max(w, h) * 0.46);
+        g2.addColorStop(0, `rgba(${Math.min(255, r + 35)}, ${Math.max(30, g - 15)}, ${Math.min(255, b + 45)}, 0.09)`);
+        g2.addColorStop(1, 'transparent');
+        ctx.fillStyle = g2;
+        ctx.fillRect(0, 0, w, h);
+
+        requestAnimationFrame(render);
+      }
+
+      window.addEventListener('resize', resize);
+      resize();
+      render();
+    })();
+
+    /* ========================================================================
+       4. HELPERS: EVENT LOOKUP, TOAST, DYNAMIC PILL, COUNTDOWN
+       ======================================================================== */
+    function findEventById(id) {
+      if (SDUI_STATE.crossDayRelay.id === id) return SDUI_STATE.crossDayRelay;
+      return SDUI_STATE.events.find(e => e.id === id) || null;
+    }
+
+    let toastTimer = null;
+    function showToast(msg, themeKey = SDUI_STATE.activeTheme) {
+      const t = THEMES[themeKey] || THEMES.travel;
+      const el = document.getElementById('toast');
+      document.getElementById('toast-msg').textContent = msg;
+      const dot = document.getElementById('toast-dot');
+      dot.style.backgroundColor = t.hex;
+      dot.style.boxShadow = `0 0 10px ${t.hex}`;
+
+      el.classList.remove('hidden', 'toast-active');
+      void el.offsetWidth;
+      el.classList.add('toast-active');
+
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => el.classList.add('hidden'), 2800);
+    }
+
+    let pillTimer = null;
+    function pulseDynamicPill(text, themeKey, durationMs, onComplete) {
+      setTheme(themeKey);
+      const pill = document.getElementById('l2-pill');
+      const idle = document.getElementById('l2-idle');
+      const active = document.getElementById('l2-active');
+      const activeText = document.getElementById('l2-active-text');
+
+      idle.classList.add('hidden');
+      active.classList.remove('hidden');
+      activeText.textContent = text;
+      pill.classList.add('sensing', 'w-full', 'px-4', 'py-2');
+
+      clearTimeout(pillTimer);
+      pillTimer = setTimeout(() => {
+        pill.classList.remove('sensing', 'w-full', 'px-4', 'py-2');
+        active.classList.add('hidden');
+        idle.classList.remove('hidden');
+        if (onComplete) onComplete();
+      }, durationMs);
+    }
+
+    function formatCountdown(sec) {
+      const h = String(Math.floor(sec / 3600)).padStart(2, '0');
+      const m = String(Math.floor((sec % 3600) / 60)).padStart(2, '0');
+      const s = String(sec % 60).padStart(2, '0');
+      return `${h}:${m}:${s}`;
+    }
+
+    setInterval(() => {
+      if (SDUI_STATE.countdownSeconds > 0) SDUI_STATE.countdownSeconds -= 1;
+      const el = document.getElementById('now-countdown');
+      if (el) el.textContent = formatCountdown(SDUI_STATE.countdownSeconds);
+    }, 1000);
+
+    /* ========================================================================
+       5. RIGHT PANEL: TABS & LIVE SDUI JSON INSPECTOR
+       ======================================================================== */
+    function switchStudioTab(tab) {
+      SDUI_STATE.activeStudioTab = tab;
+      const cBtn = document.getElementById('tab-btn-console');
+      const sBtn = document.getElementById('tab-btn-sdui');
+      const cPanel = document.getElementById('tab-panel-console');
+      const sPanel = document.getElementById('tab-panel-sdui');
+
+      if (tab === 'console') {
+        cBtn.className = 'py-2 rounded-xl text-xs font-semibold transition-all bg-white/[0.12] text-white border border-white/15 shadow-sm';
+        sBtn.className = 'py-2 rounded-xl text-xs font-medium transition-all text-slate-400 hover:text-white border border-transparent';
+        cPanel.classList.remove('hidden');
+        sPanel.classList.add('hidden');
+      } else {
+        sBtn.className = 'py-2 rounded-xl text-xs font-semibold transition-all bg-white/[0.12] text-white border border-white/15 shadow-sm';
+        cBtn.className = 'py-2 rounded-xl text-xs font-medium transition-all text-slate-400 hover:text-white border border-transparent';
+        sPanel.classList.remove('hidden');
+        cPanel.classList.add('hidden');
+        updateSduiInspector();
+      }
+    }
+
+    function syntaxHighlightJson(jsonStr) {
+      const esc = jsonStr.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return esc.replace(
+        /("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+        (match) => {
+          let cls = 'json-num';
+          if (/^"/.test(match)) cls = /:$/.test(match) ? 'json-key' : 'json-str';
+          else if (/true|false/.test(match)) cls = 'json-bool';
+          else if (/null/.test(match)) cls = 'json-null';
+          return `<span class="${cls}">${match}</span>`;
+        }
+      );
+    }
+
+    function getCurrentSduiPayload() {
+      const activeEvent = SDUI_STATE.activeL1Id ? findEventById(SDUI_STATE.activeL1Id) : null;
+
+      if (activeEvent) {
+        const blocks = activeEvent.lifecycleStage === 'CONFIRMED' && !SDUI_STATE.l1ForceMapView
+          ? (activeEvent.category === 'TRAVEL'
+              ? ['HOLO_3D_BOARDING_PASS', 'LIVE_GATE_STATUS', 'QUICK_TRANSFER_ACTIONS']
+              : activeEvent.category === 'DINING'
+                ? ['HOLO_3D_TABLE_PASS', 'GROUP_SYNC_AVATARS', 'ONE_TAP_NAV']
+                : activeEvent.category === 'SHOPPING'
+                  ? ['HOLO_3D_VOUCHER_QR', 'INTERACTIVE_CHECKLIST']
+                  : activeEvent.detailBlocks)
+          : activeEvent.detailBlocks;
+
+        return {
+          dayMode: SDUI_STATE.dayMode,
+          activeView: 'L1_DETAIL_SHEET',
+          eventId: activeEvent.id,
+          category: activeEvent.category,
+          lifecycleStage: activeEvent.lifecycleStage,
+          themeToken: THEMES[activeEvent.themeKey]?.hex || '#00E5FF',
+          connectorState: activeEvent.connectorToNext?.connectorState || 'NONE',
+          detailBlocks: blocks,
+          selectedPlan: activeEvent.plans ? activeEvent.plans[activeEvent.selectedPlanIdx]?.carrier || activeEvent.plans[activeEvent.selectedPlanIdx]?.name : undefined,
+          checklistProgress: activeEvent.checklist
+            ? `${activeEvent.checklist.filter(c => c.done).length}/${activeEvent.checklist.length}`
+            : undefined,
+        };
+      }
+
+      if (SDUI_STATE.dayMode === 'EMPTY_EXPLORE') {
+        const preset = EXPLORE_PRESETS[SDUI_STATE.weatherContext.mode][SDUI_STATE.exploreIndex];
+        return {
+          dayMode: 'EMPTY_EXPLORE',
+          weatherContext: SDUI_STATE.weatherContext,
+          themeToken: THEMES.explore.hex,
+          recommendedMicroTrip: {
+            id: preset.id,
+            title: preset.title,
+            duration: preset.duration,
+            stopsCount: preset.stops.length,
+          },
+          availableActions: ['CYCLE_INSPIRATION', 'ADOPT_TO_TIMELINE', 'SWITCH_TO_REST_MODE'],
+        };
+      }
+
+      if (SDUI_STATE.dayMode === 'REST_MODE') {
+        return {
+          dayMode: 'REST_MODE',
+          ambientShader: 'SILENT_SILVER_INDIGO_BREATH',
+          notificationPolicy: 'DO_NOT_DISTURB_EXCEPT_EMERGENCY',
+          availableActions: ['WAKE_EXPLORE', 'RESTORE_TIMELINE'],
+        };
+      }
+
+      return {
+        protocolVersion: SDUI_STATE.protocolVersion,
+        dayMode: SDUI_STATE.dayMode,
+        archivedCount: SDUI_STATE.archivedEvents.length,
+        timelineNodes: SDUI_STATE.events.map(e => ({
+          id: e.id,
+          time: e.time,
+          category: e.category,
+          lifecycleStage: e.lifecycleStage,
+          connectorState: e.connectorToNext ? e.connectorToNext.connectorState : 'END',
+          hasReminderStrip: Boolean(e.reminderStrip && !e.reminderStrip.dismissed),
+          swipeDismissible: Boolean(e.isMisjudgment),
+        })),
+        crossDayRelay: {
+          id: SDUI_STATE.crossDayRelay.id,
+          lifecycleStage: SDUI_STATE.crossDayRelay.lifecycleStage,
+          wakeWindow: '48h_BEFORE_RETURN',
+        },
+      };
+    }
+
+    function updateSduiInspector() {
+      const payload = getCurrentSduiPayload();
+
+      // Update top compact routing pills
+      const dmBadge = document.getElementById('badge-daymode');
+      const stBadge = document.getElementById('badge-stage');
+      const cnBadge = document.getElementById('badge-connector');
+
+      dmBadge.textContent = SDUI_STATE.dayMode;
+      if (SDUI_STATE.activeL1Id) {
+        const ev = findEventById(SDUI_STATE.activeL1Id);
+        stBadge.textContent = `L1 · ${ev?.lifecycleStage || 'DETAIL'}`;
+      } else {
+        stBadge.textContent = 'L0 · HOME';
+      }
+
+      // Show highest-priority connector state on timeline
+      const connectors = SDUI_STATE.events.map(e => e.connectorToNext?.connectorState).filter(Boolean);
+      const topConn = connectors.includes('ALERT_PULSE') ? 'ALERT_PULSE'
+        : connectors.includes('CONFLICT_DASHED') ? 'CONFLICT_DASHED'
+        : connectors.includes('GAP_SUGGESTION') ? 'GAP_SUGGESTION'
+        : 'NORMAL_SOLID';
+      cnBadge.textContent = SDUI_STATE.dayMode === 'ACTIVE_TIMELINE' ? topConn : 'IDLE';
+      cnBadge.className = topConn === 'ALERT_PULSE'
+        ? 'px-2 py-0.5 rounded-md bg-alert/20 text-alert border border-alert/45'
+        : topConn === 'CONFLICT_DASHED'
+          ? 'px-2 py-0.5 rounded-md bg-dining/15 text-dining border border-dining/35'
+          : 'px-2 py-0.5 rounded-md bg-white/[0.08] text-slate-200 border border-white/15';
+
+      // Update Mode Button Active Styling in Console
+      ['ACTIVE_TIMELINE', 'EMPTY_EXPLORE', 'REST_MODE'].forEach(mode => {
+        const idMap = { ACTIVE_TIMELINE: 'btn-mode-active', EMPTY_EXPLORE: 'btn-mode-explore', REST_MODE: 'btn-mode-rest' };
+        const el = document.getElementById(idMap[mode]);
+        if (!el) return;
+        if (SDUI_STATE.dayMode === mode) {
+          el.className = 'p-2.5 rounded-2xl text-left border transition-all active:scale-95 bg-white/[0.12] border-white/30 text-white shadow-[0_0_16px_rgba(var(--accent-rgb),0.18)]';
+        } else {
+          el.className = 'p-2.5 rounded-2xl text-left border transition-all active:scale-95 bg-white/[0.03] border-white/10 hover:border-white/25 text-slate-300';
+        }
+      });
+
+      // Render syntax-highlighted JSON
+      const codeEl = document.getElementById('sdui-json-code');
+      if (codeEl) {
+        codeEl.innerHTML = syntaxHighlightJson(JSON.stringify(payload, null, 2));
+      }
+    }
+
+    function copySduiJson() {
+      const text = JSON.stringify(getCurrentSduiPayload(), null, 2);
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand('copy');
+        showToast('已复制当前 SDUI 协议 JSON', SDUI_STATE.activeTheme);
+      } catch (e) {
+        showToast('复制失败，请手动选中复制', 'rest');
+      }
+      document.body.removeChild(ta);
+    }
+
+    /* ========================================================================
+       6. MACRO DAY MODE DISPATCHER (ACTIVE_TIMELINE / EMPTY_EXPLORE / REST_MODE)
+       ======================================================================== */
+    function setDayMode(mode) {
+      if (SDUI_STATE.activeL1Id) closeL1(true);
+      closeMiniSheet();
+      SDUI_STATE.dayMode = mode;
+
+      if (mode === 'EMPTY_EXPLORE') setTheme('explore');
+      else if (mode === 'REST_MODE') setTheme('rest');
+      else setTheme('travel');
+
+      renderPhoneHome();
+      updateSduiInspector();
+    }
+
+    function setWeather(mode) {
+      SDUI_STATE.weatherContext = mode === 'sunny'
+        ? { mode: 'sunny', label: '晴朗微风 21°C', city: '上海' }
+        : { mode: 'rainy', label: '细雨微凉 15°C', city: '上海' };
+      SDUI_STATE.exploreIndex = 0;
+
+      const sBtn = document.getElementById('weather-btn-sunny');
+      const rBtn = document.getElementById('weather-btn-rainy');
+      if (mode === 'sunny') {
+        sBtn.className = 'px-2.5 py-1 rounded-md font-medium bg-exploreGold/20 text-exploreGold transition-all';
+        rBtn.className = 'px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all';
+      } else {
+        rBtn.className = 'px-2.5 py-1 rounded-md font-medium bg-travel/20 text-travel transition-all';
+        sBtn.className = 'px-2.5 py-1 rounded-md font-medium text-slate-400 hover:text-white transition-all';
+      }
+
+      if (SDUI_STATE.dayMode === 'EMPTY_EXPLORE') renderPhoneHome();
+      updateSduiInspector();
+    }
+
+    function cycleExploreInspiration() {
+      const list = EXPLORE_PRESETS[SDUI_STATE.weatherContext.mode];
+      SDUI_STATE.exploreIndex = (SDUI_STATE.exploreIndex + 1) % list.length;
+      renderPhoneHome();
+      updateSduiInspector();
+    }
+
+    function adoptExploreToTimeline() {
+      const preset = EXPLORE_PRESETS[SDUI_STATE.weatherContext.mode][SDUI_STATE.exploreIndex];
+
+      // Convert micro-itinerary stops into confirmed Lavender-Gold timeline cards
+      const adoptedEvents = preset.stops.map((stop, idx) => ({
+        id: `evt_explore_${Date.now()}_${idx}`,
+        category: 'EXPLORE',
+        themeKey: 'explore',
+        lifecycleStage: 'CONFIRMED',
+        time: stop.time,
+        title: stop.name,
+        subtitle: `${stop.dist} · ${stop.note}`,
+        badge: '漫游已定',
+        connectorToNext: idx < preset.stops.length - 1
+          ? { connectorState: 'NORMAL_SOLID', label: '漫步衔接' }
+          : null,
+        entities: [preset.tag, stop.dist, SDUI_STATE.weatherContext.label],
+        detailBlocks: ['EXPLORE_ROUTE_CARD'],
+        exploreMeta: { tripTitle: preset.title, duration: preset.duration, note: stop.note, stops: preset.stops, currentStopIdx: idx },
+      }));
+
+      SDUI_STATE.events = adoptedEvents;
+      SDUI_STATE.dayMode = 'ACTIVE_TIMELINE';
+      setTheme('explore');
+      renderPhoneHome();
+      updateSduiInspector();
+
+      // Trigger celebratory light sweep across phone screen
+      const host = document.getElementById('sweep-host');
+      host.innerHTML = '<div class="sweep-overlay"></div>';
+      setTimeout(() => { host.innerHTML = ''; }, 1000);
+      showToast(`已采纳「${preset.title}」并生成今日流光日程`, 'explore');
+    }
+
+    /* ========================================================================
+       7. L0 · PHONE HOME RENDERER
+       ======================================================================== */
+    function renderPhoneHome(highlightId = null) {
+      const vp = document.getElementById('l0-viewport');
+      if (!vp) return;
+
+      if (SDUI_STATE.dayMode === 'EMPTY_EXPLORE') {
+        vp.innerHTML = renderEmptyExploreHtml();
+        return;
+      }
+
+      if (SDUI_STATE.dayMode === 'REST_MODE') {
+        vp.innerHTML = renderRestModeHtml();
+        return;
+      }
+
+      vp.innerHTML = renderActiveTimelineHtml(highlightId);
+      bindSwipeDismissCards();
+    }
+
+    function renderEmptyExploreHtml() {
+      const w = SDUI_STATE.weatherContext;
+      const preset = EXPLORE_PRESETS[w.mode][SDUI_STATE.exploreIndex];
+
+      return `
+        <div class="flex-1 flex flex-col justify-between py-2 anim-enter">
+          <!-- Editorial Header -->
+          <div class="flex items-end justify-between">
+            <div>
+              <h2 class="text-[22px] font-semibold tracking-tight text-white">11月22日 <span class="text-slate-400 font-light">· 周日</span></h2>
+              <p class="text-xs text-explore/90 mt-1">今日无日程 · 后端已生成附近漫游灵感</p>
+            </div>
+            <button onclick="setWeather('${w.mode === 'sunny' ? 'rainy' : 'sunny'}')"
+              class="px-2.5 py-1 rounded-full bg-white/[0.06] border border-white/15 text-[10.5px] text-slate-200 hover:bg-white/[0.12] transition-all">
+              ${w.mode === 'sunny' ? '☀ 21°C' : '🌧 15°C'}
+            </button>
+          </div>
+
+          <!-- Full-Focus Aurora Explore Poster Card -->
+          <div class="my-4 rounded-[28px] p-5 relative overflow-hidden border border-explore/40"
+            style="background: linear-gradient(155deg, rgba(192,132,252,0.16) 0%, rgba(16,14,32,0.92) 52%, rgba(251,191,36,0.12) 100%); box-shadow: 0 24px 60px rgba(0,0,0,0.6), 0 0 40px rgba(192,132,252,0.14);">
+            <div class="flex items-center justify-between gap-2">
+              <span class="px-2.5 py-1 rounded-full text-[10px] font-mono bg-explore/20 text-purple-200 border border-explore/40">
+                EMPTY_EXPLORE · ${preset.tag}
+              </span>
+              <span class="text-[10.5px] font-mono text-exploreGold">${preset.duration}</span>
+            </div>
+
+            <h3 class="text-xl font-semibold text-white tracking-tight mt-3 leading-snug">
+              ${preset.title}
+            </h3>
+            <p class="text-xs text-slate-300/90 mt-1">
+              结合当前「${w.label}」与机主静谧偏好生成
+            </p>
+
+            <!-- Stylized Mini Walk Route Preview -->
+            <div class="mt-4 pt-3.5 border-t border-white/10 space-y-3 relative pl-5">
+              <div class="absolute left-[6px] top-5 bottom-3 w-[1.5px] bg-gradient-to-b from-explore via-purple-300 to-exploreGold rounded-full"></div>
+              ${preset.stops.map((s, idx) => `
+                <div class="relative flex items-start justify-between gap-2">
+                  <span class="absolute -left-[19px] top-1.5 w-2.5 h-2.5 rounded-full border-2 border-[#121024]"
+                    style="background:${idx === 2 ? '#FBBF24' : '#C084FC'}; box-shadow: 0 0 8px ${idx === 2 ? '#FBBF24' : '#C084FC'};"></span>
+                  <div>
+                    <div class="text-xs font-semibold text-white">${s.name}</div>
+                    <div class="text-[10.5px] text-slate-400 mt-0.5">${s.note}</div>
+                  </div>
+                  <div class="text-right shrink-0">
+                    <div class="text-[10.5px] font-mono text-purple-200">${s.time}</div>
+                    <div class="text-[9.5px] text-slate-500">${s.dist}</div>
+                  </div>
+                </div>
+              `).join('')}
+            </div>
+
+            <!-- 3 Interactive Action Buttons -->
+            <div class="mt-5 space-y-2.5">
+              <button onclick="adoptExploreToTimeline()"
+                class="w-full py-3 rounded-2xl font-semibold text-xs text-slate-950 transition-all active:scale-[0.98]"
+                style="background: linear-gradient(135deg, #E9D5FF 0%, #C084FC 48%, #FBBF24 100%); box-shadow: 0 8px 24px rgba(192,132,252,0.35);">
+                就去这 · 采纳上轴 ✦
+              </button>
+              <div class="grid grid-cols-2 gap-2">
+                <button onclick="cycleExploreInspiration()"
+                  class="py-2.5 rounded-xl bg-white/[0.07] hover:bg-white/[0.13] border border-white/12 text-xs font-medium text-white transition-all active:scale-95">
+                  换一批灵感 ↻
+                </button>
+                <button onclick="setDayMode('REST_MODE')"
+                  class="py-2.5 rounded-xl bg-white/[0.04] hover:bg-white/[0.1] border border-white/10 text-xs font-medium text-slate-300 transition-all active:scale-95">
+                  今日宜放空
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div class="text-center text-[10.5px] text-slate-500">
+            点击上方天气胶囊可对比晴天户外 / 雨天室内路线
+          </div>
+        </div>
+      `;
+    }
+
+    function renderRestModeHtml() {
+      return `
+        <div class="flex-1 flex flex-col items-center justify-center text-center px-4 anim-enter relative">
+          <div class="relative w-44 h-44 flex items-center justify-center mb-6">
+            <div class="absolute inset-0 rounded-full bg-gradient-to-tr from-slate-400/20 via-indigo-400/25 to-white/10 blur-2xl rest-halo"></div>
+            <div class="w-28 h-28 rounded-full border border-white/15 bg-white/[0.03] backdrop-blur-xl flex items-center justify-center shadow-[0_0_50px_rgba(129,140,248,0.2)]">
+              <div class="w-12 h-12 rounded-full bg-gradient-to-br from-slate-200/80 to-indigo-300/60 blur-[1px] opacity-80"></div>
+            </div>
+          </div>
+
+          <div class="text-[10px] font-mono uppercase tracking-[0.26em] text-slate-400">REST MODE · 11月22日</div>
+          <h2 class="text-xl font-medium text-white tracking-wide mt-2.5">今日宜放空</h2>
+          <p class="text-xs text-slate-400 mt-1.5 leading-relaxed max-w-[240px]">
+            灵枢已静默守候中，非紧急消息将自动归档，不打扰你的独处时光。
+          </p>
+
+          <div class="mt-10 flex items-center gap-2.5">
+            <button onclick="setDayMode('EMPTY_EXPLORE')"
+              class="px-4 py-2.5 rounded-full bg-white/[0.07] hover:bg-white/[0.14] border border-white/15 text-xs font-medium text-slate-100 transition-all active:scale-95">
+              唤醒出去逛逛 ✦
+            </button>
+            <button onclick="setDayMode('ACTIVE_TIMELINE')"
+              class="px-4 py-2.5 rounded-full bg-white/[0.03] hover:bg-white/[0.09] border border-white/10 text-xs font-medium text-slate-400 hover:text-white transition-all active:scale-95">
+              返回示例日程
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderActiveTimelineHtml(highlightId) {
+      const proposalCount = SDUI_STATE.events.filter(e => e.lifecycleStage === 'PROPOSAL').length;
+      const totalCount = SDUI_STATE.events.length;
+
+      // Pick primary focus event (prefer Travel Outbound if present, else first event)
+      const focusEvent = SDUI_STATE.events.find(e => e.id === 'evt_travel_outbound') || SDUI_STATE.events[0];
+      const focusTheme = THEMES[focusEvent.themeKey] || THEMES.travel;
+      const focusConfirmed = focusEvent.lifecycleStage === 'CONFIRMED';
+
+      // Auto-Collapsed Archived Pill
+      const arch = SDUI_STATE.archivedEvents[0];
+      const archivedHtml = arch ? `
+        <div class="mb-3">
+          <button onclick="toggleArchived()"
+            class="w-full px-3.5 py-2 rounded-2xl bg-white/[0.03] hover:bg-white/[0.06] border border-white/[0.07] flex items-center justify-between text-[11px] text-slate-400 transition-all">
+            <span class="flex items-center gap-2 truncate">
+              <span class="w-1.5 h-1.5 rounded-full bg-slate-500"></span>
+              <span>已完成 ${SDUI_STATE.archivedEvents.length} 项日程 · ${arch.time} ${arch.title}</span>
+            </span>
+            <span class="text-[10px] transition-transform ${SDUI_STATE.archivedExpanded ? 'rotate-180' : ''}">▾</span>
+          </button>
+          ${SDUI_STATE.archivedExpanded ? `
+            <div class="mt-1.5 px-3.5 py-2.5 rounded-2xl bg-white/[0.025] border border-white/[0.06] text-[11px] text-slate-400 space-y-1 anim-enter">
+              <div class="flex items-center justify-between font-mono text-[10px] text-slate-500">
+                <span>${arch.time} - ${arch.endTime}</span>
+                <span>ARCHIVED</span>
+              </div>
+              <p class="leading-relaxed text-slate-300/80">${arch.summary}</p>
+            </div>
+          ` : ''}
+        </div>
+      ` : '';
+
+      // Now Focus Card (Top Center)
+      const nowCardHtml = `
+        <section class="mb-4">
+          <div class="flex items-center justify-between mb-1.5 px-0.5">
+            <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">NOW · 此刻焦点</span>
+            <span class="text-[10px] font-mono" style="color:${focusTheme.hex};">${focusConfirmed ? '已出票 · 点击亮码' : '待拍板 · 点击选方案'}</span>
+          </div>
+          <div onclick="openL1('${focusEvent.id}')" class="now-card rounded-[24px] p-4 cursor-pointer relative overflow-hidden">
+            <div class="absolute -right-8 -top-10 w-32 h-32 rounded-full blur-2xl pointer-events-none" style="background:rgba(${focusTheme.rgb}, 0.14);"></div>
+            <div class="flex items-start justify-between gap-2.5">
+              <div class="min-w-0">
+                <div class="flex items-center gap-2">
+                  <span class="text-xs font-mono font-semibold" style="color:${focusTheme.hex};">${focusEvent.time}</span>
+                  <span class="w-1 h-1 rounded-full bg-slate-600"></span>
+                  <span class="text-[10.5px] text-slate-400 truncate">${focusConfirmed ? '已同步登机动态' : 'AI 推荐方案就绪'}</span>
+                </div>
+                <h2 class="text-[16.5px] font-semibold text-white tracking-tight mt-1 truncate">${focusEvent.title}</h2>
+                <p class="text-xs text-slate-400 mt-0.5 truncate">${focusEvent.subtitle}</p>
+              </div>
+              <div class="text-right shrink-0">
+                <div id="now-countdown" class="text-[13px] font-mono font-semibold tracking-tight" style="color:${focusTheme.hex};">
+                  ${formatCountdown(SDUI_STATE.countdownSeconds)}
+                </div>
+                <div class="text-[10px] text-slate-400 mt-0.5">${focusConfirmed ? '后登机' : '后出发'}</div>
+              </div>
+            </div>
+            <div class="mt-3 flex items-center gap-2">
+              <div class="flex-1 h-1 rounded-full bg-white/[0.08] overflow-hidden">
+                <div class="h-full rounded-full" style="width:${focusConfirmed ? '72%' : '38%'}; background: linear-gradient(90deg, ${focusTheme.hex}, ${focusTheme.alt}); box-shadow: 0 0 10px ${focusTheme.hex};"></div>
+              </div>
+              <span class="text-[9.5px] font-mono text-slate-400">${focusConfirmed ? 'BOARDING' : 'PROPOSAL'}</span>
+            </div>
+          </div>
+        </section>
+      `;
+
+      // Minimalist Vertical Timeline Items + 4 Connector States
+      let timelineHtml = `<div class="relative pl-6 space-y-1.5">`;
+      timelineHtml += `<div class="absolute left-[7px] top-3 bottom-3 w-[1.5px] bg-gradient-to-b from-indigo-400/60 via-travel/55 via-dining/55 to-shopping/55 rounded-full"></div>`;
+
+      SDUI_STATE.events.forEach((ev) => {
+        const theme = THEMES[ev.themeKey] || THEMES.travel;
+        const isConfirmed = ev.lifecycleStage === 'CONFIRMED';
+        const isNew = ev.id === highlightId;
+
+        // Right Micro-Badge (Shopping uses live SVG progress ring!)
+        let rightBadge = '';
+        if (ev.category === 'SHOPPING' && ev.checklist) {
+          const done = ev.checklist.filter(c => c.done).length;
+          const tot = ev.checklist.length;
+          const r = 11;
+          const circ = 2 * Math.PI * r;
+          const off = circ * (1 - done / tot);
+          rightBadge = `
+            <div class="relative w-7 h-7 flex items-center justify-center shrink-0">
+              <svg class="w-7 h-7 -rotate-90" viewBox="0 0 28 28">
+                <circle cx="14" cy="14" r="${r}" fill="none" stroke="rgba(255,255,255,0.12)" stroke-width="2.2"/>
+                <circle cx="14" cy="14" r="${r}" fill="none" stroke="${theme.hex}" stroke-width="2.2"
+                  stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" stroke-linecap="round"/>
+              </svg>
+              <span class="absolute text-[9px] font-mono font-semibold text-white">${done}/${tot}</span>
+            </div>
+          `;
+        } else if (ev.isMisjudgment) {
+          rightBadge = `
+            <button onclick="dismissMisjudgment(event, '${ev.id}')" title="雾化移除"
+              class="px-2 py-1 rounded-full text-[10px] font-medium bg-explore/20 text-purple-200 border border-explore/45 hover:bg-explore/35 transition-all shrink-0">
+              ← 雾化 ×
+            </button>
+          `;
+        } else if (isConfirmed) {
+          rightBadge = `
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-medium shrink-0"
+              style="background:rgba(${theme.rgb},0.13); color:${theme.hex}; border:1px solid rgba(${theme.rgb},0.3);">
+              ${ev.badge}
+            </span>
+          `;
+        } else {
+          rightBadge = `
+            <span class="px-2.5 py-1 rounded-full text-[10px] font-semibold shrink-0"
+              style="background:rgba(${theme.rgb},0.16); color:${theme.hex}; border:1px solid rgba(${theme.rgb},0.45);">
+              ${ev.badge}
+            </span>
+          `;
+        }
+
+        // Optional Pre-Trip Reminder Strip (only on confirmed cards, non-dismissed)
+        const showStrip = isConfirmed && ev.reminderStrip && !ev.reminderStrip.dismissed;
+
+        timelineHtml += `
+          <div id="node-wrap-${ev.id}" class="relative ${isNew ? 'anim-enter' : ''}">
+            <span class="absolute -left-[21px] top-5 w-3 h-3 rounded-full border-2 border-[#06080F]"
+              style="background:${theme.hex}; box-shadow: 0 0 10px ${theme.hex};"></span>
+
+            <div ${ev.isMisjudgment ? `data-swipe-id="${ev.id}"` : ''}
+              onclick="if(!this.dataset.dragging) openL1('${ev.id}')"
+              style="--card-rgb:${theme.rgb};"
+              class="cursor-pointer rounded-[20px] px-3.5 py-3 flex items-center justify-between gap-2.5 select-none ${isConfirmed ? 'card-confirmed' : 'card-proposal'} ${ev.isMisjudgment ? 'touch-pan-y' : ''}">
+              <div class="min-w-0 flex-1">
+                <div class="flex items-center gap-2">
+                  <span class="text-[11px] font-mono font-semibold shrink-0" style="color:${theme.hex};">${ev.time}</span>
+                  <h3 class="text-[13px] font-semibold text-white truncate tracking-tight">${ev.title}</h3>
+                </div>
+                <p class="text-[11px] text-slate-400 mt-0.5 truncate">${ev.subtitle}</p>
+              </div>
+              ${rightBadge}
+            </div>
+
+            ${showStrip ? `
+              <div class="mx-2.5 -mt-1.5 pt-2.5 pb-1.5 px-3 rounded-b-2xl bg-white/[0.035] border-x border-b border-white/[0.08] flex items-center justify-between gap-2 text-[10px] text-slate-300">
+                <span class="truncate">✦ ${ev.reminderStrip.text}</span>
+                <button onclick="dismissReminderStrip(event, '${ev.id}')"
+                  class="w-4 h-4 rounded-full hover:bg-white/15 flex items-center justify-center text-slate-400 hover:text-white shrink-0"
+                  aria-label="关闭提醒">×</button>
+              </div>
+            ` : ''}
+          </div>
+        `;
+
+        // Render Dynamic Connector Line to Next Event
+        if (ev.connectorToNext) {
+          const conn = ev.connectorToNext;
+          if (conn.connectorState === 'GAP_SUGGESTION') {
+            timelineHtml += `
+              <div class="relative py-1.5 flex items-center">
+                <button onclick="openGapSuggestionSheet('${ev.id}')"
+                  class="ml-1 px-3 py-1 rounded-full bg-explore/[0.11] hover:bg-explore/[0.22] border border-explore/40 text-[10.5px] text-purple-200 flex items-center gap-1.5 transition-all active:scale-95 shadow-[0_0_16px_rgba(192,132,252,0.16)]">
+                  <span>${conn.label}</span>
+                </button>
+              </div>
+            `;
+          } else if (conn.connectorState === 'CONFLICT_DASHED') {
+            timelineHtml += `
+              <div class="relative py-1">
+                <svg class="absolute -left-[24px] top-1/2 -translate-y-1/2 w-6 h-10 overflow-visible pointer-events-none" viewBox="0 0 24 40">
+                  <path d="M 7 0 C 20 10, 20 30, 7 40" fill="none" stroke="#FF914D" stroke-width="1.8" stroke-dasharray="3 3">
+                    <animate attributeName="stroke-dashoffset" from="12" to="0" dur="1.3s" repeatCount="indefinite"/>
+                  </path>
+                </svg>
+                <div class="ml-1 px-3 py-2 rounded-2xl bg-dining/[0.09] border border-dining/40 flex items-center justify-between gap-2">
+                  <span class="text-[10.5px] text-orange-200 truncate">⚡ ${conn.label}</span>
+                  <button onclick="resolveConflictShift(event, '${ev.id}')"
+                    class="px-2.5 py-1 rounded-lg bg-dining text-slate-950 font-semibold text-[10px] shrink-0 hover:brightness-110 active:scale-95 transition-all">
+                    ${conn.actionLabel}
+                  </button>
+                </div>
+              </div>
+            `;
+          } else if (conn.connectorState === 'ALERT_PULSE') {
+            timelineHtml += `
+              <div class="relative py-1">
+                <svg class="absolute -left-[24px] top-1/2 -translate-y-1/2 w-6 h-12 overflow-visible pointer-events-none" viewBox="0 0 24 48">
+                  <path d="M 7 0 C 22 12, 22 36, 7 48" fill="none" stroke="#FF4D6D" stroke-width="2.2" stroke-dasharray="4 3">
+                    <animate attributeName="stroke-dashoffset" from="14" to="0" dur="0.7s" repeatCount="indefinite"/>
+                  </path>
+                </svg>
+                <div onclick="openAlertPlanBSheet('${ev.id}')"
+                  class="ml-1 px-3 py-2.5 rounded-2xl bg-alert/[0.13] border border-alert/70 alert-pulse-box cursor-pointer flex items-center justify-between gap-2">
+                  <span class="text-[10.5px] font-medium text-rose-100 leading-snug">🚨 ${conn.label}</span>
+                  <span class="px-2 py-0.5 rounded-md bg-alert text-white font-semibold text-[9.5px] shrink-0">B 计划</span>
+                </div>
+              </div>
+            `;
+          } else {
+            timelineHtml += `
+              <div class="relative py-0.5 pl-1 text-[9.5px] text-slate-500 flex items-center gap-1.5">
+                <span class="w-1 h-1 rounded-full bg-emerald-400/70"></span>
+                <span>${conn.label || '衔接充裕'}</span>
+              </div>
+            `;
+          }
+        }
+      });
+
+      timelineHtml += `</div>`;
+
+      // Cross-Day Relay Anchor (Bottom of Timeline)
+      const relay = SDUI_STATE.crossDayRelay;
+      const relayConfirmed = relay.lifecycleStage === 'CONFIRMED';
+      const relayHtml = `
+        <div class="mt-4 pt-3 border-t border-white/[0.06]">
+          <button onclick="openL1('${relay.id}')"
+            class="w-full px-3.5 py-2.5 rounded-2xl ${relayConfirmed ? 'bg-travel/[0.08] border-travel/35' : 'bg-white/[0.03] border-dashed border-white/20'} border hover:border-travel/60 flex items-center justify-between gap-2 transition-all active:scale-[0.985]">
+            <div class="flex items-center gap-2 min-w-0">
+              <span class="w-2 h-2 rounded-full ${relayConfirmed ? 'bg-travel shadow-[0_0_8px_#00E5FF]' : 'bg-slate-400'} shrink-0"></span>
+              <span class="text-[11px] font-medium text-slate-200 truncate">
+                ${relay.time.split(' ')[0]}返程 · 上海 → 北京 · ${relayConfirmed ? relay.subtitle : '未订票（提前48h唤醒）'}
+              </span>
+            </div>
+            <span class="text-[10px] font-mono text-travel shrink-0">${relayConfirmed ? '查看 ↗' : '选票 →'}</span>
+          </button>
+        </div>
+      `;
+
+      return `
+        <header class="flex items-end justify-between mb-3">
+          <div>
+            <h2 class="text-[21px] font-semibold tracking-tight text-white leading-tight">
+              11月22日 <span class="text-slate-400 font-light">· 今日</span>
+            </h2>
+            <p class="text-[11.5px] text-slate-400 mt-0.5">
+              今日 ${totalCount} 项安排 · ${proposalCount > 0 ? `${proposalCount} 项待拍板` : '全部已确认'}
+            </p>
+          </div>
+          <button onclick="setDayMode('EMPTY_EXPLORE')"
+            class="px-2.5 py-1 rounded-full bg-white/[0.04] hover:bg-explore/15 border border-white/10 hover:border-explore/40 text-[10px] text-slate-300 hover:text-purple-200 transition-all">
+            出去逛逛 ✦
+          </button>
+        </header>
+        ${archivedHtml}
+        ${nowCardHtml}
+        <section>
+          <div class="flex items-center justify-between mb-2 px-0.5">
+            <span class="text-[10px] font-mono uppercase tracking-[0.18em] text-slate-400">TIMELINE · 流光日程轴</span>
+            <span class="text-[10px] text-slate-500">点击卡片展开详情</span>
+          </div>
+          ${timelineHtml}
+        </section>
+        ${relayHtml}
+      `;
+    }
+
+    function toggleArchived() {
+      SDUI_STATE.archivedExpanded = !SDUI_STATE.archivedExpanded;
+      renderPhoneHome();
+    }
+
+    function dismissReminderStrip(e, id) {
+      e.stopPropagation();
+      const ev = findEventById(id);
+      if (ev && ev.reminderStrip) {
+        ev.reminderStrip.dismissed = true;
+        renderPhoneHome();
+        updateSduiInspector();
+        showToast('已收起行前提醒微囊', ev.themeKey);
+      }
+    }
+
+    /* ========================================================================
+       8. CONNECTOR ACTIONS: GAP SUGGESTION / CONFLICT SHIFT / ALERT PLAN B
+       ======================================================================== */
+    function resolveConflictShift(e, eventId) {
+      e.stopPropagation();
+      const ev = findEventById(eventId);
+      const dinner = findEventById('evt_dining_bund');
+      if (ev && ev.connectorToNext) {
+        ev.connectorToNext = { connectorState: 'NORMAL_SOLID', label: '已顺延 · 预留 25m 缓冲' };
+      }
+      if (dinner) {
+        dinner.time = '18:30';
+      }
+      renderPhoneHome();
+      updateSduiInspector();
+      showToast('已将外滩晚宴顺延至 18:30，消除通勤冲突', 'dining');
+    }
+
+    function openGapSuggestionSheet(afterEventId) {
+      const sheet = document.getElementById('mini-sheet');
+      const body = document.getElementById('mini-sheet-content');
+
+      body.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-mono uppercase tracking-widest text-explore">GAP_SUGGESTION · 线间补白</span>
+              <h3 class="text-base font-semibold text-white mt-0.5">11:00 - 14:30 空档 3.5h</h3>
+            </div>
+            <button onclick="closeMiniSheet()" class="text-xs text-slate-400 hover:text-white">关闭</button>
+          </div>
+          <p class="text-xs text-slate-400">基于当前位置为你挑选 2 个顺路轻去处，点击直接嵌入时间轴：</p>
+
+          <div class="space-y-2.5">
+            <button onclick="insertGapSpot('${afterEventId}', '12:00', '西岸美术馆特展', '步行 8m · 沉浸看展 1.5h')"
+              class="w-full text-left p-3.5 rounded-2xl bg-white/[0.04] hover:bg-explore/15 border border-white/10 hover:border-explore/50 transition-all flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-white">西岸美术馆特展</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">12:00 · 距离 650m · 蓬皮杜当代艺术展</div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full bg-explore/20 text-purple-200 text-[10.5px] font-semibold shrink-0">+ 插入</span>
+            </button>
+
+            <button onclick="insertGapSpot('${afterEventId}', '12:15', '独立手冲咖啡馆', '静谧办公位 · 距出发顺路')"
+              class="w-full text-left p-3.5 rounded-2xl bg-white/[0.04] hover:bg-explore/15 border border-white/10 hover:border-explore/50 transition-all flex items-center justify-between gap-3">
+              <div>
+                <div class="text-sm font-semibold text-white">独立手冲咖啡馆</div>
+                <div class="text-[11px] text-slate-400 mt-0.5">12:15 · 距离 320m · 埃塞单品 + 安静电源位</div>
+              </div>
+              <span class="px-2.5 py-1 rounded-full bg-explore/20 text-purple-200 text-[10.5px] font-semibold shrink-0">+ 插入</span>
+            </button>
+          </div>
+        </div>
+      `;
+
+      sheet.classList.add('open');
+    }
+
+    function insertGapSpot(afterEventId, time, title, subtitle) {
+      const idx = SDUI_STATE.events.findIndex(e => e.id === afterEventId);
+      if (idx === -1) return;
+
+      SDUI_STATE.events[idx].connectorToNext = { connectorState: 'NORMAL_SOLID', label: '顺路衔接' };
+      const newEvent = {
+        id: `evt_gap_${Date.now()}`,
+        category: 'EXPLORE',
+        themeKey: 'explore',
+        lifecycleStage: 'CONFIRMED',
+        time,
+        title,
+        subtitle,
+        badge: '补白已定',
+        connectorToNext: { connectorState: 'NORMAL_SOLID', label: '准时衔接下一程' },
+        entities: ['线间补白', time, '顺路推荐'],
+        detailBlocks: ['EXPLORE_ROUTE_CARD'],
+        exploreMeta: { tripTitle: title, duration: '1.5 小时', note: subtitle, stops: [{ time, name: title, dist: '当前附近', note: subtitle }], currentStopIdx: 0 },
+      };
+
+      SDUI_STATE.events.splice(idx + 1, 0, newEvent);
+      closeMiniSheet();
+      renderPhoneHome(newEvent.id);
+      updateSduiInspector();
+      showToast(`已将「${title}」嵌入今日日程空档`, 'explore');
+    }
+
+    function triggerEmergencyAlert() {
+      if (SDUI_STATE.dayMode !== 'ACTIVE_TIMELINE') setDayMode('ACTIVE_TIMELINE');
+      if (SDUI_STATE.activeL1Id) closeL1(true);
+
+      pulseDynamicPill('预警：MU5102 预计延误 75m · 触发红线熔断', 'dining', 1400, () => {
+        const travel = findEventById('evt_travel_outbound');
+        if (travel) {
+          travel.connectorToNext = {
+            connectorState: 'ALERT_PULSE',
+            label: 'MU5102 预计延误 75m · 点击查看 B 计划',
+          };
+        }
+        renderPhoneHome();
+        updateSduiInspector();
+        showToast('监测到航班延误，点击手机内红线查看 AI B 计划', 'dining');
+      });
+    }
+
+    function openAlertPlanBSheet(eventId) {
+      const sheet = document.getElementById('mini-sheet');
+      const body = document.getElementById('mini-sheet-content');
+
+      body.innerHTML = `
+        <div class="space-y-3">
+          <div class="flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-mono uppercase tracking-widest text-alert">ALERT_PULSE · AI B 计划</span>
+              <h3 class="text-base font-semibold text-white mt-0.5">MU5102 受雷雨影响预计延误 75m</h3>
+            </div>
+            <button onclick="closeMiniSheet()" class="text-xs text-slate-400 hover:text-white">关闭</button>
+          </div>
+          <p class="text-xs text-slate-400">原定 18:00 外滩晚宴将迟到，AI 已为你备好两套无痛化解方案：</p>
+
+          <div class="space-y-2.5">
+            <button onclick="applyPlanB('shift_dinner')"
+              class="w-full text-left p-3.5 rounded-2xl bg-alert/[0.09] hover:bg-alert/[0.18] border border-alert/45 transition-all space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-white">方案 A：自动顺延晚宴至 19:30 并通知包厢留座</span>
+                <span class="text-[10px] font-mono text-alert">推荐</span>
+              </div>
+              <p class="text-[11px] text-slate-300">同步微信告知 3 位同行好友并致电鹿园保留 B08 包厢</p>
+            </button>
+
+            <button onclick="applyPlanB('switch_hsr')"
+              class="w-full text-left p-3.5 rounded-2xl bg-white/[0.04] hover:bg-travel/[0.12] border border-white/15 hover:border-travel/50 transition-all space-y-1">
+              <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold text-white">方案 B：保留原计划 · 改乘高铁 G14</span>
+                <span class="text-[10px] font-mono text-travel">准点 99%</span>
+              </div>
+              <p class="text-[11px] text-slate-300">12:00 北京南发车，16:18 准点抵虹桥，按原时间赴宴</p>
+            </button>
+          </div>
+        </div>
+      `;
+
+      sheet.classList.add('open');
+    }
+
+    function applyPlanB(choice) {
+      const travel = findEventById('evt_travel_outbound');
+      const dinner = findEventById('evt_dining_bund');
+
+      if (choice === 'shift_dinner') {
+        if (dinner) {
+          dinner.time = '19:30';
+          dinner.subtitle = '已自动顺延 · 包厢已留座至 19:45';
+        }
+        if (travel) {
+          travel.connectorToNext = { connectorState: 'NORMAL_SOLID', label: 'B 计划已生效 · 晚宴延至 19:30' };
+        }
+        showToast('已顺延外滩晚宴至 19:30 并通知留座', 'dining');
+      } else {
+        if (travel) {
+          travel.selectedPlanIdx = 1; // G14
+          travel.lifecycleStage = 'CONFIRMED';
+          travel.time = '12:00';
+          travel.title = '北京 → 上海 · 复兴号 G14';
+          travel.subtitle = '北京南站 · 05车 08F · 准点 99%';
+          travel.badge = '已改签';
+          travel.connectorToNext = { connectorState: 'NORMAL_SOLID', label: '高铁准点抵沪 · 赴宴充裕' };
+        }
+        showToast('已无缝切换至复兴号 G14，延误预警已解除', 'travel');
+      }
+
+      closeMiniSheet();
+      renderPhoneHome();
+      updateSduiInspector();
+    }
+
+    function closeMiniSheet(e) {
+      if (e && e.target !== document.getElementById('mini-sheet')) return;
+      document.getElementById('mini-sheet').classList.remove('open');
+    }
+
+    /* ========================================================================
+       9. ZERO-MANUAL SMS AUTO-DETECTION & SWIPE-TO-DISMISS AI MISJUDGMENT
+       ======================================================================== */
+    function simulateSmsAutoTicket() {
+      if (SDUI_STATE.dayMode !== 'ACTIVE_TIMELINE') setDayMode('ACTIVE_TIMELINE');
+      if (SDUI_STATE.activeL1Id) closeL1(true);
+
+      pulseDynamicPill('捕获航旅纵横出票短信 · 自动核销提案', 'travel', 1650, () => {
+        const travel = findEventById('evt_travel_outbound');
+        if (travel) {
+          travel.selectedPlanIdx = 0;
+          const p = travel.plans[0];
+          travel.lifecycleStage = 'CONFIRMED';
+          travel.title = `北京 → 上海 · ${p.carrier.split(' ')[1]}`;
+          travel.subtitle = `${p.depHub} · ${p.seat}`;
+          travel.badge = '已出票';
+          if (travel.reminderStrip) travel.reminderStrip.dismissed = false;
+        }
+        triggerFxBurst('#00E5FF', 0.5, 0.42);
+        renderPhoneHome('evt_travel_outbound');
+        updateSduiInspector();
+        showToast('已通过出票短信自动核销，点击卡片查看 3D 登机牌', 'travel');
+      });
+    }
+
+    function simulateJokeMisjudgment() {
+      if (SDUI_STATE.dayMode !== 'ACTIVE_TIMELINE') setDayMode('ACTIVE_TIMELINE');
+      if (SDUI_STATE.activeL1Id) closeL1(true);
+
+      pulseDynamicPill('捕获群聊：走，明天飞巴黎喝咖啡！', 'explore', 1500, () => {
+        // Remove existing if present
+        SDUI_STATE.events = SDUI_STATE.events.filter(e => !e.isMisjudgment);
+        const jokeCard = {
+          id: 'evt_joke_paris',
+          category: 'TRAVEL',
+          themeKey: 'explore',
+          lifecycleStage: 'PROPOSAL',
+          isMisjudgment: true,
+          time: '明日 09:00',
+          title: '北京 → 巴黎 · 喝咖啡（疑似玩笑）',
+          subtitle: '← 左滑雾化移除 · 纠正 AI 闲聊语境',
+          badge: '待拍板',
+          connectorToNext: { connectorState: 'NORMAL_SOLID', label: '待确认跨国意图' },
+          entities: ['群聊捕获', '置信度 42%', '支持左滑雾化'],
+          detailBlocks: ['SUMMARY_CARD'],
+        };
+        SDUI_STATE.events.unshift(jokeCard);
+        renderPhoneHome('evt_joke_paris');
+        updateSduiInspector();
+        showToast('已插入疑似玩笑卡片 · 请在手机中向左滑动卡片雾化移除', 'explore');
+      });
+    }
+
+    function bindSwipeDismissCards() {
+      const cards = document.querySelectorAll('[data-swipe-id]');
+      cards.forEach(card => {
+        const id = card.getAttribute('data-swipe-id');
+        let startX = 0, dx = 0, active = false;
+
+        card.onpointerdown = (e) => {
+          if (e.target.closest('button')) return;
+          active = true;
+          startX = e.clientX;
+          dx = 0;
+          card.setPointerCapture(e.pointerId);
+          card.style.transition = 'none';
+        };
+
+        card.onpointermove = (e) => {
+          if (!active) return;
+          dx = Math.min(0, e.clientX - startX);
+          if (Math.abs(dx) > 6) card.dataset.dragging = '1';
+          const progress = Math.min(1, Math.abs(dx) / 135);
+          card.style.transform = `translateX(${dx}px) scale(${1 - progress * 0.04})`;
+          card.style.opacity = `${1 - progress * 0.72}`;
+          card.style.filter = `blur(${(progress * 3).toFixed(1)}px)`;
+        };
+
+        const finishSwipe = () => {
+          if (!active) return;
+          active = false;
+          if (dx < -85) {
+            vaporizeCard(id, card);
+          } else {
+            card.style.transition = 'transform 0.32s cubic-bezier(0.22,1,0.36,1), opacity 0.25s ease, filter 0.25s ease';
+            card.style.transform = 'translateX(0px) scale(1)';
+            card.style.opacity = '1';
+            card.style.filter = 'blur(0px)';
+            setTimeout(() => { delete card.dataset.dragging; }, 60);
+          }
+        };
+
+        card.onpointerup = finishSwipe;
+        card.onpointercancel = finishSwipe;
+      });
+    }
+
+    function dismissMisjudgment(e, id) {
+      e.stopPropagation();
+      const card = document.querySelector(`[data-swipe-id="${id}"]`);
+      vaporizeCard(id, card);
+    }
+
+    function vaporizeCard(id, cardEl) {
+      const screen = document.getElementById('phone-screen');
+      let relY = 0.45;
+      if (cardEl && screen) {
+        const sr = screen.getBoundingClientRect();
+        const cr = cardEl.getBoundingClientRect();
+        relY = (cr.top + cr.height * 0.5 - sr.top) / sr.height;
+        cardEl.style.transition = 'all 0.22s ease-out';
+        cardEl.style.transform = 'translateX(-140px) scale(0.9)';
+        cardEl.style.opacity = '0';
+        cardEl.style.filter = 'blur(8px)';
+      }
+
+      triggerFxBurst('#C084FC', 0.45, relY, true);
+      setTimeout(() => {
+        SDUI_STATE.events = SDUI_STATE.events.filter(e => e.id !== id);
+        renderPhoneHome();
+        updateSduiInspector();
+        showToast('已雾化移除 · 云端已标记为闲聊语境', 'explore');
+      }, 220);
+    }
+
+    /* ========================================================================
+       10. L1 · FLUID DETAIL SHEET CONTROLLER
+       ======================================================================== */
+    function openL1(eventId) {
+      const ev = findEventById(eventId);
+      if (!ev) return;
+
+      SDUI_STATE.activeL1Id = eventId;
+      SDUI_STATE.l1ForceMapView = false;
+      setTheme(ev.themeKey);
+
+      document.getElementById('l1-overlay').classList.add('open');
+      renderL1View();
+      document.getElementById('l1-content').scrollTop = 0;
+      updateSduiInspector();
+    }
+
+    function closeL1(silent = false) {
+      SDUI_STATE.activeL1Id = null;
+      stopL1Animations();
+      document.getElementById('l1-overlay').classList.remove('open');
+
+      if (!silent) {
+        setTheme(SDUI_STATE.dayMode === 'EMPTY_EXPLORE' ? 'explore' : SDUI_STATE.dayMode === 'REST_MODE' ? 'rest' : 'travel');
+        renderPhoneHome();
+        updateSduiInspector();
+      }
+    }
+
+    function toggleL1SubView() {
+      SDUI_STATE.l1ForceMapView = !SDUI_STATE.l1ForceMapView;
+      renderL1View();
+      updateSduiInspector();
+    }
+
+    function renderL1View() {
+      const ev = findEventById(SDUI_STATE.activeL1Id);
+      if (!ev) return;
+
+      stopL1Animations();
+      const theme = THEMES[ev.themeKey] || THEMES.travel;
+      const kicker = document.getElementById('l1-top-kicker');
+      const toggleBtn = document.getElementById('l1-mode-toggle');
+      const spacer = document.getElementById('l1-right-spacer');
+      const content = document.getElementById('l1-content');
+
+      kicker.textContent = `L1 · ${theme.label} · ${ev.lifecycleStage}`;
+      kicker.style.color = theme.hex;
+
+      const hasHoloPass = ['TRAVEL', 'DINING', 'SHOPPING'].includes(ev.category) && !ev.isMisjudgment;
+      const showPass = hasHoloPass && ev.lifecycleStage === 'CONFIRMED' && !SDUI_STATE.l1ForceMapView;
+
+      if (hasHoloPass && ev.lifecycleStage === 'CONFIRMED') {
+        toggleBtn.classList.remove('hidden');
+        spacer.classList.add('hidden');
+        toggleBtn.textContent = showPass ? '查看交互沙盘' : '返回 3D 凭证';
+      } else {
+        toggleBtn.classList.add('hidden');
+        spacer.classList.remove('hidden');
+      }
+
+      const headerHtml = `
+        <div class="space-y-2.5">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <h2 class="text-lg font-semibold text-white tracking-tight">${ev.title}</h2>
+              <p class="text-xs text-slate-400 mt-0.5">${ev.time} · ${ev.subtitle}</p>
+            </div>
+            <span class="px-2.5 py-1 rounded-full text-[9.5px] font-mono shrink-0"
+              style="background:rgba(${theme.rgb},0.14); color:${theme.hex}; border:1px solid rgba(${theme.rgb},0.35);">
+              ${ev.lifecycleStage}
+            </span>
+          </div>
+          <div class="flex flex-wrap gap-1.5">
+            ${(ev.entities || []).map(tag => `
+              <span class="px-2.5 py-1 rounded-full text-[10.5px] bg-white/[0.045] border border-white/10 text-slate-200">${tag}</span>
+            `).join('')}
+          </div>
+        </div>
+      `;
+
+      if (showPass) {
+        content.innerHTML = headerHtml + renderHoloPassHtml(ev);
+        bindHolo3DTilt();
+        return;
+      }
+
+      let bodyHtml = '';
+      if (ev.isMisjudgment) {
+        bodyHtml = `
+          <div class="rounded-2xl p-4 bg-explore/[0.08] border border-explore/35 space-y-3">
+            <div class="text-xs font-semibold text-purple-200">AI 语境置信度偏低（42%）</div>
+            <p class="text-xs text-slate-300 leading-relaxed">群聊原句：「走，明天飞巴黎喝咖啡！」。若属于朋友间调侃，可直接雾化移除，云端将同步学习该群的闲聊语气。</p>
+            <button onclick="closeL1(); setTimeout(() => vaporizeCard('${ev.id}', null), 120);"
+              class="w-full py-2.5 rounded-xl bg-explore/25 hover:bg-explore/35 border border-explore/50 text-xs font-semibold text-white">
+              立即雾化移除并纠偏 ✦
+            </button>
+          </div>
+        `;
+      } else if (ev.category === 'TRAVEL') {
+        bodyHtml = renderTravelDetailHtml(ev);
+      } else if (ev.category === 'DINING') {
+        bodyHtml = renderDiningDetailHtml(ev);
+      } else if (ev.category === 'SHOPPING') {
+        bodyHtml = renderShoppingDetailHtml(ev);
+      } else if (ev.category === 'EXPLORE') {
+        bodyHtml = renderExploreDetailHtml(ev);
+      } else {
+        bodyHtml = renderOfficeDetailHtml(ev);
+      }
+
+      content.innerHTML = headerHtml + bodyHtml;
+
+      // Hydrate dynamic visuals & drag controls
+      if (!ev.isMisjudgment) {
+        if (ev.category === 'TRAVEL') initTravelD3Map(ev);
+        else if (ev.category === 'DINING') initDiningIsochroneAnim();
+        else if (ev.category === 'SHOPPING') initShoppingRouteAnim();
+
+        if (ev.lifecycleStage === 'PROPOSAL' && ['TRAVEL', 'DINING', 'SHOPPING'].includes(ev.category)) {
+          initSlideToConfirm(ev);
+        }
+      }
+    }
+
+    /* ========================================================================
+       11. DETAIL VIEW: TRAVEL (REAL D3.JS v7 geoMercator MAP)
+       ======================================================================== */
+    function renderTravelDetailHtml(ev) {
+      const plan = ev.plans[ev.selectedPlanIdx];
+      return `
+        <div class="rounded-[24px] bg-[#070B14] border border-white/10 overflow-hidden">
+          <div class="px-3.5 py-2.5 flex items-center justify-between border-b border-white/[0.06]">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-travel shadow-[0_0_8px_#00E5FF]"></span>
+              <span class="text-[11px] font-medium text-slate-200">京沪立体轨迹沙盘</span>
+            </div>
+            <div class="flex p-0.5 rounded-full bg-white/[0.05] border border-white/10 text-[10px]">
+              <button onclick="switchTravelMapMode('corridor')"
+                class="px-2.5 py-0.5 rounded-full transition-all ${SDUI_STATE.travelMapMode === 'corridor' ? 'bg-travel text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'}">
+                城际走廊
+              </button>
+              <button onclick="switchTravelMapMode('intermodal')"
+                class="px-2.5 py-0.5 rounded-full transition-all ${SDUI_STATE.travelMapMode === 'intermodal' ? 'bg-travel text-slate-950 font-semibold' : 'text-slate-400 hover:text-white'}">
+                联运接驳
+              </button>
+            </div>
+          </div>
+
+          <div id="travel-d3-mount" class="w-full h-[186px] relative"></div>
+
+          <div class="px-3.5 py-2 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-[10px] text-slate-400">
+            <span class="truncate">✦ ${plan.note}</span>
+            <span class="font-mono text-travel shrink-0 ml-2">D3 v7</span>
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-[11px] font-medium text-slate-300">AI 精选 3 套方案（点击切换轨迹）</span>
+            <span class="text-[10px] font-mono text-slate-500">横滑对比 →</span>
+          </div>
+          <div class="flex gap-2.5 no-scrollbar-x pb-1">
+            ${ev.plans.map((p, idx) => renderPlanCardHtml(p, idx === ev.selectedPlanIdx, 'travel', `selectEventPlan(${idx})`)).join('')}
+          </div>
+        </div>
+
+        ${ev.lifecycleStage === 'PROPOSAL' ? renderSlideConfirmHtml(`滑动一键锁座出票 · ¥${plan.price}`, 'travel') : ''}
+      `;
+    }
+
+    function switchTravelMapMode(mode) {
+      SDUI_STATE.travelMapMode = mode;
+      renderL1View();
+    }
+
+    function initTravelD3Map(ev) {
+      const mount = document.getElementById('travel-d3-mount');
+      if (!mount) return;
+      mount.innerHTML = '';
+
+      const W = 336, H = 186;
+      const activePlan = ev.plans[ev.selectedPlanIdx];
+      const isReturn = ev.direction === 'return';
+
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
+      svg.setAttribute('class', 'w-full h-full');
+      mount.appendChild(svg);
+
+      svg.innerHTML = `
+        <defs>
+          <linearGradient id="flightGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#00E5FF"/>
+            <stop offset="100%" stop-color="#3B82F6"/>
+          </linearGradient>
+          <linearGradient id="railGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#C084FC"/>
+            <stop offset="100%" stop-color="#00E5FF"/>
+          </linearGradient>
+          <filter id="glowCyan" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="2.5" result="b"/>
+            <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+          </filter>
+        </defs>
+      `;
+
+      if (SDUI_STATE.travelMapMode === 'intermodal') {
+        // ZOOMED INTERMODAL TRANSFER VIEW: Metro/Express -> Terminal -> Flight -> Maglev/Taxi -> Bund
+        svg.innerHTML += `
+          <g opacity="0.12" stroke="#94A3B8" stroke-width="0.6">
+            ${[34, 68, 102, 136, 170].map(y => `<line x1="0" y1="${y}" x2="${W}" y2="${y}"/>`).join('')}
+            ${[48, 96, 144, 192, 240, 288].map(x => `<line x1="${x}" y1="0" x2="${x}" y2="${H}"/>`).join('')}
+          </g>
+          <!-- Segment 1: Airport Express Metro to PEK T2 -->
+          <path id="im-leg-1" d="M 24 134 Q 56 122 86 92" fill="none" stroke="#818CF8" stroke-width="2.2" stroke-dasharray="3 3"/>
+          <!-- Segment 2: Flight Arc PEK -> SHA -->
+          <path id="im-leg-2" d="M 86 92 Q 162 24 232 92" fill="none" stroke="url(#flightGrad)" stroke-width="2.8" filter="url(#glowCyan)"/>
+          <!-- Segment 3: Maglev / Taxi to Bund -->
+          <path id="im-leg-3" d="M 232 92 Q 268 118 308 82" fill="none" stroke="#FF914D" stroke-width="2.4" filter="url(#glowCyan)"/>
+
+          <!-- Transfer Nodes -->
+          <g transform="translate(24,134)">
+            <circle r="4" fill="#818CF8"/>
+            <text x="2" y="16" fill="#C7D2FE" font-size="8.5">首都机场线</text>
+            <text x="2" y="-8" fill="#94A3B8" font-size="7.5" font-family="JetBrains Mono">24m</text>
+          </g>
+          <g transform="translate(86,92)">
+            <circle r="9" fill="rgba(0,229,255,0.16)" class="iso-ring"/>
+            <circle r="4.5" fill="#00E5FF" stroke="#070B14" stroke-width="1.4"/>
+            <text x="0" y="18" text-anchor="middle" fill="#FFFFFF" font-size="9" font-weight="600">首都 T2</text>
+          </g>
+          <g transform="translate(232,92)">
+            <circle r="9" fill="rgba(0,229,255,0.16)" class="iso-ring"/>
+            <circle r="4.5" fill="#00E5FF" stroke="#070B14" stroke-width="1.4"/>
+            <text x="0" y="18" text-anchor="middle" fill="#FFFFFF" font-size="9" font-weight="600">虹桥 T2</text>
+          </g>
+          <g transform="translate(308,82)">
+            <circle r="5" fill="#FF914D" stroke="#070B14" stroke-width="1.4"/>
+            <text x="-4" y="-11" text-anchor="end" fill="#FED7AA" font-size="9" font-weight="600">外滩鹿园</text>
+            <text x="-4" y="17" text-anchor="end" fill="#FF914D" font-size="8" font-family="JetBrains Mono">专车 55m</text>
+          </g>
+
+          <!-- Animated Multi-Leg Vehicles -->
+          <g id="im-plane" filter="url(#glowCyan)">
+            <path d="M 6 0 L -4 -4 L -2 0 L -4 4 Z" fill="#FFFFFF" stroke="#00E5FF" stroke-width="0.9"/>
+          </g>
+          <g id="im-car" filter="url(#glowCyan)">
+            <circle r="3.6" fill="#FFF7ED" stroke="#FF914D" stroke-width="1.6"/>
+          </g>
+          <text x="12" y="16" fill="#64748B" font-size="8" font-family="JetBrains Mono">INTERMODAL · 空铁/专车无缝联运</text>
+        `;
+
+        const leg2 = svg.querySelector('#im-leg-2');
+        const leg3 = svg.querySelector('#im-leg-3');
+        const pl = svg.querySelector('#im-plane');
+        const car = svg.querySelector('#im-car');
+        let t1 = 0, t2 = 0.3;
+
+        startL1Animation(() => {
+          t1 = (t1 + 0.006) % 1;
+          t2 = (t2 + 0.008) % 1;
+          const l2 = leg2.getTotalLength();
+          const p1 = leg2.getPointAtLength(l2 * t1);
+          const p2 = leg2.getPointAtLength(Math.min(l2, l2 * t1 + 2));
+          const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x) * (180 / Math.PI);
+          pl.setAttribute('transform', `translate(${p1.x.toFixed(1)},${p1.y.toFixed(1)}) rotate(${ang.toFixed(1)})`);
+
+          const cPt = leg3.getPointAtLength(leg3.getTotalLength() * t2);
+          car.setAttribute('transform', `translate(${cPt.x.toFixed(1)},${cPt.y.toFixed(1)})`);
+        });
+        return;
+      }
+
+      // CORRIDOR VIEW: Real D3.js v7 geoMercator with exact lon/lat nodes
+      const nodes = [
+        { name: '北京', code: 'PEK', coords: [116.407, 39.904], terminal: true },
+        { name: '天津', code: 'TSN', coords: [117.201, 39.084], terminal: false },
+        { name: '济南', code: 'TNA', coords: [117.120, 36.651], terminal: false },
+        { name: '南京', code: 'NKG', coords: [118.797, 32.060], terminal: false },
+        { name: '上海', code: 'SHA', coords: [121.474, 31.230], terminal: true },
+      ];
+
+      const eastChinaCoast = [
+        [113.8, 41.5], [118.4, 40.2], [119.6, 39.4], [117.8, 38.6], [119.1, 37.8],
+        [120.8, 37.6], [122.4, 37.2], [121.2, 36.3], [119.8, 35.3], [120.4, 33.9],
+        [121.3, 32.5], [121.9, 31.3], [121.5, 30.5], [122.1, 29.4], [113.5, 29.4]
+      ];
+
+      let project;
+      if (window.d3 && typeof d3.geoMercator === 'function') {
+        const proj = d3.geoMercator()
+          .center([118.9, 35.6])
+          .scale(1020)
+          .translate([W * 0.49, H * 0.51]);
+        project = (ll) => proj(ll);
+      } else {
+        project = ([lon, lat]) => [W * 0.49 + (lon - 118.9) * 17.8, H * 0.51 - (lat - 35.6) * 15.6];
+      }
+
+      const pts = nodes.map(n => ({ ...n, xy: project(n.coords) }));
+      const coastD = eastChinaCoast.map((c, i) => {
+        const [x, y] = project(c);
+        return `${i === 0 ? 'M' : 'L'} ${x.toFixed(1)} ${y.toFixed(1)}`;
+      }).join(' ') + ' Z';
+
+      let grat = '';
+      for (let lon = 114; lon <= 124; lon += 2) {
+        const [x1, y1] = project([lon, 42]);
+        const [x2, y2] = project([lon, 29]);
+        grat += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(148,163,184,0.08)" stroke-width="0.7"/>`;
+      }
+      for (let lat = 30; lat <= 42; lat += 2) {
+        const [x1, y1] = project([112, lat]);
+        const [x2, y2] = project([126, lat]);
+        grat += `<line x1="${x1.toFixed(1)}" y1="${y1.toFixed(1)}" x2="${x2.toFixed(1)}" y2="${y2.toFixed(1)}" stroke="rgba(148,163,184,0.08)" stroke-width="0.7"/>`;
+      }
+
+      const [bj, tj, jn, nj, sh] = pts.map(p => p.xy);
+      const startPt = isReturn ? sh : bj;
+      const endPt = isReturn ? bj : sh;
+
+      // Geodesic Flight Arc
+      const fCx = (startPt[0] + endPt[0]) * 0.5 + 56;
+      const fCy = (startPt[1] + endPt[1]) * 0.5 - 10;
+      const flightD = `M ${startPt[0].toFixed(1)} ${startPt[1].toFixed(1)} Q ${fCx.toFixed(1)} ${fCy.toFixed(1)} ${endPt[0].toFixed(1)} ${endPt[1].toFixed(1)}`;
+
+      // High-Speed Rail Corridor Passing All 5 Real Nodes
+      const railSeq = isReturn ? [sh, nj, jn, tj, bj] : [bj, tj, jn, nj, sh];
+      const railD = `M ${railSeq[0][0].toFixed(1)} ${railSeq[0][1].toFixed(1)} ` +
+        railSeq.slice(1).map((pt, i) => {
+          const prev = railSeq[i];
+          const mx = (prev[0] + pt[0]) / 2 - 4;
+          const my = (prev[1] + pt[1]) / 2;
+          return `Q ${mx.toFixed(1)} ${my.toFixed(1)} ${pt[0].toFixed(1)} ${pt[1].toFixed(1)}`;
+        }).join(' ');
+
+      const isFlight = activePlan.mode === 'flight';
+      const isRail = activePlan.mode === 'rail';
+
+      svg.innerHTML += `
+        <g>${grat}</g>
+        <path d="${coastD}" fill="rgba(255,255,255,0.028)" stroke="rgba(0,229,255,0.16)" stroke-width="1"/>
+
+        <path id="d3-rail" d="${railD}" fill="none" stroke="url(#railGrad)"
+          stroke-width="${isRail ? '2.8' : '1.4'}" opacity="${isRail ? '0.95' : '0.36'}"
+          stroke-dasharray="${isRail ? 'none' : '4 3'}" filter="${isRail ? 'url(#glowCyan)' : ''}"/>
+
+        <path id="d3-flight" d="${flightD}" fill="none" stroke="url(#flightGrad)"
+          stroke-width="${isFlight ? '2.8' : '1.4'}" opacity="${isFlight ? '1' : '0.34'}"
+          stroke-dasharray="${isFlight ? 'none' : '3 4'}" filter="${isFlight ? 'url(#glowCyan)' : ''}"/>
+
+        ${pts.map((n, idx) => `
+          <g transform="translate(${n.xy[0].toFixed(1)}, ${n.xy[1].toFixed(1)})">
+            ${n.terminal ? `<circle r="10" fill="rgba(0,229,255,0.15)" class="iso-ring"/>` : ''}
+            <circle r="${n.terminal ? 4.2 : 2.5}" fill="${n.terminal ? '#00E5FF' : '#CBD5E1'}" stroke="#070B14" stroke-width="1.2"/>
+            <text x="${idx === 4 ? 10 : (idx === 1 ? 8 : -9)}" y="${idx === 1 ? -4 : 3}"
+              text-anchor="${idx === 4 || idx === 1 ? 'start' : 'end'}"
+              fill="${n.terminal ? '#FFFFFF' : '#94A3B8'}"
+              font-size="${n.terminal ? '10' : '8'}" font-weight="${n.terminal ? '600' : '400'}">${n.name}</text>
+          </g>
+        `).join('')}
+
+        <g id="d3-plane" filter="url(#glowCyan)" opacity="${isFlight ? '1' : '0.45'}">
+          <path d="M 6 0 L -4 -4 L -2 0 L -4 4 Z" fill="#FFFFFF" stroke="#00E5FF" stroke-width="0.9"/>
+        </g>
+        <g id="d3-train" filter="url(#glowCyan)" opacity="${isRail ? '1' : '0.45'}">
+          <rect x="-5" y="-2.4" width="10" height="4.8" rx="2.4" fill="#F3E8FF" stroke="#C084FC" stroke-width="0.9"/>
+        </g>
+
+        <text x="12" y="16" fill="#64748B" font-size="8" font-family="JetBrains Mono">D3.geoMercator · ${isReturn ? 'SHA → PEK' : 'PEK → SHA'}</text>
+      `;
+
+      const fPath = svg.querySelector('#d3-flight');
+      const rPath = svg.querySelector('#d3-rail');
+      const planeEl = svg.querySelector('#d3-plane');
+      const trainEl = svg.querySelector('#d3-train');
+      let pf = 0.08, pr = 0.36;
+
+      startL1Animation(() => {
+        pf = (pf + 0.005) % 1;
+        pr = (pr + 0.003) % 1;
+
+        const fl = fPath.getTotalLength();
+        const fp1 = fPath.getPointAtLength(fl * pf);
+        const fp2 = fPath.getPointAtLength(Math.min(fl, fl * pf + 2));
+        const fa = Math.atan2(fp2.y - fp1.y, fp2.x - fp1.x) * (180 / Math.PI);
+        planeEl.setAttribute('transform', `translate(${fp1.x.toFixed(1)},${fp1.y.toFixed(1)}) rotate(${fa.toFixed(1)})`);
+
+        const rl = rPath.getTotalLength();
+        const rp1 = rPath.getPointAtLength(rl * pr);
+        const rp2 = rPath.getPointAtLength(Math.min(rl, rl * pr + 2));
+        const ra = Math.atan2(rp2.y - rp1.y, rp2.x - rp1.x) * (180 / Math.PI);
+        trainEl.setAttribute('transform', `translate(${rp1.x.toFixed(1)},${rp1.y.toFixed(1)}) rotate(${ra.toFixed(1)})`);
+      });
+    }
+
+    /* ========================================================================
+       12. DETAIL VIEW: DINING (GEO-CENTROID & PULSING ISOCHRONE MAP)
+       ======================================================================== */
+    function renderDiningDetailHtml(ev) {
+      const rest = ev.plans[ev.selectedPlanIdx];
+      return `
+        <div class="rounded-[24px] bg-[#0B080A] border border-dining/25 overflow-hidden">
+          <div class="px-3.5 py-2.5 flex items-center justify-between border-b border-white/[0.06]">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-dining shadow-[0_0_8px_#FF914D]"></span>
+              <span class="text-[11px] font-medium text-orange-100">多人地理重心与 15/30/45m 等时圈</span>
+            </div>
+            <span class="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-dining/15 text-dining border border-dining/35">
+              平均 ${rest.avgCommute}m
+            </span>
+          </div>
+
+          <div class="w-full h-[186px]">
+            <svg id="dining-iso-svg" viewBox="0 0 336 186" class="w-full h-full">
+              <defs>
+                <radialGradient id="isoGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stop-color="#FF914D" stop-opacity="0.28"/>
+                  <stop offset="100%" stop-color="#FF914D" stop-opacity="0"/>
+                </radialGradient>
+                <filter id="amberGlow" x="-40%" y="-40%" width="180%" height="180%">
+                  <feGaussianBlur stdDeviation="2.5" result="b"/>
+                  <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+                </filter>
+              </defs>
+
+              <g opacity="0.09" stroke="#FDBA74" stroke-width="0.6">
+                ${[36, 72, 108, 144].map(y => `<line x1="0" y1="${y}" x2="336" y2="${y}"/>`).join('')}
+                ${[56, 112, 168, 224, 280].map(x => `<line x1="${x}" y1="0" x2="${x}" y2="186"/>`).join('')}
+              </g>
+
+              <g transform="translate(${rest.target.x}, ${rest.target.y})">
+                <circle r="76" fill="url(#isoGlow)"/>
+                <circle r="72" fill="none" stroke="rgba(255,145,77,0.18)" stroke-width="1" stroke-dasharray="3 4" class="iso-ring"/>
+                <circle r="48" fill="none" stroke="rgba(255,145,77,0.34)" stroke-width="1.1" class="iso-ring" style="animation-delay:0.5s"/>
+                <circle r="24" fill="none" stroke="rgba(255,145,77,0.54)" stroke-width="1.2" class="iso-ring" style="animation-delay:1s"/>
+                <text x="26" y="-14" fill="#FDBA74" opacity="0.7" font-size="7.5" font-family="JetBrains Mono">15m</text>
+                <text x="48" y="-26" fill="#FDBA74" opacity="0.55" font-size="7.5" font-family="JetBrains Mono">30m</text>
+                <text x="66" y="-36" fill="#FDBA74" opacity="0.4" font-size="7.5" font-family="JetBrains Mono">45m</text>
+              </g>
+
+              ${DINING_FRIENDS.map((f, idx) => {
+                const mx = (f.x + rest.target.x) / 2;
+                const my = (f.y + rest.target.y) / 2 - (idx % 2 === 0 ? 18 : -16);
+                const d = `M ${f.x} ${f.y} Q ${mx.toFixed(1)} ${my.toFixed(1)} ${rest.target.x} ${rest.target.y}`;
+                return `
+                  <path id="din-arc-${idx}" d="${d}" fill="none" stroke="#FF914D" stroke-width="1.7" opacity="0.65" stroke-dasharray="4 3"/>
+                  <g id="din-dot-${idx}" filter="url(#amberGlow)">
+                    <circle r="3" fill="#FFF7ED" stroke="#FF914D" stroke-width="1.2"/>
+                  </g>
+                  <g transform="translate(${mx.toFixed(1)}, ${(my + (idx % 2 === 0 ? 4 : -4)).toFixed(1)})">
+                    <rect x="-15" y="-7.5" width="30" height="14" rx="7" fill="#170E0D" stroke="rgba(255,145,77,0.45)" stroke-width="0.9"/>
+                    <text x="0" y="2.5" text-anchor="middle" fill="#FED7AA" font-size="8" font-family="JetBrains Mono">${rest.commutes[idx]}m</text>
+                  </g>
+                `;
+              }).join('')}
+
+              ${DINING_FRIENDS.map(f => `
+                <g transform="translate(${f.x}, ${f.y})">
+                  <circle r="9" fill="#1B1316" stroke="rgba(255,255,255,0.28)" stroke-width="1.2"/>
+                  <text x="0" y="3" text-anchor="middle" fill="#FFFFFF" font-size="8.5" font-weight="600">${f.short}</text>
+                  <text x="0" y="19" text-anchor="middle" fill="#CBD5E1" font-size="8">${f.name}</text>
+                </g>
+              `).join('')}
+
+              <g transform="translate(${rest.target.x}, ${rest.target.y})" filter="url(#amberGlow)">
+                <circle r="7" fill="#FF914D" stroke="#FFFFFF" stroke-width="1.8"/>
+                <text x="0" y="-13" text-anchor="middle" fill="#FFFFFF" font-size="9.5" font-weight="600">${rest.name.split('·')[0].trim()}</text>
+              </g>
+            </svg>
+          </div>
+          <div class="px-3.5 py-2 bg-black/40 border-t border-white/[0.06] text-[10px] text-orange-100/80 truncate">
+            ✦ ${rest.note}
+          </div>
+        </div>
+
+        <div class="space-y-2">
+          <div class="flex items-center justify-between px-0.5">
+            <span class="text-[11px] font-medium text-slate-300">切换餐厅重算 4 人通勤路径</span>
+            <span class="text-[10px] font-mono text-slate-500">横滑对比 →</span>
+          </div>
+          <div class="flex gap-2.5 no-scrollbar-x pb-1">
+            ${ev.plans.map((p, idx) => renderPlanCardHtml(p, idx === ev.selectedPlanIdx, 'dining', `selectEventPlan(${idx})`)).join('')}
+          </div>
+        </div>
+
+        ${ev.lifecycleStage === 'PROPOSAL' ? renderSlideConfirmHtml('滑动一键订座并同步群聊', 'dining') : ''}
+      `;
+    }
+
+    function initDiningIsochroneAnim() {
+      const svg = document.getElementById('dining-iso-svg');
+      if (!svg) return;
+      const arcs = [0, 1, 2, 3].map(i => svg.querySelector(`#din-arc-${i}`));
+      const dots = [0, 1, 2, 3].map(i => svg.querySelector(`#din-dot-${i}`));
+      let phase = 0;
+
+      startL1Animation(() => {
+        phase = (phase + 0.008) % 1;
+        arcs.forEach((arc, i) => {
+          if (!arc || !dots[i]) return;
+          const pt = arc.getPointAtLength(arc.getTotalLength() * ((phase + i * 0.22) % 1));
+          dots[i].setAttribute('transform', `translate(${pt.x.toFixed(1)},${pt.y.toFixed(1)})`);
+        });
+      });
+    }
+
+    /* ========================================================================
+       13. DETAIL VIEW: SHOPPING (INTERACTIVE PRICE CHART + MALL ROUTE + CHECKLIST)
+       ======================================================================== */
+    function renderShoppingDetailHtml(ev) {
+      const pts = ev.priceHistory;
+      const sel = pts[SDUI_STATE.selectedPriceIdx] || pts[pts.length - 1];
+      const minP = 300, maxP = 395;
+      const coords = pts.map((p, i) => ({
+        x: 24 + i * 72,
+        y: 84 - ((p.price - minP) / (maxP - minP)) * 58,
+        ...p
+      }));
+      const lineD = coords.map((c, i) => `${i === 0 ? 'M' : 'L'} ${c.x} ${c.y.toFixed(1)}`).join(' ');
+      const areaD = `${lineD} L ${coords[coords.length - 1].x} 94 L ${coords[0].x} 94 Z`;
+
+      const doneCount = ev.checklist.filter(c => c.done).length;
+
+      return `
+        <!-- Block 1: Interactive Historical Price Trend Chart -->
+        <div class="rounded-[24px] bg-[#060E0B] border border-shopping/25 overflow-hidden">
+          <div class="px-3.5 py-2.5 flex items-center justify-between border-b border-white/[0.06]">
+            <div class="flex items-center gap-1.5">
+              <span class="w-1.5 h-1.5 rounded-full bg-shopping shadow-[0_0_8px_#00E676]"></span>
+              <span class="text-[11px] font-medium text-emerald-100">全网历史价格走势（点击节点检视）</span>
+            </div>
+            <span class="text-[10px] font-mono text-shopping font-semibold">${sel.date} · ¥${sel.price}</span>
+          </div>
+
+          <div class="px-2 pt-2 pb-1">
+            <svg viewBox="0 0 336 106" class="w-full h-[106px]">
+              <defs>
+                <linearGradient id="priceFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="#00E676" stop-opacity="0.3"/>
+                  <stop offset="100%" stop-color="#00E676" stop-opacity="0"/>
+                </linearGradient>
+              </defs>
+              <!-- Lowest Price Reference Line -->
+              <line x1="16" y1="74.8" x2="320" y2="74.8" stroke="rgba(0,230,118,0.28)" stroke-dasharray="3 3" stroke-width="1"/>
+              <text x="320" y="71" text-anchor="end" fill="#6EE7B7" font-size="7.5" font-family="JetBrains Mono">史低 ¥315</text>
+
+              <path d="${areaD}" fill="url(#priceFill)"/>
+              <path d="${lineD}" fill="none" stroke="#00E676" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+
+              ${coords.map((c, idx) => {
+                const isAct = idx === SDUI_STATE.selectedPriceIdx;
+                return `
+                  <g onclick="selectPricePoint(${idx})" onmouseenter="selectPricePoint(${idx})" class="cursor-pointer">
+                    <circle cx="${c.x}" cy="${c.y.toFixed(1)}" r="12" fill="transparent"/>
+                    ${isAct ? `<circle cx="${c.x}" cy="${c.y.toFixed(1)}" r="7.5" fill="rgba(0,230,118,0.24)"/>` : ''}
+                    <circle cx="${c.x}" cy="${c.y.toFixed(1)}" r="${isAct ? 4.4 : 3}" fill="${isAct ? '#FFFFFF' : '#00E676'}" stroke="#00E676" stroke-width="1.6"/>
+                    <text x="${c.x}" y="102" text-anchor="middle" fill="${isAct ? '#FFFFFF' : '#64748B'}" font-size="8" font-family="JetBrains Mono">${c.date}</text>
+                  </g>
+                `;
+              }).join('')}
+            </svg>
+          </div>
+          <div class="px-3.5 py-2 bg-black/40 border-t border-white/[0.06] flex items-center justify-between text-[10.5px]">
+            <span class="text-emerald-200/90">✦ ${sel.tag}</span>
+            <span class="font-mono text-slate-400">当前 ¥328 vs 原价 ¥380</span>
+          </div>
+        </div>
+
+        <!-- Block 2: Isometric Mall Floor Route Map (B1 -> L2 -> L3) -->
+        <div class="rounded-[24px] bg-[#060E0B] border border-white/10 overflow-hidden">
+          <div class="px-3.5 py-2 flex items-center justify-between border-b border-white/[0.06]">
+            <span class="text-[11px] font-medium text-slate-200">恒隆广场 · B1 → L2 → L3 最优采购动线</span>
+            <span class="text-[10px] font-mono text-shopping">步行 6m</span>
+          </div>
+          <svg id="shopping-mall-svg" viewBox="0 0 336 124" class="w-full h-[124px]">
+            <defs>
+              <linearGradient id="mallGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                <stop offset="0%" stop-color="#00E676"/><stop offset="100%" stop-color="#14B8A6"/>
+              </linearGradient>
+              <filter id="emGlow" x="-40%" y="-40%" width="180%" height="180%">
+                <feGaussianBlur stdDeviation="2.4" result="b"/>
+                <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+              </filter>
+            </defs>
+            <polygon points="190,14 316,14 296,44 170,44" fill="rgba(0,230,118,0.06)" stroke="rgba(0,230,118,0.28)"/>
+            <text x="298" y="27" text-anchor="end" fill="#6EE7B7" font-size="8" font-family="JetBrains Mono">L3</text>
+
+            <polygon points="106,48 236,48 216,78 86,78" fill="rgba(20,184,166,0.06)" stroke="rgba(20,184,166,0.34)"/>
+            <text x="218" y="61" text-anchor="end" fill="#5EEAD4" font-size="8" font-family="JetBrains Mono">L2</text>
+
+            <polygon points="22,82 154,82 134,112 8,112" fill="rgba(0,230,118,0.05)" stroke="rgba(0,230,118,0.28)"/>
+            <text x="136" y="95" text-anchor="end" fill="#6EE7B7" font-size="8" font-family="JetBrains Mono">B1</text>
+
+            <path id="mall-path" d="M 60 97 C 96 97, 120 70, 160 63 C 198 56, 214 34, 248 29"
+              fill="none" stroke="url(#mallGrad)" stroke-width="2.5" filter="url(#emGlow)"/>
+
+            <g id="mall-dot" filter="url(#emGlow)">
+              <circle r="7" fill="rgba(0,230,118,0.25)"/>
+              <circle r="3.6" fill="#FFFFFF" stroke="#00E676" stroke-width="1.5"/>
+            </g>
+
+            <g transform="translate(60,97)"><circle r="4" fill="#00E676"/><text x="0" y="14" text-anchor="middle" fill="#ECFDF5" font-size="8.5" font-weight="600">B1 礼盒</text></g>
+            <g transform="translate(160,63)"><circle r="4" fill="#14B8A6"/><text x="0" y="-9" text-anchor="middle" fill="#CCFBF1" font-size="8.5" font-weight="600">L2 香氛</text></g>
+            <g transform="translate(248,29)"><circle r="4" fill="#00E676"/><text x="0" y="-9" text-anchor="middle" fill="#ECFDF5" font-size="8.5" font-weight="600">L3 纪念杯</text></g>
+          </svg>
+        </div>
+
+        <!-- Block 3: Interactive Checklist (Syncs Live Progress Ring on Home Timeline) -->
+        <div class="rounded-2xl bg-white/[0.03] border border-white/[0.08] p-3.5 space-y-2">
+          <div class="flex items-center justify-between text-[11px]">
+            <span class="font-medium text-slate-200">AI 购物清单（勾选同步首屏进度环）</span>
+            <span class="font-mono text-shopping">${doneCount}/${ev.checklist.length}</span>
+          </div>
+          ${ev.checklist.map((c, idx) => `
+            <label onclick="toggleShoppingItem(${idx})"
+              class="flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${c.done ? 'bg-shopping/15 border border-shopping/40' : 'bg-black/30 border border-white/[0.07] hover:border-shopping/35'}">
+              <div class="flex items-center gap-2.5">
+                <span class="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold ${c.done ? 'bg-shopping text-slate-950' : 'border border-white/30 text-transparent'}">✓</span>
+                <span class="text-xs ${c.done ? 'line-through text-emerald-200/70' : 'text-white'}">${c.name}</span>
+              </div>
+              <div class="flex items-center gap-1.5 font-mono text-[10.5px]">
+                <span class="text-slate-300">${c.price}</span>
+                <span class="text-shopping bg-shopping/10 px-1.5 py-0.5 rounded text-[9.5px]">${c.save}</span>
+              </div>
+            </label>
+          `).join('')}
+        </div>
+
+        ${ev.lifecycleStage === 'PROPOSAL' ? renderSlideConfirmHtml('滑动一键领券并生成 3D 核销卡', 'shopping') : ''}
+      `;
+    }
+
+    function selectPricePoint(idx) {
+      if (SDUI_STATE.selectedPriceIdx === idx) return;
+      SDUI_STATE.selectedPriceIdx = idx;
+      renderL1View();
+    }
+
+    function toggleShoppingItem(idx) {
+      const ev = findEventById('evt_shopping_plaza66');
+      if (!ev) return;
+      ev.checklist[idx].done = !ev.checklist[idx].done;
+      renderL1View();
+      renderPhoneHome();
+      updateSduiInspector();
+    }
+
+    function initShoppingRouteAnim() {
+      const svg = document.getElementById('shopping-mall-svg');
+      if (!svg) return;
+      const p = svg.querySelector('#mall-path');
+      const d = svg.querySelector('#mall-dot');
+      let t = 0;
+      startL1Animation(() => {
+        t = (t + 0.006) % 1;
+        const pt = p.getPointAtLength(p.getTotalLength() * t);
+        d.setAttribute('transform', `translate(${pt.x.toFixed(1)},${pt.y.toFixed(1)})`);
+      });
+    }
+
+    /* ========================================================================
+       14. DETAIL VIEW: OFFICE & ADOPTED EXPLORE CARDS
+       ======================================================================== */
+    function renderOfficeDetailHtml(ev) {
+      return `
+        <div class="rounded-[24px] p-4 bg-white/[0.03] border border-white/10 space-y-3">
+          <div class="text-xs font-semibold text-indigo-200">AI 议程提炼与行动点</div>
+          <div class="space-y-2">
+            ${(ev.notes || []).map((n, idx) => `
+              <div onclick="toggleOfficeNote('${ev.id}', ${idx})"
+                class="p-2.5 rounded-xl cursor-pointer flex items-center gap-2.5 ${n.done ? 'bg-indigo-500/15 border border-indigo-400/40' : 'bg-black/30 border border-white/10'}">
+                <span class="w-4 h-4 rounded flex items-center justify-center text-[10px] font-bold ${n.done ? 'bg-indigo-400 text-slate-950' : 'border border-white/30 text-transparent'}">✓</span>
+                <span class="text-xs ${n.done ? 'line-through text-indigo-200/70' : 'text-white'}">${n.text}</span>
+              </div>
+            `).join('')}
+          </div>
+          <button onclick="showToast('已一键加入腾讯会议室', 'office')"
+            class="w-full py-2.5 rounded-xl bg-indigo-500/25 hover:bg-indigo-500/35 border border-indigo-400/45 text-xs font-semibold text-white transition-all">
+            一键入会 · 自动开启 AI 纪要
+          </button>
+        </div>
+      `;
+    }
+
+    function toggleOfficeNote(evId, idx) {
+      const ev = findEventById(evId);
+      if (!ev || !ev.notes) return;
+      ev.notes[idx].done = !ev.notes[idx].done;
+      renderL1View();
+    }
+
+    function renderExploreDetailHtml(ev) {
+      const meta = ev.exploreMeta;
+      return `
+        <div class="rounded-[24px] p-4 bg-explore/[0.09] border border-explore/35 space-y-3">
+          <div class="flex items-center justify-between">
+            <span class="text-xs font-semibold text-purple-200">✦ 漫游导航详情</span>
+            <span class="text-[10.5px] font-mono text-exploreGold">${meta.duration}</span>
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">${meta.note}</p>
+          <div class="pt-2 border-t border-white/10 space-y-2">
+            ${meta.stops.map((s, i) => `
+              <div class="flex items-center justify-between text-xs p-2 rounded-xl ${i === meta.currentStopIdx ? 'bg-explore/20 border border-explore/40 text-white' : 'text-slate-400'}">
+                <span>${s.time} · ${s.name}</span>
+                <span class="text-[10px] font-mono">${s.dist}</span>
+              </div>
+            `).join('')}
+          </div>
+          <button onclick="showToast('已开启步行 AR 实景导航前往 ${ev.title}', 'explore')"
+            class="w-full py-2.5 rounded-xl bg-gradient-to-r from-explore to-exploreGold text-slate-950 font-semibold text-xs active:scale-95 transition-transform">
+            开启步行导航 ↗
+          </button>
+        </div>
+      `;
+    }
+
+    /* ========================================================================
+       15. REUSABLE PLAN CARD, SLIDE-TO-CONFIRM & 3D HOLOGRAPHIC PASSES
+       ======================================================================== */
+    function renderPlanCardHtml(plan, selected, type, clickJs) {
+      const t = THEMES[type];
+      const score = type === 'travel' ? plan.punctuality : plan.match;
+      const r = 13, circ = 2 * Math.PI * r, off = circ * (1 - score / 100);
+
+      return `
+        <div onclick="${clickJs}" class="plan-card shrink-0 w-[212px] rounded-2xl p-3 cursor-pointer ${selected ? 'selected' : ''}">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <div class="text-xs font-semibold text-white">${type === 'travel' ? plan.carrier : plan.name}</div>
+              <div class="text-[10.5px] mt-0.5" style="color:${type === 'travel' ? '#94A3B8' : t.hex};">${type === 'travel' ? plan.modeText : plan.queue}</div>
+            </div>
+            <div class="relative w-8 h-8 flex items-center justify-center shrink-0">
+              <svg class="w-8 h-8 -rotate-90" viewBox="0 0 32 32">
+                <circle cx="16" cy="16" r="${r}" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="2.4"/>
+                <circle cx="16" cy="16" r="${r}" fill="none" stroke="${t.hex}" stroke-width="2.4"
+                  stroke-dasharray="${circ.toFixed(1)}" stroke-dashoffset="${off.toFixed(1)}" stroke-linecap="round"/>
+              </svg>
+              <span class="absolute text-[8.5px] font-mono font-bold text-white">${score}%</span>
+            </div>
+          </div>
+          <div class="mt-2.5 flex items-baseline justify-between">
+            <span class="text-sm font-mono font-bold text-white">${type === 'travel' ? `¥${plan.price}` : `人均 ¥${plan.price}`}</span>
+            <span class="text-[10px] font-mono" style="color:${type === 'travel' ? t.hex : '#94A3B8'};">
+              ${type === 'travel' ? `${plan.dep}→${plan.arr}` : `平均 ${plan.avgCommute}m`}
+            </span>
+          </div>
+        </div>
+      `;
+    }
+
+    function selectEventPlan(idx) {
+      const ev = findEventById(SDUI_STATE.activeL1Id);
+      if (!ev) return;
+      ev.selectedPlanIdx = idx;
+      renderL1View();
+      updateSduiInspector();
+    }
+
+    function renderSlideConfirmHtml(label, type) {
+      const t = THEMES[type];
+      return `
+        <div class="pt-1 space-y-1.5">
+          <div id="slide-bar"
+            class="relative h-14 rounded-full bg-slate-900/95 p-1.5 select-none overflow-hidden touch-none"
+            style="border:1px solid rgba(${t.rgb},0.48); box-shadow: 0 0 24px rgba(${t.rgb},0.16);">
+            <div id="slide-fill" class="absolute inset-y-1 left-1 rounded-full pointer-events-none"
+              style="width:48px; background:linear-gradient(90deg, rgba(${t.rgb},0.35), rgba(${t.rgb},0.65));"></div>
+            <div id="slide-text" class="absolute inset-0 flex items-center justify-center pl-8 pointer-events-none">
+              <span class="text-xs font-semibold tracking-wide shimmer-guide">${label}</span>
+            </div>
+            <div id="slide-handle"
+              class="relative z-10 w-11 h-11 rounded-full flex items-center justify-center text-slate-950 cursor-grab active:cursor-grabbing"
+              style="background:linear-gradient(135deg,#FFFFFF 0%, ${t.hex} 100%); box-shadow:0 0 16px rgba(${t.rgb},0.8);">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2.4" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"/>
+              </svg>
+            </div>
+          </div>
+          <div class="text-center">
+            <button onclick="confirmActiveEvent(true)" class="text-[10px] text-slate-500 hover:text-slate-300 underline underline-offset-2">
+              或点击此处快速完成滑动确认
+            </button>
+          </div>
+        </div>
+      `;
+    }
+
+    function initSlideToConfirm() {
+      const bar = document.getElementById('slide-bar');
+      const handle = document.getElementById('slide-handle');
+      const fill = document.getElementById('slide-fill');
+      const text = document.getElementById('slide-text');
+      if (!bar || !handle) return;
+
+      let dragging = false, startX = 0, curX = 0, maxX = 0;
+
+      handle.onpointerdown = (e) => {
+        dragging = true;
+        handle.setPointerCapture(e.pointerId);
+        maxX = bar.clientWidth - handle.clientWidth - 12;
+        startX = e.clientX - curX;
+        handle.style.transition = 'none';
+        fill.style.transition = 'none';
+      };
+
+      handle.onpointermove = (e) => {
+        if (!dragging) return;
+        curX = Math.max(0, Math.min(maxX, e.clientX - startX));
+        handle.style.transform = `translateX(${curX}px)`;
+        fill.style.width = `${curX + handle.clientWidth + 4}px`;
+        text.style.opacity = `${Math.max(0.08, 1 - curX / (maxX * 0.78))}`;
+        if (curX >= maxX * 0.88) {
+          dragging = false;
+          confirmActiveEvent(false);
+        }
+      };
+
+      const release = () => {
+        if (!dragging) return;
+        dragging = false;
+        curX = 0;
+        handle.style.transition = 'transform 0.35s cubic-bezier(0.22,1,0.36,1)';
+        fill.style.transition = 'width 0.35s cubic-bezier(0.22,1,0.36,1)';
+        handle.style.transform = 'translateX(0px)';
+        fill.style.width = '48px';
+        text.style.opacity = '1';
+      };
+
+      handle.onpointerup = release;
+      handle.onpointercancel = release;
+    }
+
+    function confirmActiveEvent(animateBar) {
+      const ev = findEventById(SDUI_STATE.activeL1Id);
+      if (!ev || ev.lifecycleStage === 'CONFIRMED') return;
+
+      const finalize = () => {
+        ev.lifecycleStage = 'CONFIRMED';
+        if (ev.category === 'TRAVEL') {
+          const p = ev.plans[ev.selectedPlanIdx];
+          ev.time = p.dep;
+          ev.title = `${ev.direction === 'return' ? '上海 → 北京' : '北京 → 上海'} · ${p.carrier.split(' ')[1] || p.carrier}`;
+          ev.subtitle = `${p.depHub} · ${p.seat}`;
+          ev.badge = '已出票';
+        } else if (ev.category === 'DINING') {
+          const r = ev.plans[ev.selectedPlanIdx];
+          ev.title = `${r.name.split('·')[1]?.trim() || '外滩'} · ${r.name.split('·')[0].trim()}（4人）`;
+          ev.subtitle = `${r.room} · 已同步群聊`;
+          ev.badge = '已订座';
+        } else if (ev.category === 'SHOPPING') {
+          ev.subtitle = '已领 2 张满减券 · 3件现货清单';
+        }
+
+        triggerFxBurst(THEMES[ev.themeKey].hex, 0.5, 0.65);
+        SDUI_STATE.l1ForceMapView = false;
+        renderL1View();
+        renderPhoneHome();
+        updateSduiInspector();
+        showToast(`已确认「${ev.title}」，详情页已变形为 3D 全息凭证`, ev.themeKey);
+      };
+
+      if (animateBar) {
+        const bar = document.getElementById('slide-bar');
+        const handle = document.getElementById('slide-handle');
+        const fill = document.getElementById('slide-fill');
+        if (bar && handle && fill) {
+          const maxX = bar.clientWidth - handle.clientWidth - 12;
+          handle.style.transition = 'transform 0.3s cubic-bezier(0.22,1,0.36,1)';
+          fill.style.transition = 'width 0.3s cubic-bezier(0.22,1,0.36,1)';
+          handle.style.transform = `translateX(${maxX}px)`;
+          fill.style.width = `${bar.clientWidth - 8}px`;
+          setTimeout(finalize, 300);
+          return;
+        }
+      }
+      finalize();
+    }
+
+    function renderHoloPassHtml(ev) {
+      if (ev.category === 'TRAVEL') {
+        const p = ev.plans[ev.selectedPlanIdx];
+        const isRet = ev.direction === 'return';
+        const depCode = isRet ? 'SHA' : 'PEK';
+        const arrCode = isRet ? 'PEK' : 'SHA';
+        const isRail = p.mode === 'rail';
+        const bars = Array.from({ length: 34 }, (_, i) =>
+          `<span style="width:${i % 3 === 0 ? 3 : 1.5}px; background:${i % 8 === 0 ? '#00E5FF' : '#E2E8F0'}; border-radius:1px;"></span>`
+        ).join('');
+
+        return `
+          <div class="space-y-3 pt-1">
+            <div class="text-[11px] text-travel/90 flex items-center justify-between px-0.5">
+              <span>✦ 3D 全息${isRail ? '电子车票' : '登机牌'} · 滑动倾斜折射光效</span>
+              <span class="font-mono text-[10px] text-slate-400">HOLO PASS</span>
+            </div>
+
+            <div class="holo-stage">
+              <div id="active-holo-card" class="holo-card p-5"
+                style="background:linear-gradient(135deg,#0D192B 0%,#101533 52%,#081526 100%);">
+                <div class="holo-foil"></div>
+                <div class="ticket-cut-l"></div>
+                <div class="ticket-cut-r"></div>
+
+                <div class="relative z-10 flex items-center justify-between pb-3">
+                  <div>
+                    <div class="text-xs font-bold text-white tracking-wide">${p.carrier}</div>
+                    <div class="text-[10px] text-cyan-200/80">${p.modeText} · ${isRail ? '刷证直进' : '电子登机牌'}</div>
+                  </div>
+                  <span class="px-2 py-0.5 rounded-full text-[9.5px] font-mono bg-travel/15 text-travel border border-travel/35">CONFIRMED</span>
+                </div>
+
+                <div class="relative z-10 flex items-center justify-between py-2">
+                  <div>
+                    <div class="text-3xl font-bold font-mono text-white tracking-tight">${depCode}</div>
+                    <div class="text-[11px] text-slate-300">${p.depHub}</div>
+                    <div class="text-xs font-mono text-travel mt-0.5">${p.dep}</div>
+                  </div>
+                  <div class="flex-1 px-3 flex flex-col items-center">
+                    <div class="w-full h-[1.5px] bg-gradient-to-r from-travel via-sky-300 to-blue-500 relative">
+                      <span class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-[#0F172D] px-1.5 text-travel text-xs">${isRail ? '🚄' : '✈'}</span>
+                    </div>
+                    <span class="text-[9.5px] font-mono text-slate-400 mt-1.5">${isRet ? '周日返程' : '11月22日'}</span>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-3xl font-bold font-mono text-white tracking-tight">${arrCode}</div>
+                    <div class="text-[11px] text-slate-300">${p.arrHub}</div>
+                    <div class="text-xs font-mono text-sky-300 mt-0.5">${p.arr}</div>
+                  </div>
+                </div>
+
+                <div class="relative z-10 my-3.5 border-t border-dashed border-white/20"></div>
+
+                <div class="relative z-10 grid grid-cols-3 gap-2">
+                  <div>
+                    <div class="text-[9px] text-slate-400 font-mono">SEAT</div>
+                    <div class="text-xs font-mono font-bold text-travel mt-0.5">${p.seat}</div>
+                  </div>
+                  <div>
+                    <div class="text-[9px] text-slate-400 font-mono">${isRail ? 'CHECK-IN' : 'GATE'}</div>
+                    <div class="text-xs font-mono font-bold text-white mt-0.5">${p.gate}</div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-[9px] text-slate-400 font-mono">STATUS</div>
+                    <div class="text-xs font-semibold text-emerald-300 mt-0.5">准点计划中</div>
+                  </div>
+                </div>
+
+                <div class="relative z-10 mt-4 pt-3 border-t border-white/10">
+                  <div class="h-7 w-full flex items-stretch justify-between gap-[2px] opacity-85">${bars}</div>
+                  <div class="flex justify-between text-[9px] font-mono text-slate-400 mt-1.5">
+                    <span>ETKT 781-20261122-5102</span>
+                    <span>AURAFLOW VERIFIED</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Live Status & Quick Actions -->
+            <div class="grid grid-cols-2 gap-2">
+              <button onclick="showToast('已打开选座图 · 当前锁定 ${p.seat}', 'travel')"
+                class="py-2.5 rounded-2xl bg-white/[0.06] hover:bg-white/[0.12] border border-white/10 text-xs font-medium text-white active:scale-95 transition-all">
+                值机座位
+              </button>
+              <button onclick="showToast('已预约虹桥 T2 接机专车，落地直达外滩', 'travel')"
+                class="py-2.5 rounded-2xl bg-travel/15 hover:bg-travel/25 border border-travel/40 text-xs font-semibold text-travel active:scale-95 transition-all">
+                接驳叫车 ↗
+              </button>
+            </div>
+          </div>
+        `;
+      }
+
+      if (ev.category === 'DINING') {
+        const r = ev.plans[ev.selectedPlanIdx];
+        return `
+          <div class="space-y-3 pt-1">
+            <div class="text-[11px] text-dining flex items-center justify-between px-0.5">
+              <span>✦ 3D 全息订座牌 · 已同步至 4 人群聊</span>
+              <span class="font-mono text-[10px] text-slate-400">VIP TABLE</span>
+            </div>
+
+            <div class="holo-stage">
+              <div id="active-holo-card" class="holo-card p-5"
+                style="background:linear-gradient(135deg,#241311 0%,#1B1018 52%,#190D0B 100%);">
+                <div class="holo-foil"></div>
+                <div class="relative z-10 flex items-start justify-between">
+                  <div>
+                    <span class="px-2 py-0.5 rounded-full text-[9.5px] font-mono bg-dining/20 text-dining border border-dining/40">RESERVED · 免排队</span>
+                    <h3 class="text-xl font-bold text-white mt-2">${r.room}</h3>
+                    <p class="text-xs text-orange-100/80 mt-0.5">${r.name} · ${ev.time}</p>
+                  </div>
+                  <div class="w-11 h-11 rounded-2xl bg-dining/15 border border-dining/35 flex items-center justify-center text-lg">🍷</div>
+                </div>
+                <div class="relative z-10 my-4 border-t border-dashed border-white/20"></div>
+                <div class="relative z-10 flex items-center justify-between">
+                  <div>
+                    <div class="text-[10px] text-slate-400">同行 4 人 · 均已收到群日程</div>
+                    <div class="flex items-center -space-x-2 mt-2">
+                      ${DINING_FRIENDS.map(f => `<div class="w-8 h-8 rounded-full bg-gradient-to-br from-dining/85 to-rose-500/80 border-2 border-[#1B1018] flex items-center justify-center text-[11px] font-bold text-white">${f.short}</div>`).join('')}
+                    </div>
+                  </div>
+                  <div class="text-right">
+                    <div class="text-[10px] text-slate-400">平均通勤</div>
+                    <div class="text-base font-mono font-bold text-dining">${r.avgCommute} min</div>
+                  </div>
+                </div>
+                <div class="relative z-10 mt-4 pt-3 border-t border-white/10 flex items-center justify-between gap-2">
+                  <span class="text-[10.5px] text-slate-300 truncate">📍 ${r.address}</span>
+                  <button onclick="showToast('已唤起导航前往 ${r.name}', 'dining')"
+                    class="px-3 py-1.5 rounded-xl bg-dining text-slate-950 font-semibold text-[11px] shrink-0 active:scale-95">
+                    一键导航
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+
+      // Shopping 3D Holo Voucher Pass + Checkable Items
+      const doneCount = ev.checklist.filter(c => c.done).length;
+      return `
+        <div class="space-y-3 pt-1">
+          <div class="text-[11px] text-shopping flex items-center justify-between px-0.5">
+            <span>✦ 3D 全息核销券 · 勾选同步首屏进度环</span>
+            <span class="font-mono text-[10px] text-shopping">${doneCount}/${ev.checklist.length} 完成</span>
+          </div>
+          <div class="holo-stage">
+            <div id="active-holo-card" class="holo-card p-4"
+              style="background:linear-gradient(135deg,#092018 0%,#0C1A22 52%,#071912 100%);">
+              <div class="holo-foil"></div>
+              <div class="relative z-10 flex items-center justify-between gap-3">
+                <div>
+                  <span class="px-2 py-0.5 rounded-full text-[9.5px] font-mono bg-shopping/20 text-shopping border border-shopping/40">2 VOUCHERS ACTIVE</span>
+                  <h3 class="text-base font-bold text-white mt-1.5">恒隆广场 · 现货核销卡</h3>
+                  <p class="text-[11px] text-emerald-200/80 mt-0.5">叠券立省 ¥340 · 门店已留货 3h</p>
+                </div>
+                <div class="w-14 h-14 rounded-xl bg-white p-1.5 shrink-0 shadow-lg">
+                  <svg viewBox="0 0 21 21" class="w-full h-full text-slate-950" fill="currentColor">
+                    <rect x="0" y="0" width="6" height="6"/><rect x="1" y="1" width="4" height="4" fill="#fff"/><rect x="2" y="2" width="2" height="2"/>
+                    <rect x="15" y="0" width="6" height="6"/><rect x="16" y="1" width="4" height="4" fill="#fff"/><rect x="17" y="2" width="2" height="2"/>
+                    <rect x="0" y="15" width="6" height="6"/><rect x="1" y="16" width="4" height="4" fill="#fff"/><rect x="2" y="17" width="2" height="2"/>
+                    <rect x="8" y="1" width="2" height="2"/><rect x="11" y="2" width="2" height="3"/><rect x="8" y="7" width="4" height="2"/>
+                    <rect x="2" y="9" width="3" height="2"/><rect x="13" y="9" width="3" height="3"/><rect x="18" y="9" width="3" height="3"/>
+                    <rect x="8" y="13" width="3" height="3"/><rect x="13" y="15" width="4" height="2"/><rect x="17" y="18" width="4" height="3"/>
+                  </svg>
+                </div>
+              </div>
+              <div class="relative z-10 my-3.5 border-t border-dashed border-white/20"></div>
+              <div class="relative z-10 space-y-2">
+                ${ev.checklist.map((c, idx) => `
+                  <label onclick="toggleShoppingItem(${idx})"
+                    class="flex items-center justify-between p-2.5 rounded-xl cursor-pointer transition-all ${c.done ? 'bg-shopping/15 border border-shopping/40' : 'bg-black/35 border border-white/10 hover:border-shopping/35'}">
+                    <div class="flex items-center gap-2.5">
+                      <span class="w-5 h-5 rounded-md flex items-center justify-center text-[11px] font-bold ${c.done ? 'bg-shopping text-slate-950' : 'border border-white/30 text-transparent'}">✓</span>
+                      <span class="text-xs font-medium ${c.done ? 'line-through text-emerald-200/70' : 'text-white'}">${c.name}</span>
+                    </div>
+                    <span class="text-[11px] font-mono ${c.done ? 'text-shopping' : 'text-slate-300'}">${c.price}</span>
+                  </label>
+                `).join('')}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function bindHolo3DTilt() {
+      const card = document.getElementById('active-holo-card');
+      if (!card) return;
+
+      const update = (cx, cy) => {
+        const r = card.getBoundingClientRect();
+        const x = (cx - r.left) / r.width;
+        const y = (cy - r.top) / r.height;
+        card.style.transform = `rotateX(${((0.5 - y) * 16).toFixed(2)}deg) rotateY(${((x - 0.5) * 18).toFixed(2)}deg) scale(1.015)`;
+        card.style.setProperty('--gx', `${(x * 100).toFixed(1)}%`);
+        card.style.setProperty('--gy', `${(y * 100).toFixed(1)}%`);
+      };
+      const reset = () => {
+        card.style.transform = 'rotateX(0deg) rotateY(0deg) scale(1)';
+        card.style.setProperty('--gx', '50%');
+        card.style.setProperty('--gy', '50%');
+      };
+
+      card.addEventListener('mousemove', e => update(e.clientX, e.clientY));
+      card.addEventListener('mouseleave', reset);
+      card.addEventListener('touchmove', e => { if (e.touches[0]) update(e.touches[0].clientX, e.touches[0].clientY); }, { passive: true });
+      card.addEventListener('touchend', reset);
+    }
+
+    /* ========================================================================
+       16. ANIMATION LOOP, PARTICLE FX & RESET CONTROLS
+       ======================================================================== */
+    let l1Raf = null;
+    function startL1Animation(fn) {
+      stopL1Animations();
+      const loop = () => { fn(); l1Raf = requestAnimationFrame(loop); };
+      l1Raf = requestAnimationFrame(loop);
+    }
+    function stopL1Animations() {
+      if (l1Raf !== null) { cancelAnimationFrame(l1Raf); l1Raf = null; }
+    }
+
+    function triggerFxBurst(hex, rx = 0.5, ry = 0.6, vaporMode = false) {
+      const canvas = document.getElementById('fx-canvas');
+      const screen = document.getElementById('phone-screen');
+      const ctx = canvas.getContext('2d');
+      canvas.width = screen.clientWidth;
+      canvas.height = screen.clientHeight;
+
+      const cx = canvas.width * rx;
+      const cy = canvas.height * ry;
+      const colors = [hex, '#FFFFFF', hex, '#CBD5E1'];
+
+      const particles = Array.from({ length: vaporMode ? 56 : 46 }, () => {
+        const a = Math.random() * Math.PI * 2;
+        const v = vaporMode ? (1.2 + Math.random() * 4.5) : (2.2 + Math.random() * 6.2);
+        return {
+          x: cx + (vaporMode ? (Math.random() - 0.5) * 160 : 0),
+          y: cy + (vaporMode ? (Math.random() - 0.5) * 32 : 0),
+          vx: vaporMode ? (-2.8 - Math.random() * 4.2) : Math.cos(a) * v,
+          vy: vaporMode ? ((Math.random() - 0.5) * 2.5) : (Math.sin(a) * v - 1.6),
+          r: 1.5 + Math.random() * 2.8,
+          c: colors[Math.floor(Math.random() * colors.length)],
+          life: 1,
+        };
+      });
+
+      function step() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        let alive = false;
+        for (const p of particles) {
+          p.x += p.vx;
+          p.y += p.vy;
+          if (!vaporMode) p.vy += 0.13;
+          p.vx *= 0.96;
+          p.life -= 0.025;
+          if (p.life > 0) {
+            alive = true;
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = p.c;
+            ctx.shadowBlur = 10;
+            ctx.shadowColor = p.c;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+          }
+        }
+        ctx.globalAlpha = 1;
+        if (alive) requestAnimationFrame(step);
+        else ctx.clearRect(0, 0, canvas.width, canvas.height);
+      }
+      requestAnimationFrame(step);
+    }
+
+    function resetFlightToProposal() {
+      if (SDUI_STATE.dayMode !== 'ACTIVE_TIMELINE') setDayMode('ACTIVE_TIMELINE');
+      const travel = findEventById('evt_travel_outbound');
+      if (travel) {
+        travel.lifecycleStage = 'PROPOSAL';
+        travel.time = '14:30';
+        travel.title = '北京 → 上海 · 差旅出行';
+        travel.subtitle = '待拍板 · 推荐 3 套出行方案';
+        travel.badge = '待拍板';
+        travel.selectedPlanIdx = 0;
+        travel.connectorToNext = {
+          connectorState: 'CONFLICT_DASHED',
+          label: '打车约 55m · 衔接紧张',
+          actionLabel: '一键顺延 30m',
+        };
+      }
+      if (SDUI_STATE.activeL1Id === 'evt_travel_outbound') renderL1View();
+      renderPhoneHome('evt_travel_outbound');
+      updateSduiInspector();
+      showToast('已将 14:30 航班重置为未订票推荐态（PROPOSAL）', 'travel');
+    }
+
+    function resetAllDemo() {
+      stopL1Animations();
+      closeMiniSheet();
+      const prevTab = SDUI_STATE.activeStudioTab;
+      SDUI_STATE = createInitialSduiState();
+      SDUI_STATE.activeStudioTab = prevTab;
+      document.getElementById('l1-overlay').classList.remove('open');
+      setTheme('travel');
+      setWeather('sunny');
+      renderPhoneHome();
+      updateSduiInspector();
+      showToast('已重置所有场景与 SDUI 协议状态', 'travel');
+    }
+
+    window.addEventListener('load', () => {
+      setTheme('travel');
+      renderPhoneHome();
+      updateSduiInspector();
+    });
+  </script>
+</body>
+</html>
