@@ -76,6 +76,8 @@ def initialize():
     with closing(sqlite3.connect(path)) as conn, conn:
         conn.execute('PRAGMA journal_mode=WAL')
         conn.executescript(SCHEMA)
+        from .home_sdui import ensure_schema
+        ensure_schema(conn)
 
 
 @asynccontextmanager
@@ -257,7 +259,7 @@ def health():
 
 
 @app.post('/v1/auth/register', status_code=201)
-def register(data: Credentials, request: Request, conn=Depends(db)):
+def register(data: Credentials, request: Request, conn=Depends(db, scope='function')):
     throttle(request, 'register', 6)
     username = data.username.lower()
     user_id = str(uuid4())
@@ -269,7 +271,7 @@ def register(data: Credentials, request: Request, conn=Depends(db)):
 
 
 @app.post('/v1/auth/login')
-def login(data: Credentials, request: Request, conn=Depends(db)):
+def login(data: Credentials, request: Request, conn=Depends(db, scope='function')):
     throttle(request, 'login')
     row = conn.execute('SELECT * FROM users WHERE username=?', (data.username.lower(),)).fetchone()
     try:
@@ -282,7 +284,7 @@ def login(data: Credentials, request: Request, conn=Depends(db)):
 
 
 @app.post('/v1/auth/refresh')
-def refresh_session(data: Refresh, request: Request, conn=Depends(db)):
+def refresh_session(data: Refresh, request: Request, conn=Depends(db, scope='function')):
     throttle(request, 'refresh', 60)
     row = conn.execute('SELECT s.*,u.username FROM sessions s JOIN users u ON u.id=s.user_id WHERE refresh_hash=? AND refresh_until>?', (digest(data.refresh_token), now())).fetchone()
     if not row:
@@ -484,6 +486,8 @@ def unshare(group_id: str, event_id: str, user=Depends(session_user), conn=Depen
 import sys
 from .agent_bridge import install
 install(app, sys.modules[__name__])
+from .home_sdui import install_home_sdui
+install_home_sdui(app, sys.modules[__name__])
 from .app_updates import router as updates_router
 app.include_router(updates_router)
 

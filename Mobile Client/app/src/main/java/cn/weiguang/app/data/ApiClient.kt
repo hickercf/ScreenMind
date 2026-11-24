@@ -3,12 +3,19 @@ package cn.weiguang.app.data
 import cn.weiguang.app.BuildConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.callbackFlow
+import kotlinx.coroutines.flow.conflate
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.Response
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import org.json.JSONObject
 import java.net.URI
+import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 class ApiFailure(val status: Int, message: String) : Exception(message)
@@ -17,12 +24,41 @@ class ApiClient {
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS).callTimeout(40, TimeUnit.SECONDS)
         .followRedirects(false).followSslRedirects(false).build()
+    private val streamClient = client.newBuilder().callTimeout(0, TimeUnit.SECONDS).build()
+
+    fun homeUpdates(session: UserSession) = callbackFlow<Unit> {
+        val request = Request.Builder().url(CloudEndpoint.request(session.endpoint) + "/api/v1/home/stream")
+            .header("Authorization", "Bearer " + session.accessToken).header("Accept", "text/event-stream").build()
+        val call = streamClient.newCall(request)
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) { close(e) }
+            override fun onResponse(call: Call, response: Response) {
+                response.use {
+                    if (!it.isSuccessful || it.header("Content-Type")?.startsWith("text/event-stream") != true) {
+                        close(ApiFailure(it.code, "实时订阅暂不可用"))
+                        return
+                    }
+                    try {
+                        val source = it.body!!.source()
+                        var data = false
+                        while (!call.isCanceled()) {
+                            val line = source.readUtf8Line() ?: break
+                            if (line.startsWith("data:")) data = true
+                            if (line.isEmpty() && data) { trySend(Unit); data = false }
+                        }
+                        close()
+                    } catch (e: IOException) { close(e) }
+                }
+            }
+        })
+        awaitClose { call.cancel() }
+    }.conflate()
 
     suspend fun call(endpoint: String, path: String, method: String = "GET", body: JSONObject? = null, token: String? = null): JSONObject = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(CloudEndpoint.request(endpoint) + path)
         if (token != null) request.header("Authorization", "Bearer $token")
         val requestBody = body?.toString()?.toRequestBody("application/json; charset=utf-8".toMediaType())
-        request.method(method, if (method in listOf("POST", "PUT")) requestBody ?: "{}".toRequestBody("application/json".toMediaType()) else null)
+        request.method(method, if (method in listOf("POST", "PUT", "PATCH")) requestBody ?: "{}".toRequestBody("application/json".toMediaType()) else null)
         client.newCall(request.build()).execute().use { response ->
             val text = response.body?.string().orEmpty()
             val json = try { JSONObject(text) } catch (_: Exception) { JSONObject() }

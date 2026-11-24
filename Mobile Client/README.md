@@ -120,6 +120,16 @@ Windows 中文目录下请使用 `scripts/build.ps1`：脚本会使用一个空�
 
 运行后端测试使用 `& '.venv/Scripts/python.exe' -m unittest backend.test_api backend.test_agent_bridge -v`。可复用的 Android 设备测试保存在 `app/src/androidTest`。先启动后端，再运行 `& './scripts/test-device.ps1' -Serial 'emulator-5554'`，它会构建并安装测试包、设置端口转发、执行测试并拉取截图。替换 Serial 可以指定其他测试设备。该测试会创建随机名称的专用测试账号，覆盖真实页面、端侧中文 OCR 与本地账户隔离。
 
+## AuraFlow 首页联调
+
+Windows 上双击仓库根目录的 [一键启动模拟器.cmd](../一键启动模拟器.cmd)，即可打开 `ScreenMind35` 的微光主页和后台模拟输入控制台。重复启动会复用运行中的服务和虚拟设备，保留当前场景。启动器从 `local.properties` 或 Android SDK 环境变量定位工具，日志保存在 `%LOCALAPPDATA%\ScreenMind\home-simulator`。首次使用空白虚拟设备时，使用下方的联调账号登录。
+
+在本目录启动移动网关，将 `PYTHONPATH` 指向同级的 `Cloud Agent`，用 `WEIGUANG_DB` 指定独立测试库，设置 `SCREENMIND_PROVIDER=mock`。网关命令为 `python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765`。在第二个终端运行 `python -m scripts.home_simulator.server`，打开 [首页事件控制台](http://127.0.0.1:8766/)。
+
+选场景先看模拟报文，点「发送至本步」即可把相同输入送到本地网关。「1.2 首页下发」显示时间轴，展开「全部事件」中的卡片可查看详情积木。模拟器可通过 `adb reverse tcp:8765 tcp:8765` 连接 `http://127.0.0.1:8765`，使用控制台首次联调时生成在 `%LOCALAPPDATA%/ScreenMind/home-simulator/studio-account.json` 的专用测试账号。全场景示例的参考时刻为当日 12:16（UTC+8），模拟凭证和行情仅供联调。
+
+首页入口为 `GET /api/v1/home/timeline`，详情入口为 `GET /api/v1/events/{eventId}/detail`，两者复用网关 Bearer 会话。完整接口和参数可在[本地网关接口文档](http://127.0.0.1:8765/docs)查看。SSE 建连与重连先发当前快照，随后发送事件变更。
+
 ## 发布前补齐
 
 后端当前使用 SQLite 和单进程内存限流，适合小规模内部联调。公开部署前需由云端同学完成 HTTPS、数据库迁移、集中限流、运维备份、密码找回与上线账户管理。正式上架需配置团队签名并核对届时渠道要求。

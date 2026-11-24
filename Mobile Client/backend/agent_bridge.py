@@ -56,6 +56,13 @@ class AgentHub:
         conn.row_factory = sqlite3.Row
         return conn
 
+    def workspace_path(self, uid):
+        return self.root / hashlib.sha256(uid.encode()).hexdigest()
+
+    async def restore_existing(self, uid):
+        if uid in self.entries or (self.workspace_path(uid) / 'state.sqlite3').is_file():
+            await self.ready(uid)
+
     async def entry(self, uid):
         if uid in self.entries:
             return self.entries[uid]
@@ -65,7 +72,7 @@ class AgentHub:
             # Bounded internal pilot. A production worker pool is a separate deployment task.
             if len(self.entries) >= 8:
                 raise HTTPException(503, '当前内测服务已达到8个用户工作区上限，请联系维护者')
-            root = self.root / hashlib.sha256(uid.encode()).hexdigest()
+            root = self.workspace_path(uid)
             key = secrets.token_urlsafe(32)
             cfg = replace(self.settings, owner=uid, db_path=root / 'state.sqlite3',
                 index_path=root / 'index', action_path=root / 'exports', api_key=key,

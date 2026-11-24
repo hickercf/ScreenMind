@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>微光 · 首页事件推演</title><link rel="stylesheet" href="/static/studio.css"><script defer src="/static/studio.js"></script></head>
+<body>
+<header><div class="brand"><span class="mark" aria-hidden="true">✦</span> 微光 <span class="slash">/</span> 首页事件推演</div><span class="host">本地网关 <code>127.0.0.1:8765</code></span></header>
+<div class="studio"><aside><details open id="directory"><summary>场景目录 <span id="count"></span></summary><nav id="cases"></nav></details></aside>
+<main>
+<div class="heading"><div><div class="group" id="group"></div><h1 id="title">加载场景</h1><p id="description"></p></div><button class="quiet" id="repeat">重新模拟</button></div>
+<div class="steps" id="steps" aria-label="事件步骤"></div>
+<section class="sendbar"><div class="source"><button id="mock">模拟传输</button><button id="remote">后端实收</button></div><button id="send" class="primary">发送至本地后端 →</button></section>
+<p id="message" role="status"></p>
+<section class="logic"><div class="logicTop"><span class="eyebrow">执行逻辑</span><code id="mode"></code></div><h2 id="operation"></h2><p id="rule"></p></section>
+<div class="grid">
+<section class="panel"><div class="panelHead"><h2>请求与响应</h2><span id="status" class="status"></span></div><div id="method" class="method"></div><div class="tabs" id="wiretabs"><button data-wire="body">请求体</button><button data-wire="reply">接口响应</button><button data-wire="contract">1.2 首页下发</button></div><p id="wirelabel" class="caption"></p><pre id="wire"></pre></section>
+<section class="panel"><div class="panelHead"><h2>事件卡片</h2><span id="total" class="count"></span></div><div class="tabs" id="cardtabs"><button data-cards="changes">本步变化</button><button data-cards="all">全部事件</button></div><div id="cards"></div></section>
+</div>
+<section class="device"><div class="panelHead"><h2>设备对应的后端快照</h2><button class="quiet" id="refresh">读取当前首页</button></div><p id="deviceLabel" class="caption">对接后可读取同一测试账号的最新状态，包括手机上的操作。</p><div id="device"></div></section>
+</main></div></body></html>

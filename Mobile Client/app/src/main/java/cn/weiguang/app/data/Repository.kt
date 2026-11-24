@@ -34,6 +34,9 @@ class Repository(private val context: Context, val database: AppDatabase) {
         }
     })
     val session: StateFlow<UserSession?> = sessionState.asStateFlow()
+    fun homeUpdates(account: String) = api.homeUpdates(requireNotNull(session.value).also {
+        check(it.accountKey == account) { "账号已变化" }
+    })
     private val settings = context.settingsDataStore
     val endpoint = settings.data.map { CloudEndpoint.selected(it[stringPreferencesKey("endpoint")]) }
     val theme = settings.data.map { it[stringPreferencesKey("theme")] ?: "system" }
@@ -357,6 +360,35 @@ class Repository(private val context: Context, val database: AppDatabase) {
 
     suspend fun agentCalendar(actionId: String): JSONObject = mutex.withLock {
         authenticated("/v1/agent/actions/$actionId/calendar")
+    }
+
+    private suspend fun readHome(): JSONObject = try {
+        authenticated("/api/v1/home/timeline?clientCapabilities=ANDROID_COMPAT")
+    } catch (error: ApiFailure) {
+        if (error.status != 404) throw error
+        authenticated("/v1/home/sdui?live=true&follow=true")
+    }
+
+    suspend fun homeSdui(account: String): JSONObject = mutex.withLock {
+        check(session.value?.accountKey == account) { "账号已变化" }
+        readHome()
+    }
+
+    suspend fun homeDetail(account: String, id: String): JSONObject = mutex.withLock {
+        check(session.value?.accountKey == account) { "账号已变化" }
+        authenticated("/api/v1/events/" + android.net.Uri.encode(id) + "/detail")
+    }
+
+    suspend fun homeContractAction(account: String, path: String, method: String, body: JSONObject): JSONObject = mutex.withLock {
+        check(session.value?.accountKey == account) { "账号已变化" }
+        authenticated(path, method, body)
+        readHome()
+    }
+
+    suspend fun homeSduiAction(account: String, body: JSONObject, live: Boolean = true): JSONObject = mutex.withLock {
+        check(session.value?.accountKey == account) { "账号已变化" }
+        authenticated("/v1/home/sdui/actions?live=$live", "POST", body)
+        readHome()
     }
 }
 

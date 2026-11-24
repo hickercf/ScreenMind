@@ -40,6 +40,27 @@ class DeviceFlowTest {
         compose.onNodeWithText("我的空间").assertExists()
     }
 
+    @Test fun homeCardKeepsItsSourceThroughConfirmationAndCompletion() {
+        val repo = (compose.activity.application as WeiguangApp).repository
+        runBlocking { repo.enterOffline() }
+        val title = "首页评审 " + System.nanoTime()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("＋ 添加日程").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("＋ 添加日程").performClick()
+        compose.onNodeWithText("识别或记录内容").performTextInput(title)
+        compose.onNodeWithText("确认并保存").performScrollTo().performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
+        // A new schedule without a supplied clock stays in the unscheduled section.
+        compose.onAllNodesWithText(title).onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("确认这项安排").performScrollTo().performClick()
+        compose.onNodeWithText("核对或修改线索").performScrollTo().performClick()
+        compose.onNodeWithText("核对这条线索").assertExists()
+        compose.onNodeWithText("确认并保存").performScrollTo().performClick()
+        compose.onAllNodesWithText(title).onFirst().performScrollTo().performClick()
+        compose.onNodeWithText("标记完成").performScrollTo().performClick()
+        compose.onNodeWithText("今日回顾", substring = true).performScrollTo().performClick()
+        compose.onNodeWithText("$title · 已完成", substring = true).assertExists()
+    }
+
     @Test fun bundledChineseOcrWorksOnDevice() = runBlocking {
         val bitmap = Bitmap.createBitmap(1200, 420, Bitmap.Config.ARGB_8888)
         val canvas = Canvas(bitmap)

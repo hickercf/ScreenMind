@@ -49,6 +49,13 @@ class AgentFlowTest {
         compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
         ready()
         compose.onNodeWithTag("agent-state-version").assertTextContains("已确认状态 v0", substring = true)
+        val taskId = runBlocking { repository.agentSnapshot(null, null).getJSONArray("tasks").getJSONObject(0).getString("id") }
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("home-card-task_$taskId").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("home-card-task_$taskId").performScrollTo().performClick()
+        compose.onNodeWithText("处理关联任务").performScrollTo().performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
+        ready()
         compose.onNodeWithTag("agent-accept-state").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("已确认状态 v1", substring = true).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("agent-accept-state").assertCountEquals(0)

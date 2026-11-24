@@ -36,15 +36,6 @@ private val Dark = darkColorScheme(
 @Composable
 fun WeiguangTheme(mode: String, content: @Composable () -> Unit) {
     val dark = when (mode) { "dark" -> true; "light" -> false; else -> isSystemInDarkTheme() }
-    val view = LocalView.current
-    SideEffect {
-        (view.context as? Activity)?.let { activity ->
-            WindowCompat.getInsetsController(activity.window, view).apply {
-                isAppearanceLightStatusBars = !dark
-                isAppearanceLightNavigationBars = !dark
-            }
-        }
-    }
     val typography = Typography().let {
         it.copy(
             headlineLarge = it.headlineLarge.copy(fontSize = 30.sp, fontWeight = FontWeight.Medium, fontFamily = FontFamily.SansSerif),
@@ -55,4 +46,17 @@ fun WeiguangTheme(mode: String, content: @Composable () -> Unit) {
         )
     }
     MaterialTheme(colorScheme = if (dark) Dark else Light, typography = typography, content = content)
+}
+
+@Composable
+internal fun SystemBarIcons(lightBackground: Boolean) {
+    val view = LocalView.current
+    SideEffect {
+        (view.context as? Activity)?.let { activity ->
+            WindowCompat.getInsetsController(activity.window, view).apply {
+                isAppearanceLightStatusBars = lightBackground
+                isAppearanceLightNavigationBars = lightBackground
+            }
+        }
+    }
 }

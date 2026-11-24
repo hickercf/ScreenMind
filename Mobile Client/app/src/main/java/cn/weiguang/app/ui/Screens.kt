@@ -25,6 +25,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +43,8 @@ import cn.weiguang.app.BuildConfig
 import cn.weiguang.app.AppViewModel
 import cn.weiguang.app.EditorDraft
 import cn.weiguang.app.data.*
+import cn.weiguang.app.ui.home.AuraColors
+import cn.weiguang.app.ui.home.AuraFlowHomeScreen
 import coil.compose.AsyncImage
 import org.json.JSONObject
 import java.time.Instant
@@ -122,53 +125,97 @@ fun WeiguangRoot(model: AppViewModel, sharedImage: Uri?, clearSharedImage: () ->
     LaunchedEffect(tab, page, session?.accountKey) { scrollState.scrollTo(0) }
     BackHandler(page.isNotEmpty() && !model.busy) { page = "" }
 
+    val onAuraHome = session != null && page.isEmpty() && tab == 0
+    SystemBarIcons(!onAuraHome && MaterialTheme.colorScheme.background.luminance() > 0.5f)
+
     Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
+        containerColor = if (onAuraHome) AuraColors.ScreenBg else MaterialTheme.colorScheme.background,
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
-            Column(Modifier.statusBarsPadding()) {
+            Column(Modifier.background(if (onAuraHome) AuraColors.ObsidianBg else MaterialTheme.colorScheme.background).statusBarsPadding()) {
                 Row(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     if (page.isNotEmpty()) IconButton(onClick = { page = "" }, enabled = !model.busy) { Icon(Icons.AutoMirrored.Outlined.ArrowBack, "返回") }
-                    else Icon(Icons.Outlined.AutoAwesome, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 10.dp))
-                    Text("微光", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                    else Icon(Icons.Outlined.AutoAwesome, null, tint = if (onAuraHome) AuraColors.Travel else MaterialTheme.colorScheme.primary, modifier = Modifier.padding(end = 10.dp))
+                    Text(
+                        if (onAuraHome) "微光 · 灵枢" else "微光",
+                        style = MaterialTheme.typography.titleLarge,
+                        color = if (onAuraHome) AuraColors.TextPrimary else MaterialTheme.colorScheme.onBackground,
+                        modifier = Modifier.weight(1f)
+                    )
                     if (BuildConfig.ENABLE_SELF_UPDATE) TextButton(onClick = { page = "updates" }) {
-                        Text(if (update.release != null) "发现更新" else "更新")
+                        Text(if (update.release != null) "发现更新" else "更新", color = if (onAuraHome) AuraColors.Travel else MaterialTheme.colorScheme.primary)
                     }
-                    SuggestionChip(onClick = { }, label = { Text(if (session?.endpoint == "offline") "离线体验" else "开发内测") })
-                    if (session != null && session?.endpoint != "offline") IconButton(onClick = model::sync, enabled = !model.busy) { Icon(Icons.Outlined.Sync, "同步") }
+                    SuggestionChip(
+                        onClick = { },
+                        label = {
+                            Text(
+                                if (session?.endpoint == "offline") "离线体验" else "开发内测",
+                                color = if (onAuraHome) AuraColors.TextPrimary else MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    )
+                    if (session != null && session?.endpoint != "offline") IconButton(onClick = model::sync, enabled = !model.busy) {
+                        Icon(Icons.Outlined.Sync, "同步", tint = if (onAuraHome) AuraColors.TextPrimary else MaterialTheme.colorScheme.onBackground)
+                    }
                 }
                 if (model.busy) LinearProgressIndicator(Modifier.fillMaxWidth().testTag("operation-progress"))
             }
         },
         bottomBar = {
-            if (session != null && page.isEmpty()) NavigationBar(containerColor = MaterialTheme.colorScheme.surface) {
+            if (session != null && page.isEmpty()) NavigationBar(
+                containerColor = if (onAuraHome) AuraColors.ObsidianBg else MaterialTheme.colorScheme.surface
+            ) {
                 listOf("首页" to Icons.Outlined.Home, "线索" to Icons.Outlined.Layers, "设备" to Icons.Outlined.Watch, "我的" to Icons.Outlined.PersonOutline).forEachIndexed { index, item ->
-                    NavigationBarItem(selected = tab == index, onClick = { tab = index }, enabled = !model.busy, icon = { Icon(item.second, item.first) }, label = { Text(item.first) })
+                    NavigationBarItem(
+                        selected = tab == index,
+                        onClick = { tab = index },
+                        enabled = !model.busy,
+                        icon = { Icon(item.second, item.first) },
+                        label = { Text(item.first) },
+                        colors = if (onAuraHome) NavigationBarItemDefaults.colors(
+                            selectedIconColor = AuraColors.Travel,
+                            selectedTextColor = AuraColors.Travel,
+                            indicatorColor = AuraColors.Travel.copy(alpha = 0.16f),
+                            unselectedIconColor = AuraColors.TextSecondary,
+                            unselectedTextColor = AuraColors.TextSecondary
+                        ) else NavigationBarItemDefaults.colors()
+                    )
                 }
             }
         }
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(scrollState).padding(horizontal = 22.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
-            if (page == "updates" && BuildConfig.ENABLE_SELF_UPDATE) {
-                UpdateScreen(model, endpoint, onEndpoint = { showEndpoint = true })
-            } else if (session == null) {
-                LoginScreen(model, onEndpoint = { showEndpoint = true })
-            } else {
-                if (sharedImage != null) Panel(accent = true) {
-                    Text("有一张分享过来的截图")
-                    Button(onClick = { model.recognize(sharedImage); clearSharedImage() }, enabled = !model.busy) { Text("识别并核对") }
+        if (onAuraHome) {
+            Column(Modifier.fillMaxSize().padding(padding).imePadding()) {
+                if (sharedImage != null) Box(Modifier.padding(horizontal = 18.dp, vertical = 8.dp)) {
+                    Panel(accent = true) {
+                        Text("有一张分享过来的截图")
+                        Button(onClick = { model.recognize(sharedImage); clearSharedImage() }, enabled = !model.busy) { Text("识别并核对") }
+                    }
                 }
-                when {
-                    page == "agent" -> AgentScreen(model, events)
-                    page == "groups" -> GroupScreen(model)
-                    page == "watch" -> WatchScreen()
-                    tab == 0 -> HomeScreen(model, events, decisions, { imagePicker.launch("image/*") }, { tab = 1 }, { page = "agent" })
-                    tab == 1 -> ClueScreen(model, events, { imagePicker.launch("image/*") }, requestCalendar, requestLocation)
-                    tab == 2 -> DevicesScreen(model, requestCalendar, requestLocation, requestNotification, { page = "watch" })
-                    else -> ProfileScreen(model) { page = "groups"; model.loadGroups() }
-                }
+                AuraFlowHomeScreen(model, events, decisions, { imagePicker.launch("image/*") }, { tab = 1 }, requestCalendar, { page = "agent" })
             }
-            Spacer(Modifier.height(8.dp))
+        } else {
+            Column(Modifier.fillMaxSize().padding(padding).imePadding().verticalScroll(scrollState).padding(horizontal = 22.dp, vertical = 14.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                if (page == "updates" && BuildConfig.ENABLE_SELF_UPDATE) {
+                    UpdateScreen(model, endpoint, onEndpoint = { showEndpoint = true })
+                } else if (session == null) {
+                    LoginScreen(model, onEndpoint = { showEndpoint = true })
+                } else {
+                    if (sharedImage != null) Panel(accent = true) {
+                        Text("有一张分享过来的截图")
+                        Button(onClick = { model.recognize(sharedImage); clearSharedImage() }, enabled = !model.busy) { Text("识别并核对") }
+                    }
+                    when {
+                        page == "agent" -> AgentScreen(model, events)
+                        page == "groups" -> GroupScreen(model)
+                        page == "watch" -> WatchScreen()
+                        tab == 1 -> ClueScreen(model, events, { imagePicker.launch("image/*") }, requestCalendar, requestLocation)
+                        tab == 2 -> DevicesScreen(model, requestCalendar, requestLocation, requestNotification, { page = "watch" })
+                        else -> ProfileScreen(model) { page = "groups"; model.loadGroups() }
+                    }
+                }
+                Spacer(Modifier.height(8.dp))
+            }
         }
     }
 
@@ -223,67 +270,6 @@ private fun EndpointDialog(model: AppViewModel, onDismiss: () -> Unit) {
             Text("USB 调试并设置端口转发时使用 127.0.0.1:8765；安卓模拟器使用 10.0.2.2:8765。发布服务使用 HTTPS。", style = MaterialTheme.typography.bodySmall)
         }
     }, confirmButton = { TextButton(onClick = { model.saveEndpoint(address); onDismiss() }) { Text("保存") } }, dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } })
-}
-
-@Composable
-private fun ColumnScope.HomeScreen(model: AppViewModel, events: List<LocalEvent>, decisions: List<LocalDecision>, onImage: () -> Unit, onClues: () -> Unit, onAgent: () -> Unit) {
-    val session by model.session.collectAsStateWithLifecycle()
-    Note(DateTimeFormatter.ofPattern("M 月 d 日").format(ZonedDateTime.now()))
-    Title("把线索，变成下一步。", "你决定哪些信息值得连接。")
-    Button(onClick = onAgent, enabled = !model.busy && session?.endpoint != "offline", modifier = Modifier.fillMaxWidth().testTag("open-agent")) { Text("进入云端事项") }
-    if (decisions.isEmpty()) Panel(accent = true) {
-        Mark(Icons.Outlined.AutoAwesome, "从第一条线索开始")
-        Text("一张截图，也可以成为\n清晰的下一步。", style = MaterialTheme.typography.titleLarge)
-        Text("导入文字，核对来源，再选择是否交给云端整理。")
-        Button(onClick = onImage, enabled = !model.busy) { Text("导入截图") }
-    }
-    decisions.take(10).forEach { item -> DecisionCard(model, item, events) }
-    if (events.isNotEmpty()) OutlinedButton(onClick = model::generate, enabled = !model.busy && session?.endpoint != "offline", modifier = Modifier.fillMaxWidth()) { Text("用已同步线索生成联调建议") }
-    if (session?.endpoint == "offline") Note("当前为离线体验，登录测试账号后可以上传和生成建议。")
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Text("最近线索", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        TextButton(onClick = onClues) { Text("查看全部") }
-    }
-    if (events.isEmpty()) Note("暂无记录。你也可以到「线索」手动记录或导入日程。")
-    events.take(3).forEach { event -> Panel {
-        Mark(Icons.Outlined.Description, "${SourceLabels[event.sourceKind]} · ${SyncLabels[event.syncState]}")
-        Text(event.text, maxLines = 3, overflow = TextOverflow.Ellipsis)
-        TextButton(onClick = { model.edit(event) }, enabled = !model.busy) { Text("查看与纠错") }
-    } }
-}
-
-@Composable
-private fun DecisionCard(model: AppViewModel, item: LocalDecision, events: List<LocalEvent>) {
-    val data = remember(item.body) { JSONObject(item.body) }
-    var expanded by remember(item.decisionId) { mutableStateOf(false) }
-    val evidence = data.itemObjects("evidence")
-    val locallyChanged = evidence.any { reference ->
-        val event = events.find { it.eventId == reference.optString("event_id") }
-        event == null || event.revision != reference.optInt("revision")
-    }
-    val expired = data.optLong("expires_at", 0) <= Instant.now().epochSecond
-    val active = data.optString("status") == "active" && !locallyChanged && !expired
-    val supported = data.optInt("schema_version") == 1 && data.optString("card_type") in listOf("summary", "question")
-    Panel(accent = true) {
-        Mark(Icons.Outlined.AutoAwesome, if (data.optString("provider") == "rule_demo") "规则演示 · 可替换 AI" else "云端建议")
-        Text(if (supported) data.optString("title") else "收到暂不支持的卡片", style = MaterialTheme.typography.titleLarge)
-        Text(if (supported) data.optString("summary") else "请与云端确认协议版本后重试。")
-        TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "收起依据" else "查看 ${evidence.size} 条依据") }
-        if (expanded) evidence.forEach { reference ->
-            val event = events.find { it.eventId == reference.optString("event_id") }
-            HorizontalDivider()
-            Text(event?.text ?: "此线索已移除或尚未同步到本机", style = MaterialTheme.typography.bodyMedium)
-            event?.let { TextButton(onClick = { model.edit(it) }, enabled = !model.busy) { Text("核对原始记录") } }
-        }
-        when {
-            !active -> Note("依据已修改、移除或建议已过期，请重新生成。")
-            !data.isNull("feedback") && data.optString("feedback").isNotEmpty() -> Note(if (data.optString("feedback") == "accepted") "已采纳 · 反馈已记录" else "已忽略 · 反馈已记录")
-            supported -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { model.feedback(item.decisionId, "accepted") }, enabled = !model.busy) { Text("采纳") }
-                OutlinedButton(onClick = { model.feedback(item.decisionId, "dismissed") }, enabled = !model.busy) { Text("忽略") }
-            }
-        }
-    }
 }
 
 @Composable
