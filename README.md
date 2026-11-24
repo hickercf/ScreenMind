@@ -35,6 +35,8 @@ python -m venv .venv
 
 [Mobile Client](Mobile%20Client/README.md) 提供原生安卓界面、端侧中文 OCR、账号与测试组、线索同步和云端事项交互。手机通过原有认证网关的 `/v1/agent` 接口使用同一套 Cloud Agent 引擎；每位用户的事项、证据、索引和动作文件分别隔离。
 
+Windows 上准备好 Python 依赖、安卓虚拟设备和调试 APK 后，可双击仓库根目录的 [一键启动模拟器.cmd](一键启动模拟器.cmd)，打开 AuraFlow 手机首页和模拟输入控制台。全新克隆的安装步骤见 [首次安装前置条件](Mobile%20Client/README.md#windows-首次安装前置条件)。
+
 手机联调只需启动一个服务，默认端口为 `8765`：
 
 ```powershell
@@ -50,4 +52,4 @@ powershell -ExecutionPolicy Bypass -File scripts/start-backend.ps1
 - [本轮验证记录](Mobile%20Client/docs/AGENT_TEST_REPORT.md)
 - [增强能力安装与验证边界](Cloud%20Agent/docs/phase-two.md)
 
-如同时运行独立云端网页工作台，请把它设到另一个端口（例如 `8766`）。工作台自己的数据库与手机账号工作区分开。完整检出两个目录后再启动手机网关，不使用旧版单独的手机源码包。
+如同时运行独立云端网页工作台，请把它设到另一个端口（例如 `8767`）。工作台自己的数据库与手机账号工作区分开。请使用完整的 ScreenMind 仓库启动手机网关。

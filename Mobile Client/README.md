@@ -122,11 +122,33 @@ Windows 中文目录下请使用 `scripts/build.ps1`：脚本会使用一个空�
 
 ## AuraFlow 首页联调
 
-Windows 上双击仓库根目录的 [一键启动模拟器.cmd](../一键启动模拟器.cmd)，即可打开 `ScreenMind35` 的微光主页和后台模拟输入控制台。重复启动会复用运行中的服务和虚拟设备，保留当前场景。启动器从 `local.properties` 或 Android SDK 环境变量定位工具，日志保存在 `%LOCALAPPDATA%\ScreenMind\home-simulator`。首次使用空白虚拟设备时，使用下方的联调账号登录。
+### Windows 首次安装前置条件
+
+1. 完整克隆 ScreenMind 仓库，保留同级的 `Mobile Client`、`Cloud Agent` 和 `ChronoCapsule`。安装 Python 3.12 或更新版本，以及用于构建 Android 的 JDK 17，并将 `JAVA_HOME` 指向 JDK 目录。
+2. 用 Android Studio 打开 `Mobile Client`。在 **SDK Manager** 中安装 **Android SDK Platform 35**、**Android SDK Build-Tools**、**Android SDK Platform-Tools** 和 **Android Emulator**。用 `Mobile Client/local.properties` 的 `sdk.dir` 或环境变量 `ANDROID_HOME` 指向 SDK 目录。
+3. 在 **Device Manager** 中创建名为 `ScreenMind35` 的虚拟设备，选择 Android 15（API 35）x86_64 系统镜像。若 AVD 放在自定义目录，将 `ANDROID_AVD_HOME` 指向包含 `ScreenMind35.ini` 的目录。
+4. 从仓库根目录打开 PowerShell，安装后端依赖并构建调试 APK。
+
+   ```powershell
+   Set-Location '.\Mobile Client'
+   py -3 -m venv .venv
+   .\.venv\Scripts\python.exe -m pip install -r .\backend\requirements.lock.txt
+   .\gradlew.bat :app:assembleDebug
+   ```
+
+   如果 Python 安装时只提供了 `python` 命令，用 `python -m venv .venv` 创建虚拟环境。首次安装和构建需要联网。构建产物位于 `Mobile Client/app/build/outputs/apk/debug/app-debug.apk`。
+
+### 启动与首次登录
+
+双击仓库根目录的 [一键启动模拟器.cmd](../一键启动模拟器.cmd)，启动本地网关（`8765`）、后台模拟输入控制台（`8766`）和 Android 模拟器。脚本会安装调试 APK 并配置 `adb reverse`。重复启动会复用运行中的服务和虚拟设备，保留当前场景。启动日志位于 `%LOCALAPPDATA%\ScreenMind\home-simulator`。
+
+首次使用空白虚拟设备时，在[首页事件控制台](http://127.0.0.1:8766/)选择一个场景并点击「发送至本步」。控制台会在 `%LOCALAPPDATA%\ScreenMind\home-simulator\studio-account.json` 生成专用测试账号。用其中的 `username` 和 `password` 登录微光，登录页「服务连接」使用 `http://127.0.0.1:8765`。之后即可在手机首页查看控制台下发的事件。
+
+控制台的「1.2 首页下发」显示时间轴，展开「全部事件」中的卡片可查看详情积木。全场景示例的参考时刻为当日 12:16（UTC+8），模拟凭证和行情仅供联调。
+
+### 手动启动与接口
 
 在本目录启动移动网关，将 `PYTHONPATH` 指向同级的 `Cloud Agent`，用 `WEIGUANG_DB` 指定独立测试库，设置 `SCREENMIND_PROVIDER=mock`。网关命令为 `python -m uvicorn backend.main:app --host 127.0.0.1 --port 8765`。在第二个终端运行 `python -m scripts.home_simulator.server`，打开 [首页事件控制台](http://127.0.0.1:8766/)。
-
-选场景先看模拟报文，点「发送至本步」即可把相同输入送到本地网关。「1.2 首页下发」显示时间轴，展开「全部事件」中的卡片可查看详情积木。模拟器可通过 `adb reverse tcp:8765 tcp:8765` 连接 `http://127.0.0.1:8765`，使用控制台首次联调时生成在 `%LOCALAPPDATA%/ScreenMind/home-simulator/studio-account.json` 的专用测试账号。全场景示例的参考时刻为当日 12:16（UTC+8），模拟凭证和行情仅供联调。
 
 首页入口为 `GET /api/v1/home/timeline`，详情入口为 `GET /api/v1/events/{eventId}/detail`，两者复用网关 Bearer 会话。完整接口和参数可在[本地网关接口文档](http://127.0.0.1:8765/docs)查看。SSE 建连与重连先发当前快照，随后发送事件变更。
 
