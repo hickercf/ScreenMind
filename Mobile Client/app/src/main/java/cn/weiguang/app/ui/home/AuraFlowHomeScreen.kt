@@ -101,6 +101,14 @@ fun AuraFlowHomeScreen(
     val sdui by remember(model, events, decisions) { derivedStateOf { model.effectiveHomeSdui(events, decisions) } }
     var now by remember { mutableStateOf(ZonedDateTime.now()) }
     val agenda = remember(sdui, now) { sdui.agenda(now) }
+    val localContext = sdui.localContext?.takeUnless { sdui.showcaseMode }
+    val homeCity = localContext?.city
+    val weatherStatus = localContext?.weather?.status
+    var showCityDialog by remember(session?.accountKey) { mutableStateOf(false) }
+    var placeEventId by remember(session?.accountKey) { mutableStateOf<String?>(null) }
+    LaunchedEffect(session?.accountKey, homeCity?.code, weatherStatus) {
+        if (homeCity != null && weatherStatus == "not_loaded") model.homeRefreshWeather()
+    }
     var activeDetailId by remember(session?.accountKey, sdui.showcaseMode) { mutableStateOf<String?>(null) }
     var gapSheetCardId by remember { mutableStateOf<String?>(null) }
     var alertSheetCardId by remember { mutableStateOf<String?>(null) }
@@ -184,6 +192,9 @@ fun AuraFlowHomeScreen(
                         color = AuraColors.TextSecondary,
                         fontSize = 11.5.sp
                     )
+                    localContext?.let {
+                        HomeWeatherButton(it, enabled = !model.busy) { showCityDialog = true }
+                    }
                     if (sdui.showcaseMode && sdui.dayMode == DayMode.ACTIVE_TIMELINE) {
                         Text(
                             text = "今日 ${sdui.events.size} 项安排 · ${if (proposalCount > 0) "$proposalCount 项待拍板" else "全部已确认"}",
@@ -273,6 +284,10 @@ fun AuraFlowHomeScreen(
                     onDraft = { title, at -> model.editor = EditorDraft(title, type = "schedule", occurredAt = at?.toInstant()?.toString()) },
                     onDismiss = { model.homeDismissMisjudgment(it) },
                     onReminder = model::homeDismissReminder,
+                    homeContext = localContext,
+                    onPlace = { placeEventId = it.id },
+                    onEstimate = { from, to -> model.homeEstimateWalk(from, to) },
+                    estimating = model.busy,
                     onShift = { item ->
                         val source = events.find { it.eventId == item.card.sourceEventId }
                         if (source != null && item.card.sourceWorkId == null) {
@@ -426,7 +441,11 @@ fun AuraFlowHomeScreen(
             } },
             onConfirm = { model.homeConfirmCard(card.id) },
             onComplete = { model.homeCompleteCard(card.id); activeDetailId = null },
-            onDismiss = { model.homeDismissMisjudgment(card.id); activeDetailId = null })
+            onDismiss = { model.homeDismissMisjudgment(card.id); activeDetailId = null },
+            place = localContext?.places?.get(card.id),
+            onPlace = localContext?.takeIf { card.lifecycleStage != LifecycleStage.ARCHIVED }?.let {
+                { activeDetailId = null; placeEventId = card.id }
+            })
     } else if (activeDetailCard != null) {
         val header = detailWire?.optJSONObject("header")
         val noPlans = detailWire?.let { it.optString("lifecycleStage") == "PROPOSAL" && it.isNull("stickyDock") } == true
@@ -466,6 +485,27 @@ fun AuraFlowHomeScreen(
         if (archived != null) AlertDialog(onDismissRequest = { activeDetailId = null },
             title = { Text(archived.title) }, text = { Text(detailWire?.optJSONObject("header")?.optString("subtitle") ?: archived.summary) },
             confirmButton = { TextButton(onClick = { activeDetailId = null }) { Text("关闭") } })
+    }
+
+    if (localContext != null && showCityDialog) {
+        HomeCityDialog(localContext, onSelect = { city ->
+            showCityDialog = false
+            model.homeSelectCity(city.code)
+        }, onDismiss = { showCityDialog = false })
+    }
+    val placeCard = sdui.findCard(placeEventId)
+    val account = session?.accountKey
+    if (localContext != null && placeCard != null && account != null) {
+        HomePlaceDialog(localContext.cities, homeCity, localContext.places[placeCard.id],
+            suggested = placeCard.sourceFacts().firstOrNull { it.first == "地点" }?.second.orEmpty(),
+            search = { city, query ->
+                HomePlaceResults.fromJson(model.repository.searchHomePlaces(account, city.code, query))
+            },
+            onSelect = { choice ->
+                placeEventId = null
+                model.homeSetPlace(placeCard.id, choice?.id)
+            },
+            onDismiss = { placeEventId = null })
     }
 
     // Mini Bottom Sheet: Gap Suggestion

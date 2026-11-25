@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from . import auraflow_contract as wire
+from .home_context import CITIES, city_view
 from .home_timing import shift_schedule
 from .home_sdui import HomeSduiAction, apply_home_action, build_home_sdui, load_user_state, save_user_state
 
@@ -38,6 +39,20 @@ class Explore(Body):
     lat: float | None = Field(None, ge=-90, le=90)
     lng: float | None = Field(None, ge=-180, le=180)
     excludePlanIds: list[str] = Field(default_factory=list, max_length=100)
+
+
+class CityInput(Body):
+    cityCode: str = Field(min_length=6, max_length=6)
+
+
+class PlaceInput(Body):
+    placeId: str = Field(pattern=r"^[A-Za-z0-9_-]{1,64}$")
+
+
+class CommuteInput(Body):
+    date: Day
+    fromEventId: str = Field(min_length=1, max_length=120)
+    toEventId: str = Field(min_length=1, max_length=120)
 
 
 class Confirm(Body):
@@ -72,8 +87,9 @@ def require_editable(card):
 
 
 class Home:
-    def __init__(self, conn, hub, uid):
+    def __init__(self, conn, hub, uid, context):
         self.conn, self.hub, self.uid = conn, hub, uid
+        self.context = context
         self.state = load_user_state(conn, uid)
         self.live = not self.state["showcaseMode"]
         self.doc = build_home_sdui(conn, hub, uid, live=self.live)
@@ -87,7 +103,27 @@ class Home:
         self.state = load_user_state(self.conn, self.uid)
 
     def timeline(self, day=None):
-        return wire.timeline(self.doc, day or today(), self.state)
+        selected = day or today()
+        result = wire.timeline(self.doc, selected, self.state)
+        if self.live:
+            context = self.context.snapshot(self.state, wire.pool(self.doc), selected)
+            result["homeContext"] = context
+            weather = context["weather"]
+            if weather["status"] == "available":
+                city = context["city"]["name"]
+                result["ambientHeader"]["weatherSummary"] = f"{city} · {weather['condition']} {weather['temperatureC']:g}°C"
+        return result
+
+    def require_live(self):
+        if not self.live:
+            raise HTTPException(409, "请先退出演示模式")
+
+    def commute_pair(self, body):
+        self.require_live()
+        for first, second in self.context.pairs(wire.pool(self.doc), body.date):
+            if (first["id"], second["id"]) == (body.fromEventId, body.toEventId):
+                return first, second
+        raise HTTPException(409, "日程顺序已变化，请刷新后再估算")
 
     def detail(self, eid, caps="NATIVE_V1"):
         edits = self.state.get("detailEdits", {}).get(eid)
@@ -149,7 +185,7 @@ def install(app, main, open_conn):
             await hub.restore_existing(user["id"])
             with closing(open_conn()) as conn, conn:
                 conn.execute("BEGIN IMMEDIATE" if write else "BEGIN")
-                yield Home(conn, hub, user["id"])
+                yield Home(conn, hub, user["id"], request.app.state.home_context)
 
     @router.get("/home/timeline")
     async def timeline(request: Request, date: Day | None = None, lat: float | None = Query(None, ge=-90, le=90),
@@ -164,6 +200,80 @@ def install(app, main, open_conn):
                     archivedEvents=[home.native_card(c) for c in home.doc["archivedEvents"]],
                     crossDayRelay=home.native_card(relay) if relay else None, exploreIndex=settings.get("exploreIndex", home.doc["exploreIndex"]))
             return result
+
+    @router.put("/home/context/city")
+    async def select_city(body: CityInput, request: Request, user=auth):
+        if body.cityCode not in CITIES:
+            raise HTTPException(422, "请选择支持的城市")
+        async with session(request, user, True) as home:
+            home.require_live()
+            home.state["homeCityCode"] = body.cityCode
+            home.save()
+        context = request.app.state.home_context
+        if context.enabled:
+            await context.refresh_weather(body.cityCode)
+        return {"city": city_view(body.cityCode), "weather": context.weather(body.cityCode)}
+
+    @router.post("/home/context/weather/refresh")
+    async def refresh_weather(request: Request, user=auth):
+        async with session(request, user) as home:
+            home.require_live()
+            code = home.state.get("homeCityCode")
+        context = request.app.state.home_context
+        if city_view(code) and context.enabled:
+            await context.refresh_weather(code)
+        return {"city": city_view(code), "weather": context.weather(code)}
+
+    @router.get("/places/search")
+    async def search_places(request: Request, cityCode: str = Query(min_length=6, max_length=6),
+                            query: str = Query(min_length=2, max_length=80), user=auth):
+        if cityCode not in CITIES:
+            raise HTTPException(422, "请选择支持的城市")
+        if len(query.strip()) < 2:
+            raise HTTPException(422, "请输入至少两个字的地点关键词")
+        return await request.app.state.home_context.search(cityCode, query.strip())
+
+    @router.put("/events/{eventId}/place")
+    async def confirm_place(eventId: str, body: PlaceInput, request: Request, user=auth):
+        async with session(request, user) as home:
+            home.require_live()
+            find(home.doc, eventId)
+        result = await request.app.state.home_context.resolve_place(body.placeId)
+        if result["status"] == "empty":
+            raise HTTPException(404, "找不到该地点，请重新搜索")
+        if result["status"] != "available":
+            raise HTTPException(503, "地点服务暂不可用")
+        place = {k: result["place"][k] for k in ("placeId", "name", "address")}
+        async with session(request, user, True) as home:
+            home.require_live()
+            find(home.doc, eventId)
+            home.state.setdefault("homePlaces", {})[eventId] = {**place, "source": "amap"}
+            home.save()
+        return place
+
+    @router.delete("/events/{eventId}/place")
+    async def clear_place(eventId: str, request: Request, user=auth):
+        async with session(request, user, True) as home:
+            home.require_live()
+            find(home.doc, eventId)
+            home.state.setdefault("homePlaces", {}).pop(eventId, None)
+            home.save()
+        return {"ok": True}
+
+    @router.post("/home/commutes/refresh")
+    async def refresh_commute(body: CommuteInput, request: Request, user=auth):
+        async with session(request, user) as home:
+            first, second = home.commute_pair(body)
+            places = home.state.get("homePlaces", {})
+            estimate = home.context.commute(first, second, body.date, places)
+            if estimate["status"] != "not_loaded":
+                return estimate
+            origin = places[first["id"]]["placeId"]
+            destination = places[second["id"]]["placeId"]
+        await request.app.state.home_context.refresh_walk(origin, destination)
+        async with session(request, user) as home:
+            first, second = home.commute_pair(body)
+            return home.context.commute(first, second, body.date, home.state.get("homePlaces", {}))
 
     @router.get("/events/{eventId}/detail")
     async def detail(eventId: str, request: Request, clientCapabilities: str = "NATIVE_V1",

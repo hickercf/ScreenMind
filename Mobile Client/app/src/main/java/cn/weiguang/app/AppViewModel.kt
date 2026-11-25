@@ -486,6 +486,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         )
     }
 
+    fun homeSelectCity(code: String) =
+        updateHomeContext("/api/v1/home/context/city", "PUT", JSONObject().put("cityCode", code))
+
+    fun homeRefreshWeather() =
+        updateHomeContext("/api/v1/home/context/weather/refresh", "POST", JSONObject())
+
+    fun homeSetPlace(eventId: String, placeId: String?) {
+        val path = "/api/v1/events/" + Uri.encode(eventId) + "/place"
+        updateHomeContext(path, if (placeId == null) "DELETE" else "PUT", JSONObject().put("placeId", placeId))
+    }
+
+    fun homeEstimateWalk(from: String, to: String) {
+        val date = java.time.LocalDate.now(java.time.ZoneOffset.ofHours(8)).toString()
+        updateHomeContext("/api/v1/home/commutes/refresh", "POST",
+            JSONObject().put("date", date).put("fromEventId", from).put("toEventId", to))
+    }
+
+    private fun updateHomeContext(path: String, method: String, body: JSONObject) {
+        val current = session.value?.takeUnless { it.endpoint == "offline" } ?: return
+        action {
+            val result = repository.homeContractAction(current.accountKey, path, method, body)
+            if (session.value?.accountKey == current.accountKey) serverHomeSdui = AuraFlowState.fromJson(result)
+        }
+    }
+
     fun homeSetWeather(weather: String) {
         dispatchHomeAction(
             JSONObject().put("action", "set_weather").put("weather", weather),

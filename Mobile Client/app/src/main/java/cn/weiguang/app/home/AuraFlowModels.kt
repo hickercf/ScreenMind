@@ -459,6 +459,7 @@ data class AuraFlowState(
     val focusId: String? = null,
     val focusAt: String? = null,
     val focusInProgress: Boolean = false,
+    val localContext: HomeLocalContext? = null,
     val simulatedAt: String? = null,
     val focusProgress: Float = 0f,
     val fromServer: Boolean = false
@@ -535,6 +536,7 @@ data class AuraFlowState(
                     timelineIds = obj.optJSONArray("timelineEvents").toList { it.getString("eventId") },
                     focusId = focus?.optionalText("eventId"), focusAt = focus?.optionalText("countdownTargetIso"),
                     focusInProgress = focus?.optString("timeStatus") == "IN_PROGRESS",
+                    localContext = obj.optJSONObject("homeContext")?.let(HomeLocalContext::fromJson),
                     simulatedAt = obj.optionalText("simulatedAt"),
                     focusProgress = focus?.optDouble("progressRatio", 0.0)?.toFloat() ?: 0f, wireJson = wire.toString(2))
             }

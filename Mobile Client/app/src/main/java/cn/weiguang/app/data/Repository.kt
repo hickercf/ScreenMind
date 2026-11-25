@@ -379,6 +379,13 @@ class Repository(private val context: Context, val database: AppDatabase) {
         authenticated("/api/v1/events/" + android.net.Uri.encode(id) + "/detail")
     }
 
+    suspend fun searchHomePlaces(account: String, city: String, query: String): JSONObject = mutex.withLock {
+        check(session.value?.accountKey == account) { "账号已变化" }
+        val encoded = android.net.Uri.encode(query)
+        val code = android.net.Uri.encode(city)
+        authenticated("/api/v1/places/search?cityCode=$code&query=$encoded")
+    }
+
     suspend fun homeContractAction(account: String, path: String, method: String, body: JSONObject): JSONObject = mutex.withLock {
         check(session.value?.accountKey == account) { "账号已变化" }
         authenticated(path, method, body)

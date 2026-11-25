@@ -32,7 +32,11 @@ private val dayFormat = DateTimeFormatter.ofPattern("M月d日")
 internal fun HomeAgendaView(
     agenda: HomeAgenda, now: ZonedDateTime, onDetail: (AuraCard) -> Unit,
     onDraft: (String, ZonedDateTime?) -> Unit, onDismiss: (String) -> Unit,
-    onReminder: (String) -> Unit, onShift: (AgendaEntry) -> Unit
+    onReminder: (String) -> Unit, onShift: (AgendaEntry) -> Unit,
+    homeContext: HomeLocalContext?,
+    onPlace: (AuraCard) -> Unit,
+    onEstimate: (String, String) -> Unit,
+    estimating: Boolean
 ) {
     var history by rememberSaveable { mutableStateOf(false) }
     if (agenda.past.isNotEmpty()) {
@@ -100,9 +104,43 @@ internal fun HomeAgendaView(
             val nextStart = next?.start(now.zone)
             if (start != null && next != null && nextStart != null) {
                 val gap = Duration.between(start, nextStart).toMinutes()
+                val commute = homeContext?.commutes?.firstOrNull { it.from == item.card.id && it.to == next.card.id }
+                if (commute != null && gap >= 0) {
+                    when (commute.status) {
+                        "available" -> {
+                            val minutes = commute.routeMinutes
+                            val remaining = commute.remainingMinutes
+                            val buffer = commute.bufferMinutes
+                            if (minutes != null && remaining != null && buffer != null) {
+                                val suffix = if (remaining < 0) "还差 ${-remaining} 分钟"
+                                    else "还剩 $remaining 分钟"
+                                val label = "步行约 $minutes 分钟 · 留 $buffer 分钟缓冲，$suffix"
+                                if (remaining < 0) TextButton(onClick = { onShift(next) }) {
+                                    Text(label, color = AuraColors.ExploreGold)
+                                } else Text(label, color = AuraColors.TextSecondary, fontSize = 12.sp)
+                            }
+                        }
+                        "place_needed" -> {
+                            val card = if (homeContext?.places?.containsKey(item.card.id) == true) next.card else item.card
+                            TextButton(onClick = { onPlace(card) }, enabled = !estimating) {
+                                Text("补充地点，估算步行", color = AuraColors.Explore)
+                            }
+                        }
+                        "not_loaded", "unavailable", "empty" -> TextButton(
+                            onClick = { onEstimate(item.card.id, next.card.id) }, enabled = !estimating
+                        ) {
+                            Text(when (commute.status) {
+                                "unavailable" -> "步行估算暂不可用 · 重试"
+                                "empty" -> "暂未找到步行路线 · 重试"
+                                else -> "估算步行时间"
+                            }, color = AuraColors.Explore)
+                        }
+                        "time_needed" -> Text("结束时间待确认", color = AuraColors.TextSecondary, fontSize = 12.sp)
+                    }
+                }
                 if (gap > 180) TextButton(onClick = { onDraft("", start.plusMinutes(gap / 2)) }) {
                     Text("空档 ${gap / 60} 小时 ${gap % 60} 分 · 添加安排", color = AuraColors.Explore)
-                } else if (gap < 50) TextButton(onClick = { onShift(next) }) {
+                } else if (gap < 0 || (gap < 50 && commute == null)) TextButton(onClick = { onShift(next) }) {
                     Text(if (gap < 0) "重叠 ${-gap} 分钟 · 调整下一项" else "相隔 $gap 分钟 · 调整下一项", color = AuraColors.ExploreGold)
                 }
             }
@@ -121,7 +159,8 @@ internal fun HomeAgendaView(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun SourceDetailSheet(card: AuraCard, dateLabel: String, onClose: () -> Unit, onEdit: (() -> Unit)?,
-                              onAgent: (() -> Unit)?, onConfirm: () -> Unit, onComplete: () -> Unit, onDismiss: () -> Unit) {
+                              onAgent: (() -> Unit)?, onConfirm: () -> Unit, onComplete: () -> Unit, onDismiss: () -> Unit,
+                              place: HomePlace? = null, onPlace: (() -> Unit)? = null) {
     val palette = auraPalette(card.themeKey)
     ModalBottomSheet(onDismissRequest = onClose, containerColor = AuraColors.SheetBg, contentColor = AuraColors.TextPrimary) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 22.dp).padding(bottom = 28.dp),
@@ -141,6 +180,13 @@ internal fun SourceDetailSheet(card: AuraCard, dateLabel: String, onClose: () ->
                         }
                     }
                 }
+            }
+            if (place != null) {
+                Text(place.name, color = AuraColors.TextPrimary, fontSize = 14.sp)
+                if (place.address.isNotBlank()) Text(place.address, color = AuraColors.TextSecondary, fontSize = 12.sp)
+            }
+            if (onPlace != null) TextButton(onClick = onPlace) {
+                Text(if (place == null) "选择日程地点" else "更换地点")
             }
             if (card.originalText.isNotBlank()) {
                 HorizontalDivider(color = AuraColors.Hairline)

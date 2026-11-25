@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Literal
 from uuid import UUID, uuid4
 
+import httpx
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
@@ -84,11 +85,17 @@ def initialize():
 async def lifespan(app):
     initialize()
     from .agent_bridge import AgentHub
+    from .home_context import HomeContext
     from screenmind.api import ProcessLock
     lock = ProcessLock(database_path().with_suffix('.gateway'))
     app.state.agent_hub = AgentHub(database_path)
     try:
-        yield
+        async with httpx.AsyncClient(trust_env=False) as client:
+            app.state.home_context = HomeContext(client, os.getenv("SCREENMIND_AMAP_WEB_KEY", "").strip())
+            try:
+                yield
+            finally:
+                await app.state.home_context.close()
     finally:
         await app.state.agent_hub.close()
         lock.close()

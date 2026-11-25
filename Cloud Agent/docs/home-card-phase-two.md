@@ -2,7 +2,22 @@
 
 记录日期为 2026-11-25。以本地提交 `0ecdd66` 的 Android 首页、详情和手机网关为基线。第一批已打通时间、状态、实时下发和操作写回。第二批建议先验证这样一条链路。在明确的出发地和下一站之间判断是否来得及，再给出能按时完成的空档安排。天气为这条链路提供环境信息，报价和凭证需要各自的供应商能力。[第一批接口](home-card-api.md) · [视觉参考](https://chatgpt.com/s/m_6b041cdc1568819184370bd2232a90a5)
 
-## 当前实现和缺口
+## 首段本地实现
+
+网关环境变量 `SCREENMIND_AMAP_WEB_KEY` 用于启用高德 Web 服务调用。第一轮提供北京、上海、广州、深圳、杭州和成都的手选入口，天气使用行政区编码。确认日程地点和估算步行都由用户操作触发，选地点的搜索城市可独立于首页天气城市。当前采用步行模式和 5 分钟缓冲，作为首轮规则。路线估算针对查询当时，可用于判断计划是否宽裕。[高德天气](https://lbs.amap.com/api/webservice/guide/api/weatherinfo) · [高德地点搜索](https://lbs.amap.com/api/webservice/guide/api/newpoisearch) · [高德步行路线](https://lbs.amap.com/api/webservice/guide/api/newroute)
+
+| 接口 | 本次约定 |
+| --- | --- |
+| `GET /api/v1/home/timeline` | 真实账号快照新增 `homeContext`，包含可选城市、天气、已核对地点和同日相邻日程的步行状态。保留 `weatherSummary` 和 `nativeState` 兼容 |
+| `PUT /api/v1/home/context/city` | 传 `cityCode`，保存当前账号选的城市，尝试取得天气 |
+| `POST /api/v1/home/context/weather/refresh` | 读取账号选定城市后刷新，App 可在数据到期时调用 |
+| `GET /api/v1/places/search` | 传 `cityCode` 和 `query`，返回名称、地址、地点 ID，供用户区分同名地点 |
+| `PUT /api/v1/events/{eventId}/place` 与 `DELETE /api/v1/events/{eventId}/place` | 使用 `placeId` 选中真实候选，或清除已选地点。按当前账号和事件校验 |
+| `POST /api/v1/home/commutes/refresh` | 传 `date`、`fromEventId`、`toEventId`，校验相邻顺序。提供步行分钟、缓冲、距离、估算时间和剩余分钟 |
+
+首页和 SSE 使用已取得的结果。天气和路线按时效短期复用，临时失败会保留原有时间轴并显示可重试的状态。天气查询失败后保持该状态，由用户主动刷新重试。缺少时间或地点时，首页按已知安排显示。未配置供应商密钥时仍可选城市，天气和步行数据会显示暂不可用。本轮已用替身响应完成本地联调，供应商实际返回、覆盖范围和账号权限待实测。附近推荐与报价沿用后续交付顺序。
+
+## 首段实施前的实现和缺口
 
 | 能力 | 当前实现 | 第二批需要解决 |
 | --- | --- | --- |
