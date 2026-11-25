@@ -127,7 +127,7 @@ object AuraFlowEngine {
     )
 
     fun defaultGapSpots(): List<GapSpot> = listOf(
-        GapSpot("12:00", "西岸美术馆特展", "步行 8m · 沉浸看展 1.5h", "12:00 · 距离 650m · 蓬皮杜当代艺术展"),
+        GapSpot("12:00", "西岸美术馆特展", "步行 8m · 沉浸看展 1.5h", "12:00 · 距离 650m · 蓬皮杜当代艺术展", durationMinutes = 90),
         GapSpot("12:15", "独立手冲咖啡馆", "静谧办公位 · 距出发顺路", "12:15 · 距离 320m · 埃塞单品 + 安静电源位")
     )
 

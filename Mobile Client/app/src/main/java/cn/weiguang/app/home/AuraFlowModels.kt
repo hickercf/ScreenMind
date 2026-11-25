@@ -162,14 +162,16 @@ data class GapSpot(
     val time: String,
     val title: String,
     val subtitle: String,
-    val detail: String
+    val detail: String,
+    val durationMinutes: Int? = null
 ) {
     companion object {
         fun fromJson(obj: JSONObject) = GapSpot(
             time = obj.optString("time", "12:00"),
             title = obj.optString("title"),
             subtitle = obj.optString("subtitle"),
-            detail = obj.optString("detail")
+            detail = obj.optString("detail"),
+            durationMinutes = obj.optInt("durationMinutes").takeIf { it > 0 }
         )
     }
 }
@@ -378,7 +380,9 @@ data class AuraCard(
     val checklist: List<ChecklistItem> = emptyList(),
     val notes: List<NoteItem> = emptyList(),
     val exploreMeta: ExploreMeta? = null,
-    val detailBlocks: List<String> = emptyList()
+    val detailBlocks: List<String> = emptyList(),
+    val endsAt: String? = null,
+    val allDay: Boolean = false
 ) {
     fun toSummaryJson(): JSONObject = JSONObject()
         .put("id", id)
@@ -392,6 +396,7 @@ data class AuraCard(
     companion object {
         fun fromJson(obj: JSONObject): AuraCard {
             val category = AuraCategory.parse(obj.optString("category"))
+            val timing = obj.optJSONObject("timing")
             val plansArr = obj.optJSONArray("plans")
             val travelPlans = if (category == AuraCategory.TRAVEL) plansArr.toList { TravelPlan.fromJson(it) } else emptyList()
             val diningPlans = if (category == AuraCategory.DINING) plansArr.toList { DiningPlan.fromJson(it) } else emptyList()
@@ -411,7 +416,7 @@ data class AuraCard(
                 sourceEventId = obj.optionalText("sourceEventId"),
                 sourceWorkId = obj.optionalText("sourceWorkId"),
                 sourceTaskId = obj.optionalText("sourceTaskId"),
-                scheduledAt = obj.optionalText("scheduledAt"),
+                scheduledAt = timing?.optionalText("startAt") ?: obj.optionalText("scheduledAt"),
                 capturedAt = obj.optionalText("capturedAt"),
                 completedAt = obj.optionalText("completedAt"),
                 reminderStrip = ReminderStrip.fromJson(obj.optJSONObject("reminderStrip")),
@@ -424,7 +429,9 @@ data class AuraCard(
                 checklist = obj.optJSONArray("checklist").toList { ChecklistItem.fromJson(it) },
                 notes = obj.optJSONArray("notes").toList { NoteItem.fromJson(it) },
                 exploreMeta = ExploreMeta.fromJson(obj.optJSONObject("exploreMeta")),
-                detailBlocks = obj.optJSONArray("detailBlocks").toStringList()
+                detailBlocks = obj.optJSONArray("detailBlocks").toStringList(),
+                endsAt = timing?.optionalText("endAt") ?: obj.optionalText("endsAt"),
+                allDay = timing?.optBoolean("allDay") ?: obj.optBoolean("allDay")
             )
         }
     }
@@ -451,6 +458,7 @@ data class AuraFlowState(
     val timelineIds: List<String>? = null,
     val focusId: String? = null,
     val focusAt: String? = null,
+    val focusInProgress: Boolean = false,
     val simulatedAt: String? = null,
     val focusProgress: Float = 0f,
     val fromServer: Boolean = false
@@ -526,6 +534,7 @@ data class AuraFlowState(
                 return base.copy(dayMode = DayMode.parse(obj.optString("dayMode")),
                     timelineIds = obj.optJSONArray("timelineEvents").toList { it.getString("eventId") },
                     focusId = focus?.optionalText("eventId"), focusAt = focus?.optionalText("countdownTargetIso"),
+                    focusInProgress = focus?.optString("timeStatus") == "IN_PROGRESS",
                     simulatedAt = obj.optionalText("simulatedAt"),
                     focusProgress = focus?.optDouble("progressRatio", 0.0)?.toFloat() ?: 0f, wireJson = wire.toString(2))
             }

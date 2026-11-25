@@ -5,7 +5,9 @@ import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 
 data class AgendaEntry(val card: AuraCard, val date: LocalDate?, val clock: LocalTime?, val end: ZonedDateTime? = null) {
-    fun start(zone: ZoneId): ZonedDateTime? = if (date != null && clock != null) date.atTime(clock).atZone(zone) else null
+    fun start(zone: ZoneId): ZonedDateTime? = if (date != null && clock != null) {
+        instantAt(card.scheduledAt, zone) ?: date.atTime(clock).atZone(zone)
+    } else null
 }
 
 data class HomeAgenda(
@@ -72,6 +74,13 @@ private fun rangeEnd(card: AuraCard, start: ZonedDateTime): ZonedDateTime? {
 }
 
 private fun entry(card: AuraCard, now: ZonedDateTime): AgendaEntry {
+    if (card.allDay) {
+        fun sourceDate(value: String?): LocalDate? = value?.let {
+            runCatching { OffsetDateTime.parse(it).toLocalDate() }.getOrNull()
+        }
+        return AgendaEntry(card.copy(time = "全天"), sourceDate(card.scheduledAt), null,
+            sourceDate(card.endsAt)?.atStartOfDay(now.zone))
+    }
     val exact = instantAt(card.scheduledAt, now.zone)
     val captured = instantAt(card.capturedAt, now.zone)?.toLocalDate()
     val base = captured ?: now.toLocalDate()
@@ -84,13 +93,15 @@ private fun entry(card: AuraCard, now: ZonedDateTime): AgendaEntry {
         runCatching { LocalTime.parse(label) }.getOrNull()
     } else null
     val date = exact?.toLocalDate() ?: dateIn(timing, reference) ?: captured?.takeIf { clock != null }
-    val start = if (clock != null && date != null) date.atTime(clock).atZone(now.zone) else null
-    return AgendaEntry(card.copy(time = clock?.format(clockFormat) ?: "时间待定"), date, clock, start?.let { rangeEnd(card, it) })
+    val start = exact ?: if (clock != null && date != null) date.atTime(clock).atZone(now.zone) else null
+    val end = instantAt(card.endsAt, now.zone) ?: start?.let { rangeEnd(card, it) }
+    return AgendaEntry(card.copy(time = clock?.format(clockFormat) ?: "时间待定"), date, clock, end)
 }
 
 fun AuraFlowState.agenda(now: ZonedDateTime): HomeAgenda {
     val day = now.toLocalDate()
     val minute = now.withSecond(0).withNano(0)
+    val dayStart = day.atStartOfDay(now.zone)
     val today = mutableListOf<AgendaEntry>()
     val later = mutableListOf<AgendaEntry>()
     val unscheduled = mutableListOf<AgendaEntry>()
@@ -109,7 +120,7 @@ fun AuraFlowState.agenda(now: ZonedDateTime): HomeAgenda {
         val complete = card.lifecycleStage == LifecycleStage.ARCHIVED
         val completionDay = instantAt(card.completedAt, now.zone)?.toLocalDate()
         when {
-            !complete && date != null && date < day && (item.end == null || item.end.toLocalDate() < day) -> continue
+            !complete && date != null && date < day && (item.end == null || !item.end.isAfter(dayStart)) -> continue
             complete || (item.end?.let { !it.isAfter(now) } ?: (start != null && date == day && start < minute)) -> {
                 if ((completionDay ?: date ?: day) == day || item.end?.toLocalDate() == day) past += ArchivedCard(card.id, card.time, "", card.title,
                     if (complete) "已完成" else if (item.end != null) "已过结束时间" else "已过开始时间", card.sourceWorkId)

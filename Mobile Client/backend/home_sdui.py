@@ -22,6 +22,11 @@ from uuid import uuid4
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 
+from .home_timing import (
+    ZONE, calendar_range_end, clock, duration_label, event_bounds, event_day, gap_duration_minutes, gap_subtitle,
+    shift_schedule, timestamp,
+)
+
 
 PROTOCOL_VERSION = "2.4.0"
 
@@ -119,6 +124,7 @@ DEFAULT_GAP_SPOTS = [
         "time": "12:00",
         "title": "西岸美术馆特展",
         "subtitle": "步行 8m · 沉浸看展 1.5h",
+        "durationMinutes": 90,
         "detail": "12:00 · 距离 650m · 蓬皮杜当代艺术展",
     },
     {
@@ -257,6 +263,7 @@ def showcase_template() -> dict[str, Any]:
                 "themeKey": "office",
                 "lifecycleStage": "CONFIRMED",
                 "time": "10:30",
+                "durationMinutes": 30,
                 "title": "行前简报 · 客户端需求对齐",
                 "subtitle": "线上腾讯会议 · 30m 速会",
                 "badge": "已就绪",
@@ -342,6 +349,7 @@ def showcase_template() -> dict[str, Any]:
             "direction": "return",
             "lifecycleStage": "PROPOSAL",
             "time": "周日 15:00",
+            "relativeDayHint": "周日",
             "title": "上海 → 北京 · 返程提案",
             "subtitle": "未订票（提前48h唤醒）",
             "badge": "未订票",
@@ -425,13 +433,9 @@ def classify_category(text: str, subagent_id: str | None = None) -> tuple[str, s
 
 
 def extract_time_minutes(text: str, iso_time: str | None = None, default_minutes: int = 14 * 60) -> tuple[str, int]:
-    if iso_time:
-        try:
-            dt = datetime.fromisoformat(iso_time.replace("Z", "+00:00"))
-            local_dt = dt.astimezone() if dt.tzinfo else dt
-            return local_dt.strftime("%H:%M"), local_dt.hour * 60 + local_dt.minute
-        except ValueError:
-            pass
+    if stamp := timestamp(iso_time):
+        local = stamp.astimezone(ZONE)
+        return local.strftime("%H:%M"), local.hour * 60 + local.minute
     m = _TIME_RE.search(text)
     if m:
         h, mi = int(m.group(1)), int(m.group(2))
@@ -446,14 +450,6 @@ def extract_time_minutes(text: str, iso_time: str | None = None, default_minutes
         if 0 <= h <= 23 and 0 <= mi <= 59:
             return f"{h:02d}:{mi:02d}", h * 60 + mi
     return f"{default_minutes // 60:02d}:{default_minutes % 60:02d}", default_minutes
-
-
-def _shift_hhmm(time_str: str, delta_minutes: int) -> str:
-    m = _TIME_RE.search(time_str)
-    if not m:
-        return time_str
-    total = (int(m.group(1)) * 60 + int(m.group(2)) + delta_minutes) % (24 * 60)
-    return f"{total // 60:02d}:{total % 60:02d}"
 
 
 def _short_title(text: str, category: str) -> str:
@@ -479,18 +475,26 @@ def _build_card_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
             event.get("event_type") != "schedule" and not (_SCHEDULE_RE.search(text) or _TIME_RE.search(text) or _CN_TIME_RE.search(text))):
         return None
     captured = event.get("captured_at")
+    end = event.get("ended_at")
+    if end is None and source == "calendar":
+        end = calendar_range_end(at, text)
     time_str, minutes = extract_time_minutes(text, at)
-    if not (at or _TIME_RE.search(text) or _CN_TIME_RE.search(text)):
+    all_day = bool(event.get("all_day"))
+    if all_day:
+        time_str, minutes = "全天", 0
+    elif not (at or _TIME_RE.search(text) or _CN_TIME_RE.search(text)):
         time_str, minutes = "待定", 24 * 60
     source_label = {"calendar": "系统日历", "screenshot_ocr": "截图识别"}.get(source, "手动记录")
     joke = bool(_JOKE_RE.search(text))
     confirmed = not joke and (bool(_CONFIRMED_RE.search(text)) or source == "calendar" or (event.get("event_type") == "schedule" and at is not None))
     return {
         "id": f"evt_{event['event_id']}", "sourceEventId": event["event_id"],
+        "sourceEventRevision": event["revision"],
         "category": category, "themeKey": theme, "isMisjudgment": joke,
         "lifecycleStage": "CONFIRMED" if confirmed else "PROPOSAL",
         "badge": "已出票" if confirmed and _TICKET_RE.search(text) else "已确认" if confirmed else "待确认",
-        "time": time_str, "_sortMin": minutes, "scheduledAt": at, "capturedAt": captured,
+        "time": time_str, "_sortMin": minutes, "scheduledAt": at, "endsAt": end,
+        "allDay": all_day, "capturedAt": captured,
         "title": _short_title(text, category), "originalText": text, "subtitle": source_label,
         "entities": [source_label], "detailBlocks": ["SOURCE_DETAIL"],
         "hasAlert": bool(_ALERT_RE.search(text)),
@@ -503,8 +507,34 @@ def _return_leg(card: dict[str, Any]) -> dict[str, Any] | None:
     if card["category"] != "TRAVEL" or not match:
         return None
     return {**card, "id": card["id"] + "_return", "direction": "return",
-            "title": "返程安排", "time": match[1], "scheduledAt": None,
+            "title": "返程安排", "time": match[1], "relativeDayHint": match[1],
+            "scheduledAt": None, "endsAt": None, "allDay": False, "ticketSourceEventId": None,
             "lifecycleStage": "PROPOSAL", "badge": "待确认", "detailBlocks": ["SOURCE_DETAIL"]}
+
+
+def _link_ticket_receipts(cards):
+    itineraries = [c for c in cards if c["category"] == "TRAVEL"
+                   and c["badge"] != "已出票" and not c["isMisjudgment"]]
+    linked = set()
+    today = datetime.now(ZONE).date()
+    receipts = [c for c in cards if c["category"] == "TRAVEL" and c["badge"] == "已出票"]
+    for receipt in receipts:
+        services = {number.upper() for number in _SERVICE_RE.findall(receipt["originalText"])}
+        captured = timestamp(receipt.get("capturedAt"))
+        if not services or captured is None:
+            continue
+        receipt_day = captured.astimezone(ZONE).date()
+        candidates = [c for c in itineraries if (stamp := timestamp(c.get("capturedAt")))
+                      and stamp.astimezone(ZONE).date() == receipt_day
+                      and services.intersection(n.upper() for n in _SERVICE_RE.findall(c["originalText"]))]
+        if receipt.get("scheduledAt"):
+            candidates = [c for c in candidates if event_day(c, today) == event_day(receipt, today)]
+        if len(candidates) == 1:
+            target = candidates[0]
+            target.update(lifecycleStage="CONFIRMED", badge="已出票")
+            target.setdefault("ticketSourceEventId", receipt["sourceEventId"])
+            linked.add(receipt["id"])
+    return [c for c in cards if c["id"] not in linked]
 
 
 def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -577,7 +607,8 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
             participants = plan.get("participants") or []
             attending = [p for p in participants if p.get("status") == "attending"]
             declined = [p for p in participants if p.get("status") == "declined"]
-            time_str, sort_min = extract_time_minutes(plan.get("time", ""), None, default_minutes=18 * 60)
+            at_iso = plan.get("time") or ""
+            time_str, sort_min = extract_time_minutes(at_iso, at_iso, default_minutes=18 * 60)
             active_cards.append({
                 "id": f"work_{wid}_party",
                 "sourceWorkId": wid,
@@ -634,7 +665,7 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
     return active_cards, archived_cards
 
 
-def _compute_connectors(events: list[dict[str, Any]], alert_card_id: str | None) -> None:
+def _compute_connectors(events: list[dict[str, Any]], day, alert_card_id: str | None) -> None:
     """Apply the 4 dynamic connector semantics between adjacent timeline nodes."""
     for idx, ev in enumerate(events):
         if idx == len(events) - 1:
@@ -646,18 +677,18 @@ def _compute_connectors(events: list[dict[str, Any]], alert_card_id: str | None)
         nxt = events[idx + 1]
         if ev.get("hasAlert") or (alert_card_id and ev["id"] == alert_card_id):
             ev["connectorToNext"] = {
-                "connectorState": "ALERT_PULSE",
+                "connectorState": "ALERT_PULSE", "targetEventId": nxt["id"],
                 "label": f"{ev['title'][:12]} 监测到异常变动 · 点击查看 B 计划",
             }
             continue
-        cur_min = ev.get("_sortMin")
-        nxt_min = nxt.get("_sortMin")
-        if isinstance(cur_min, int) and isinstance(nxt_min, int):
-            gap = nxt_min - cur_min
+        cur_start, cur_end = event_bounds(ev, day)
+        nxt_start, _ = event_bounds(nxt, day)
+        if cur_start and nxt_start and not (ev.get("allDay") or nxt.get("allDay")):
+            gap = int((nxt_start - (cur_end or cur_start)).total_seconds() // 60)
             if gap < 50:
                 ev["connectorToNext"] = {
                     "connectorState": "CONFLICT_DASHED",
-                    "label": f"间隔仅 {max(gap, 5)}m · 衔接紧张",
+                    "label": f"重叠 {abs(gap)} 分钟" if gap < 0 else f"间隔 {gap} 分钟 · 衔接紧张",
                     "actionLabel": "一键顺延 30m",
                 }
             elif gap > 180:
@@ -665,6 +696,7 @@ def _compute_connectors(events: list[dict[str, Any]], alert_card_id: str | None)
                 ev["connectorToNext"] = {
                     "connectorState": "GAP_SUGGESTION",
                     "gapHours": f"{hours}h",
+                    "gapMinutes": gap,
                     "label": f"空档 {hours}h · 附近补白 ✦",
                     "gapSpots": copy.deepcopy(DEFAULT_GAP_SPOTS),
                 }
@@ -678,15 +710,19 @@ def _compute_connectors(events: list[dict[str, Any]], alert_card_id: str | None)
                 "connectorState": "NORMAL_SOLID",
                 "label": "行程充裕",
             }
+        ev["connectorToNext"]["targetEventId"] = nxt["id"]
 
 
 def _apply_overrides(card: dict[str, Any], overrides: dict[str, Any]) -> None:
     ov = overrides.get(card["id"])
     if not isinstance(ov, dict):
         return
-    for key in ("lifecycleStage", "completedAt", "selectedPlanIdx", "time", "scheduledAt", "title", "subtitle", "badge"):
+    for key in ("lifecycleStage", "completedAt", "selectedPlanIdx", "time", "scheduledAt", "endsAt",
+                "endTime", "scheduleDate", "title", "subtitle", "badge"):
         if key in ov:
             card[key] = ov[key]
+    if card.get("ticketSourceEventId") and card.get("lifecycleStage") != "ARCHIVED":
+        card.update(lifecycleStage="CONFIRMED", badge="已出票")
     if "reminderDismissed" in ov and isinstance(card.get("reminderStrip"), dict):
         card["reminderStrip"]["dismissed"] = bool(ov["reminderDismissed"])
     if "connectorToNext" in ov:
@@ -750,7 +786,7 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
             for ev in timeline_events:
                 if ev["id"] == "evt_travel_outbound":
                     p = ev["plans"][0]
-                    ev["lifecycleStage"] = "CONFIRMED"
+                    ev.update(lifecycleStage="CONFIRMED", time=p["dep"], endTime=p["arr"])
                     ev["title"] = f"北京 → 上海 · {p['carrier'].split(' ')[1]}"
                     ev["subtitle"] = f"{p['depHub']} · {p['seat']}"
                     ev["badge"] = "已出票"
@@ -765,12 +801,7 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
         archived_events.extend(agent_archived)
         timeline_events.extend(agent_active)
         clue_cards = [card for event in raw_events if (card := _build_card_from_event(event))]
-        tickets = {(service.upper(), card["capturedAt"][:10]) for card in clue_cards
-                   if card["badge"] == "已出票" for service in _SERVICE_RE.findall(card["originalText"])}
-        for card in clue_cards:
-            if card["category"] == "TRAVEL" and card["lifecycleStage"] == "PROPOSAL" and not card["isMisjudgment"]:
-                if any((service.upper(), card["capturedAt"][:10]) in tickets for service in _SERVICE_RE.findall(card["originalText"])):
-                    card.update(lifecycleStage="CONFIRMED", badge="已出票")
+        for card in _link_ticket_receipts(clue_cards):
             timeline_events.append(card)
             if cross_day_relay is None and card["id"] not in dismissed:
                 cross_day_relay = _return_leg(card)
@@ -778,7 +809,15 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
     # Merge user-adopted explore / gap-filled cards
     for adopted in user_state.get("adoptedEvents") or []:
         if adopted.get("id") not in dismissed:
-            timeline_events.append(copy.deepcopy(adopted))
+            card = copy.deepcopy(adopted)
+            if card["id"].startswith("evt_gap_"):
+                minutes = card.get("durationMinutes") or gap_duration_minutes(card.get("subtitle"))
+                card["durationMinutes"] = minutes
+                if isinstance(card.get("exploreMeta"), dict):
+                    card["exploreMeta"]["duration"] = duration_label(minutes)
+                if minutes is not None and isinstance(card.get("subtitle"), str):
+                    card["subtitle"] = gap_subtitle(card["subtitle"], minutes)
+            timeline_events.append(card)
 
     # Optional simulated joke misjudgment card
     if user_state.get("simulatedJoke") and "evt_joke_paris" not in dismissed:
@@ -812,15 +851,19 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
 
     if showcase_mode:
         completed = [card for card in timeline_events if card["lifecycleStage"] == "ARCHIVED"]
-        archived_events.extend({**card, "endTime": "", "summary": "已标记完成"} for card in completed)
+        archived_events.extend({**card, "summary": "已标记完成"} for card in completed)
         timeline_events = [card for card in timeline_events if card["lifecycleStage"] != "ARCHIVED"]
         if user_state.get("adoptedEvents"):
             timeline_events.sort(key=lambda card: extract_time_minutes(card["time"], default_minutes=1440)[1])
     else:
         timeline_events.sort(key=lambda x: extract_time_minutes(x["time"], default_minutes=1440)[1])
+        by_day = {}
+        today = datetime.now(ZONE).date()
         for card in timeline_events:
-            card["_sortMin"] = extract_time_minutes(card["time"], default_minutes=1440)[1]
-        _compute_connectors(timeline_events, user_state.get("simulatedAlertCardId"))
+            if card["lifecycleStage"] != "ARCHIVED":
+                by_day.setdefault(event_day(card, today), []).append(card)
+        for day, cards in by_day.items():
+            _compute_connectors(cards, day, user_state.get("simulatedAlertCardId"))
 
     # On-device day grouping uses the viewer’s time zone. Live gaps have no venue provider.
     for ev in timeline_events:
@@ -915,6 +958,7 @@ class HomeSduiAction(BaseModel):
     item_idx: int | None = Field(default=None, ge=0, le=50)
     shift_minutes: int | None = Field(default=30, ge=5, le=240)
     time: str | None = Field(default=None, max_length=32)
+    duration_minutes: int | None = Field(default=None, strict=True, gt=0, le=1440)
     title: str | None = Field(default=None, max_length=120)
     subtitle: str | None = Field(default=None, max_length=200)
     choice: str | None = Field(default=None, max_length=64)
@@ -937,7 +981,8 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         state = showcase.get("liveState") or default_user_state()
     overrides = state.setdefault("cardOverrides", {})
     act = req.action
-    date_key = datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+    day = datetime.now(ZONE).date()
+    date_key = day.isoformat()
     daily = state.get("days", {}).get(date_key, {})
     if act in ("set_day_mode", "adopt_explore"):
         daily.pop("mode", None)
@@ -950,12 +995,18 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         if act == "dismiss_misjudgment" and req.card_id in state["dismissedIds"]:
             return build_home_sdui(conn, agent_hub, user_id, live=live)
         doc = build_home_sdui(conn, agent_hub, user_id, live=live)
-        cards = doc["events"] + ([doc["crossDayRelay"]] if doc["crossDayRelay"] else [])
+        cards = doc["events"] + doc["archivedEvents"] + ([doc["crossDayRelay"]] if doc["crossDayRelay"] else [])
         target = next((card for card in cards if card["id"] == req.card_id), None)
         if target is None:
             raise HTTPException(404, "首页事项已变化，请刷新")
         if act in ("confirm_card", "complete_card") and target.get("sourceWorkId"):
             raise HTTPException(409, "请在关联的云端事项中处理")
+        if act == "complete_card" and target["lifecycleStage"] == "ARCHIVED":
+            return doc
+        if act == "confirm_card" and target["lifecycleStage"] == "ARCHIVED":
+            raise HTTPException(409, "已归档事项不能重新确认")
+        if act == "dismiss_misjudgment" and target["lifecycleStage"] != "PROPOSAL":
+            raise HTTPException(409, "仅可移除待确认提案")
     if act == "complete_card":
         completion = overrides.setdefault(req.card_id, {})
         completion.setdefault("completedAt", datetime.now(timezone.utc).isoformat())
@@ -1028,7 +1079,8 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
             if cat == "TRAVEL" and plans and 0 <= p_idx < len(plans):
                 p = plans[p_idx]
                 direction = target.get("direction", "outbound")
-                ov["time"] = p["dep"]
+                ov.update(time=p["dep"], endTime=p["arr"], endsAt=None, scheduledAt=None,
+                          scheduleDate=event_day(target, day).isoformat())
                 ov["title"] = f"{'上海 → 北京' if direction == 'return' else '北京 → 上海'} · {p['carrier'].split(' ')[-1]}"
                 ov["subtitle"] = f"{p['depHub']} · {p['seat']}"
                 ov["badge"] = "已出票"
@@ -1060,7 +1112,10 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         if idx is not None and idx + 1 < len(events):
             nxt = events[idx + 1]
             nxt_ov = overrides.setdefault(nxt["id"], {})
-            nxt_ov["time"] = _shift_hhmm(nxt["time"], req.shift_minutes or 30)
+            shifted = shift_schedule(nxt, event_day(nxt, day), req.shift_minutes or 30)
+            if not shifted:
+                raise HTTPException(409, "事项没有可顺延的开始时间")
+            nxt_ov.update(shifted)
 
     elif act == "insert_gap_spot":
         if not req.card_id or not req.title:
@@ -1068,15 +1123,22 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         ov = overrides.setdefault(req.card_id, {})
         ov["connectorToNext"] = {"connectorState": "NORMAL_SOLID", "label": "顺路衔接"}
         t_str = req.time or "12:00"
+        if clock(t_str) is None:
+            raise HTTPException(422, "空档安排需提供有效的开始时间")
+        suggestion = next((spot for spot in DEFAULT_GAP_SPOTS if spot["title"] == req.title and spot["time"] == t_str), {})
+        minutes = req.duration_minutes or gap_duration_minutes(req.subtitle) or suggestion.get("durationMinutes")
+        subtitle = gap_subtitle(req.subtitle or "顺路轻去处", minutes)
         new_card = {
-            "id": f"evt_gap_{int(time.time() * 1000)}",
+            "id": f"evt_gap_{uuid4().hex}",
             "category": "EXPLORE",
             "themeKey": "explore",
             "lifecycleStage": "CONFIRMED",
             "time": t_str,
+            "scheduleDate": date_key,
+            "durationMinutes": minutes,
             "_sortMin": extract_time_minutes(t_str)[1],
             "title": req.title,
-            "subtitle": req.subtitle or "顺路轻去处",
+            "subtitle": subtitle,
             "badge": "补白已定",
             "connectorToNext": {"connectorState": "NORMAL_SOLID", "label": "准时衔接下一程"},
             "_connectorLocked": True,
@@ -1084,9 +1146,9 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
             "detailBlocks": ["EXPLORE_ROUTE_CARD"],
             "exploreMeta": {
                 "tripTitle": req.title,
-                "duration": "1.5 小时",
-                "note": req.subtitle or "顺路轻去处",
-                "stops": [{"time": t_str, "name": req.title, "dist": "当前附近", "note": req.subtitle or ""}],
+                "duration": duration_label(minutes),
+                "note": subtitle,
+                "stops": [{"time": t_str, "name": req.title, "dist": "当前附近", "note": subtitle}],
                 "currentStopIdx": 0,
             },
         }
@@ -1102,7 +1164,8 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         if req.choice == "switch_hsr":
             ov["selectedPlanIdx"] = 1
             ov["lifecycleStage"] = "CONFIRMED"
-            ov["time"] = "12:00"
+            backup = _default_travel_plans()[1]
+            ov.update(time=backup["dep"], endTime=backup["arr"], endsAt=None, scheduledAt=None, scheduleDate=date_key)
             ov["title"] = "北京 → 上海 · 复兴号 G14"
             ov["subtitle"] = "北京南站 · 05车 08F · 准点 99%"
             ov["badge"] = "已改签"
@@ -1110,7 +1173,7 @@ def apply_home_action(conn, agent_hub, user_id: str, req: HomeSduiAction, *, liv
         else:
             ov["connectorToNext"] = {"connectorState": "NORMAL_SOLID", "label": "B 计划已生效 · 晚宴延至 19:30"}
             din_ov = overrides.setdefault("evt_dining_bund", {})
-            din_ov["time"] = "19:30"
+            din_ov.update(time="19:30", endsAt=None, scheduledAt=None, scheduleDate=date_key)
             din_ov["subtitle"] = "已自动顺延 · 包厢已留座至 19:45"
 
     elif act == "toggle_checklist":

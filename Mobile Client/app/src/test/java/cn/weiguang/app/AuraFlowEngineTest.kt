@@ -74,6 +74,25 @@ class AuraFlowEngineTest {
         assertEquals(1, state.agenda(now.plusMinutes(30)).past.size)
     }
 
+    @Test fun syncedAgendaUsesStructuredEndAndAllDayDates() {
+        val now = java.time.ZonedDateTime.parse("2026-11-23T14:30:00+08:00[Asia/Shanghai]")
+        val state = AuraFlowState.fromJson(JSONObject(
+            """
+            {"events": [
+              {"id":"meeting","category":"OFFICE","lifecycleStage":"CONFIRMED","title":"评审会议",
+               "timing":{"startAt":"2026-11-23T06:00:00Z","endAt":"2026-11-23T07:00:00Z","allDay":false}},
+              {"id":"all-day","category":"OFFICE","lifecycleStage":"CONFIRMED","title":"展览",
+               "timing":{"startAt":"2026-11-23T00:00:00+09:00","endAt":"2026-11-24T00:00:00+09:00","allDay":true}}
+            ]}
+            """.trimIndent()
+        ))
+        val today = state.agenda(now).today.associateBy { it.card.id }
+        assertEquals(15, today.getValue("meeting").end?.hour)
+        assertEquals("全天", today.getValue("all-day").card.time)
+        assertEquals(null, today.getValue("all-day").start(now.zone))
+        assertTrue(state.agenda(now.plusDays(1)).today.isEmpty())
+    }
+
     @Test fun serverSduiJsonRoundTripParsesCleanly() {
         val raw = JSONObject(
             """

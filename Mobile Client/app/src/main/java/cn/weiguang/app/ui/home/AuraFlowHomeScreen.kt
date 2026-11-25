@@ -409,7 +409,14 @@ fun AuraFlowHomeScreen(
         val entry = (agenda.today + agenda.later + agenda.unscheduled).find { it.card.id == activeDetailCard.id }
         val card = entry?.card ?: activeDetailCard
         val source = events.find { it.eventId == card.sourceEventId }
-        val dateLabel = listOfNotNull(entry?.date?.format(DateTimeFormatter.ofPattern("M月d日")), card.time).joinToString(" ")
+        val endLabel = entry?.takeIf { it.clock != null }?.let { item ->
+            item.end?.let { end ->
+                val format = if (end.toLocalDate() == item.date) "HH:mm" else "M月d日 HH:mm"
+                end.format(DateTimeFormatter.ofPattern(format))
+            }
+        }
+        val timeLabel = endLabel?.let { "${card.time}–$it" } ?: card.time
+        val dateLabel = listOfNotNull(entry?.date?.format(DateTimeFormatter.ofPattern("M月d日")), timeLabel).joinToString(" ")
         SourceDetailSheet(card, dateLabel, { activeDetailId = null },
             onEdit = source?.let { { activeDetailId = null; model.edit(it) } },
             onAgent = card.sourceWorkId?.takeIf { session?.endpoint != "offline" }?.let { workId -> {
@@ -605,9 +612,9 @@ private fun ActiveTimelineView(
         )
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text("NOW · 此刻焦点", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                Text("此刻焦点", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
                 Text(
-                    if (focusConfirmed) "已确认 · 点击亮码" else "待拍板 · 点击选方案",
+                    if (focusConfirmed) "查看详情" else "查看方案",
                     color = focusPalette.accent,
                     fontSize = 10.sp,
                     fontFamily = FontFamily.Monospace
@@ -629,7 +636,11 @@ private fun ActiveTimelineView(
                             Text(focus.time, color = focusPalette.accent, fontSize = 12.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.SemiBold)
                             Text("·", color = AuraColors.TextMuted)
                             Text(
-                                if (focusConfirmed) "已同步实时动态" else "AI 推荐方案就绪",
+                                when {
+                                    state.focusInProgress -> "进行中"
+                                    focusConfirmed -> "已确认"
+                                    else -> "待确认"
+                                },
                                 color = AuraColors.TextSecondary,
                                 fontSize = 11.sp,
                                 maxLines = 1,
@@ -649,25 +660,19 @@ private fun ActiveTimelineView(
                             fontFamily = FontFamily.Monospace,
                             fontWeight = FontWeight.Bold
                         )
-                        Text(if (focusConfirmed) "后开始" else "后出发", color = AuraColors.TextSecondary, fontSize = 10.sp)
+                        Text(if (state.focusInProgress) "后结束" else "后开始", color = AuraColors.TextSecondary, fontSize = 10.sp)
                     }
                 }
-                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Box(Modifier.weight(1f).height(4.dp).clip(CircleShape).background(Color(0x16FFFFFF))) {
+                if (state.focusProgress > 0f) {
+                    Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Color(0x16FFFFFF))) {
                         Box(
                             Modifier
                                 .fillMaxHeight()
-                                .fillMaxWidth(if (state.timelineIds != null) state.focusProgress.coerceIn(0f, 1f) else if (focusConfirmed) 0.72f else 0.38f)
+                                .fillMaxWidth(state.focusProgress.coerceIn(0f, 1f))
                                 .clip(CircleShape)
                                 .background(Brush.horizontalGradient(listOf(focusPalette.accent, focusPalette.alt)))
                         )
                     }
-                    Text(
-                        if (focusConfirmed) "ACTIVE" else "PROPOSAL",
-                        color = AuraColors.TextSecondary,
-                        fontSize = 9.5.sp,
-                        fontFamily = FontFamily.Monospace
-                    )
                 }
             }
         }
@@ -676,7 +681,7 @@ private fun ActiveTimelineView(
     // 3. Luminous Vertical Timeline + 4 Dynamic Connector States
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Text("TIMELINE · 流光日程轴", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+            Text("今日日程", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
             Text("点击卡片展开 · 虚框左滑雾化", color = AuraColors.TextMuted, fontSize = 10.sp)
         }
 

@@ -44,7 +44,7 @@ internal fun HomeAgendaView(
         }
     }
 
-    val first = agenda.today.firstOrNull()
+    val first = agenda.today.firstOrNull { it.clock != null } ?: agenda.today.firstOrNull()
     val accent = first?.let { auraPalette(it.card.themeKey).accent } ?: AuraColors.Explore
     val shape = RoundedCornerShape(24.dp)
     var idea by rememberSaveable(now.toLocalDate().toString()) { mutableIntStateOf(0) }
@@ -65,11 +65,15 @@ internal fun HomeAgendaView(
             }
         } else {
             val seconds = first.start(now.zone)?.let { Duration.between(now, it).seconds }
+            val remaining = first.end?.let { Duration.between(now, it).seconds }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                 Text("此刻焦点", color = accent, fontSize = 13.sp)
                 Text(when {
+                    first.card.allDay -> "全天"
                     seconds == null -> "时间待定"
-                    seconds <= 0 -> if (first.end != null) "进行中" else "现在开始"
+                    seconds <= 0 && remaining != null && remaining > 0 ->
+                        "进行中 · ${(remaining + 59) / 60} 分钟后结束"
+                    seconds <= 0 -> "现在开始"
                     else -> "距开始 ${(seconds + 59) / 60} 分钟"
                 }, color = accent, fontSize = 13.sp)
             }

@@ -92,7 +92,7 @@ fun AuraDetailModalSheet(
                         Box(Modifier.width(38.dp).height(4.dp).clip(CircleShape).background(Color(0x33FFFFFF)))
                         Spacer(Modifier.height(4.dp))
                         Text(
-                            text = "L1 · ${palette.label} · ${card.lifecycleStage.name}",
+                            text = palette.label,
                             color = palette.accent,
                             fontSize = 10.sp,
                             fontFamily = FontFamily.Monospace
@@ -128,7 +128,13 @@ fun AuraDetailModalSheet(
                                 .border(1.dp, palette.accent.copy(alpha = 0.4f), CircleShape)
                                 .padding(horizontal = 9.dp, vertical = 4.dp)
                         ) {
-                            Text(card.lifecycleStage.name, color = palette.accent, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+                            Text(card.badge.ifBlank {
+                                when (card.lifecycleStage) {
+                                    LifecycleStage.PROPOSAL -> "待确认"
+                                    LifecycleStage.CONFIRMED -> "已确认"
+                                    LifecycleStage.ARCHIVED -> "已完成"
+                                }
+                            }, color = palette.accent, fontSize = 11.sp)
                         }
                     }
                     if (card.entities.isNotEmpty()) {

@@ -1,59 +1,21 @@
 """Wire representations for the AuraFlow 1.2 home and event-detail endpoints."""
-from datetime import datetime, time, timedelta, timezone
-import re
+from datetime import datetime, time, timedelta
 
-ZONE = timezone(timedelta(hours=8))
+from .home_timing import ZONE, ZONE_LABEL, event_bounds, event_day, event_time, timing
+
 THEMES = {"TRAVEL": "TRAVEL_CYAN", "DINING": "DINING_AMBER", "SHOPPING": "SHOPPING_EMERALD",
           "EXPLORE": "EXPLORE_TEAL", "OFFICE": "OFFICE_VIOLET"}
 CONFIRM = {"TRAVEL": "BOOK_FLIGHT_TICKET", "DINING": "RESERVE_TABLE", "SHOPPING": "CLAIM_COUPON"}
 
 
-def timestamp(value):
-    if value:
-        try:
-            return datetime.fromisoformat(value).astimezone(ZONE)
-        except ValueError:
-            pass
-    return None
-
-
-def event_time(card, day):
-    stamp = timestamp(card.get("scheduledAt"))
-    if stamp:
-        return stamp
-    value = card.get("time", "")
-    if re.fullmatch(r"\d{2}:\d{2}", value):
-        return datetime.combine(day, time.fromisoformat(value), ZONE)
-    return None
-
-
-def event_day(card, fallback):
-    stamp = timestamp(card.get("scheduledAt") or card.get("completedAt"))
-    if stamp:
-        return stamp.date()
-    captured = timestamp(card.get("capturedAt"))
-    if captured is None:
-        return fallback
-    base = captured.date()
-    text = card.get("originalText", "")
-    # A later return phrase belongs to the relay, not the outbound clue.
-    text = re.split(r"[，,。；;]", text, maxsplit=1)[0]
-    relative = re.search(r"今天|今日|今晚|明天|明早|明日|后天|(?:(下|本|这)?周([一二三四五六日天]))", text)
-    if not relative:
-        return base
-    if relative.group(2):
-        weekday = "一二三四五六日".index(relative[2].replace("天","日"))
-        delta = weekday - base.weekday()
-        if relative[1] == "下":
-            delta += 7
-        elif delta < 0 and not relative[1]:
-            delta += 7
-        return base + timedelta(days=delta)
-    return base + timedelta(days={"明天":1,"明早":1,"明日":1,"后天":2}.get(relative[0], 0))
-
-
 def pool(doc):
     return doc["events"] + doc["archivedEvents"] + ([doc["crossDayRelay"]] if doc["crossDayRelay"] else [])
+
+
+def source_view(card):
+    names = {"eventId": "sourceEventId", "revision": "sourceEventRevision", "receiptEventId": "ticketSourceEventId",
+             "workId": "sourceWorkId", "taskId": "sourceTaskId"}
+    return {key: card[field] for key, field in names.items() if card.get(field) is not None}
 
 
 def checklist(card):
@@ -70,7 +32,7 @@ def card_view(card, day, now):
     theme = THEMES.get(category, "GENERIC_SILVER")
     proposal = stage == "PROPOSAL"
     eid = card["id"]
-    stamp = event_time(card, day)
+    stamp = event_time(card, day) if not card.get("allDay") else None
     items = checklist(card)
     badge = {"type": "CTA_PILL" if proposal else "STATUS_TEXT", "text": card.get("badge", "已结束")}
     if not proposal and category == "SHOPPING" and items:
@@ -90,7 +52,8 @@ def card_view(card, day, now):
             "category": category, "lifecycleStage": stage, "themeToken": theme, "title": card["title"],
             "subtitle": card.get("subtitle", card.get("summary", "")), "rightBadge": badge,
             "isDismissible": proposal, "sourceHint": card.get("subtitle") if proposal and card.get("sourceEventId") else None,
-            "prepReminder": prep, "detailRoute": route, "connectorToNext": None}
+            "prepReminder": prep, "detailRoute": route, "connectorToNext": None,
+            "timing": timing(card, day), "source": source_view(card)}
 
 
 def explore_view(doc, index):
@@ -107,51 +70,83 @@ def explore_view(doc, index):
                                "headline": weather["city"]}, "currentPlan": plan, "refreshToken": plan["planId"] if plan else None}
 
 
-def timeline(doc, day, state, now=None):
-    now = now or datetime.now(ZONE)
-    if doc["showcaseMode"]:
-        now = now.replace(hour=12, minute=16, second=0, microsecond=0)
-    def belongs(card):
-        return day == event_day(card, now.date())
+def home_now(doc):
+    now = datetime.now(ZONE)
+    return now.replace(hour=12, minute=16, second=0, microsecond=0) if doc["showcaseMode"] else now
 
-    cards = [c for c in doc["events"] if belongs(c) and c.get("lifecycleStage") != "ARCHIVED"]
-    cards.sort(key=lambda c: event_time(c, day) or datetime.max.replace(tzinfo=ZONE))
-    archived = [c for c in doc["archivedEvents"] + doc["events"] if c.get("lifecycleStage") == "ARCHIVED" and belongs(c)]
+
+def timeline(doc, day, state, now=None):
+    now = now or home_now(doc)
+    today = now.astimezone(ZONE).date()
+
+    def belongs(card):
+        start_day = event_day(card, today)
+        if day == start_day:
+            return True
+        if day < start_day:
+            return False
+        _, end = event_bounds(card, start_day)
+        if end is None:
+            return False
+        return day < end.date() if card.get("allDay") else end > datetime.combine(day, time.min, ZONE)
+
+    dated = [c for c in pool(doc) if belongs(c)]
+    cards = [c for c in dated if c.get("lifecycleStage") != "ARCHIVED"]
+    def order(card):
+        start = event_time(card, event_day(card, today))
+        return not card.get("allDay"), start or datetime.max.replace(tzinfo=ZONE), card["id"]
+
+    cards.sort(key=order)
+    archived = [c for c in dated if c.get("lifecycleStage") == "ARCHIVED"]
     daily = state.get("days", {}).get(day.isoformat(), {})
-    mode = daily.get("mode") or (doc["dayMode"] if doc["dayModeOverride"] != "AUTO" and day == now.date() else None)
+    mode = daily.get("mode") or (doc["dayMode"] if doc["dayModeOverride"] != "AUTO" and day == today else None)
     mode = mode or ("ACTIVE_TIMELINE" if cards else "EMPTY_EXPLORE")
     if mode == "ACTIVE_TIMELINE" and not cards:
         mode = "EMPTY_EXPLORE"
     relay = doc.get("crossDayRelay")
-    group = None
-    if relay:
-        parent = next((c for c in cards if c["category"] == "TRAVEL" and
-                       ((relay.get("sourceEventId") and c.get("sourceEventId") == relay["sourceEventId"]) or
-                        (doc["showcaseMode"] and c["id"] == "evt_travel_outbound"))), None)
-        group = "trip_" + parent["id"] if parent else None
-    views = [card_view(c, day, now) for c in cards] if mode == "ACTIVE_TIMELINE" else []
+    parent = next((c for c in doc["events"] if c["category"] == "TRAVEL" and
+                   ((relay.get("sourceEventId") and c.get("sourceEventId") == relay["sourceEventId"]) or
+                    (doc["showcaseMode"] and c["id"] == "evt_travel_outbound"))), None) if relay else None
+    group = "trip_" + parent["id"] if parent else None
+    views = [card_view(c, event_day(c, today), now) for c in cards] if mode == "ACTIVE_TIMELINE" else []
     if group:
         for v in views:
-            if v["eventId"] == parent["id"]:
+            if v["eventId"] in (parent["id"], relay["id"]):
                 v["tripGroupId"] = group
+
     focus = None
-    if views:
-        idx = next((i for i, c in enumerate(cards) if (event_time(c, day) or now) >= now), None)
-        if idx is not None:
-            focus = views.pop(idx)
-            c = cards[idx]
-            stamp = event_time(c, day)
-            checklist_items = checklist(c)
-            ratio = sum(i["checked"] for i in checklist_items) / len(checklist_items) if checklist_items else 0.0
-            focus.update(statusLabel="即将开始" if stamp else "待安排", countdownTargetIso=stamp.isoformat() if stamp else None,
-                         progressRatio=ratio, primaryMeta=c.get("entities", [])[:3],
-                         quickCta={"label": "去拍板" if focus["isDismissible"] else "查看详情",
+    if views and day == today:
+        ongoing = None
+        upcoming = None
+        for index, card in enumerate(cards):
+            if card.get("allDay"):
+                continue
+            start, end = event_bounds(card, event_day(card, today))
+            if start and end and start <= now < end and card["lifecycleStage"] == "CONFIRMED":
+                ongoing = (index, end)
+                break
+            if upcoming is None and start and start >= now:
+                upcoming = (index, start)
+        choice = ongoing or upcoming
+        if choice:
+            index, target = choice
+            focus = views.pop(index)
+            card = cards[index]
+            items = checklist(card)
+            progress = sum(i["checked"] for i in items) / len(items) if items else 0.0
+            focus.update(timeStatus="IN_PROGRESS" if ongoing else "UPCOMING",
+                         statusLabel="进行中" if ongoing else "即将开始",
+                         countdownTargetIso=target.isoformat(), progressRatio=progress,
+                         primaryMeta=card.get("entities", [])[:3],
+                         quickCta={"label": "查看方案" if focus["isDismissible"] else "查看详情",
                                    "routeTarget": "DETAIL_PROPOSAL" if focus["isDismissible"] else "DETAIL_HOLO"})
     by_id = {c["id"]: c for c in cards}
     original_next = {a["id"]: b["id"] for a, b in zip(doc["events"], doc["events"][1:])}
     for current, following in zip(views, views[1:]):
         c = by_id[current["eventId"]]
-        raw = c.get("connectorToNext") if original_next.get(c["id"]) == following["eventId"] else None
+        raw = c.get("connectorToNext")
+        if raw and raw.get("targetEventId", original_next.get(c["id"])) != following["eventId"]:
+            raw = None
         conn = {"style": "NORMAL_SOLID", "label": ""}
         if raw:
             style = raw["connectorState"]
@@ -161,23 +156,30 @@ def timeline(doc, day, state, now=None):
                                           "payload": {"targetEventId": following["eventId"], "shiftMinutes": 30}}
             elif style == "GAP_SUGGESTION":
                 conn["suggestions"] = raw.get("gapSpots", [])
-                gap = raw.get("gapHours")
-                if gap:
-                    conn["gapMinutes"] = round(float(gap.rstrip("h")) * 60)
+                if "gapMinutes" in raw:
+                    conn["gapMinutes"] = raw["gapMinutes"]
+                elif raw.get("gapHours"):
+                    conn["gapMinutes"] = round(float(raw["gapHours"].rstrip("h")) * 60)
             elif style == "ALERT_PULSE":
                 conn.update(severity="HIGH", alertType="DELAY", planBOptions=[
                     {"actionId": "APPLY_PLAN_B", "payload": {"eventId": c["id"], "choice": choice}}
                     for choice in ("switch_hsr", "shift_dinner")] if doc["showcaseMode"] else [])
         current["connectorToNext"] = conn
-    archive_views = [dict(card_view(c, day, now), summaryTag=c.get("summary", "已结束")) for c in archived]
+    archive_views = [dict(card_view(c, event_day(c, today), now), summaryTag=c.get("summary", "已结束")) for c in archived]
+    anchors = []
+    if group and parent in cards and event_day(relay, today) != day and mode == "ACTIVE_TIMELINE":
+        anchors.append({"tripGroupId": group, "targetDate": event_day(relay, today).isoformat(),
+                        "targetDateDisplay": relay["time"], "title": relay["title"],
+                        "hintText": relay["subtitle"], "targetEventId": relay["id"]})
     pill = {"serviceState": "IDLE_LISTENING", "statusText": "灵枢静默感知中", "accentToken": "TRAVEL_CYAN", "linkedEventId": None}
-    return {"schemaVersion": "1.2", "date": day.isoformat(), "dayMode": mode,
+    return {"schemaVersion": "1.2", "date": day.isoformat(), "timezone": ZONE_LABEL, "dayMode": mode,
+            "summary": {"scheduledCount": len(cards), "pendingCount": sum(c["lifecycleStage"] == "PROPOSAL" for c in cards),
+                        "completedCount": len(archived)},
             "simulatedAt": now.isoformat() if doc["showcaseMode"] else None,
             "ambientHeader": {"dateDisplay": f"{day.month}月{day.day}日 · 周{'一二三四五六日'[day.weekday()]}",
                               "weatherSummary": doc["weatherContext"]["label"], "capturePill": pill},
             "archivedSection": {"count": len(archive_views), "items": archive_views}, "nowFocusCard": focus, "timelineEvents": views,
-            "multiDayAnchors": [{"tripGroupId": group, "targetDateDisplay": relay["time"], "title": relay["title"],
-                                 "hintText": relay["subtitle"], "targetEventId": relay["id"]}] if group and mode == "ACTIVE_TIMELINE" else [],
+            "multiDayAnchors": anchors,
             "exploreCard": explore_view(doc, daily.get("exploreIndex", doc["exploreIndex"])) if mode == "EMPTY_EXPLORE" else None}
 
 
@@ -257,5 +259,6 @@ def detail(card, doc, edits=None, capabilities="NATIVE_V1"):
     elif stage == "CONFIRMED":
         dock = {"dockType": "DUAL_ACTION_BAR", "label": "查看详情", "actions": []}
     return {"schemaVersion": "1.2", "eventId": card["id"], "category": cat, "lifecycleStage": stage, "themeToken": theme,
-            "header": base, "stateBindings": {"selectedPlanId": selected, **{k:v for k,v in edits.items() if k != "selectedPlanId"}},
+            "header": base, "source": source_view(card), "timing": timing(card, event_day(card, home_now(doc).date())),
+            "stateBindings": {"selectedPlanId": selected, **{k:v for k,v in edits.items() if k != "selectedPlanId"}},
             "detailBlocks": blocks, "stickyDock": dock}

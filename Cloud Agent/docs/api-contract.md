@@ -6,6 +6,8 @@ v0.4 新增 Schedule、索引管理、屏幕删除、辅助委派查询及日历
 
 基础地址示例：`http://127.0.0.1:8765`。请求与响应均为 UTF-8 JSON。完整模型见运行服务的 `/openapi.json`。
 
+Android 首页、时间轴、卡片详情及操作使用手机网关，见 [Android 首页与卡片接口清单](home-card-api.md)。
+
 ## 1. 上传一份屏幕记录
 
 `POST /api/screens`，返回 HTTP 201：

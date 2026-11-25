@@ -1,7 +1,7 @@
 """Authenticated AuraFlow 1.2 routes, backed by the same state as the native home."""
 import asyncio
 from contextlib import asynccontextmanager, closing
-from datetime import date as Day, datetime, timedelta
+from datetime import date as Day, datetime
 import json
 from typing import Literal
 
@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
 from . import auraflow_contract as wire
+from .home_timing import shift_schedule
 from .home_sdui import HomeSduiAction, apply_home_action, build_home_sdui, load_user_state, save_user_state
 
 
@@ -92,7 +93,12 @@ class Home:
         edits = self.state.get("detailEdits", {}).get(eid)
         return wire.detail(find(self.doc, eid), self.doc, edits, caps)
 
+    def card_patch(self, card):
+        now = wire.home_now(self.doc)
+        return wire.card_view(card, wire.event_day(card, now.date()), now)
+
     def native_card(self, card):
+        card = dict(card, timing=wire.timing(card, wire.event_day(card, today())))
         edits = self.state.get("detailEdits", {}).get(card["id"], {})
         if not edits or not card.get("plans") or card.get("lifecycleStage") != "PROPOSAL":
             return card
@@ -155,6 +161,7 @@ def install(app, main, open_conn):
                 relay = home.doc["crossDayRelay"]
                 result["nativeState"] = dict(home.doc, dayModeOverride=settings.get("mode", home.doc["dayModeOverride"]),
                     events=[home.native_card(c) for c in home.doc["events"]],
+                    archivedEvents=[home.native_card(c) for c in home.doc["archivedEvents"]],
                     crossDayRelay=home.native_card(relay) if relay else None, exploreIndex=settings.get("exploreIndex", home.doc["exploreIndex"]))
             return result
 
@@ -214,7 +221,7 @@ def install(app, main, open_conn):
                 home.apply("select_plan", card_id=eventId, plan_idx=idx)
             home.apply("confirm_card", card_id=eventId)
             result = home.detail(eventId)
-            result["homeCardPatch"] = wire.card_view(find(home.doc,eventId), today(), datetime.now(wire.ZONE))
+            result["homeCardPatch"] = home.card_patch(find(home.doc, eventId))
             home.conn.execute("INSERT INTO home_confirmations VALUES (?,?,?,?,?)",
                               (home.uid, scope, body.idempotencyKey, fingerprint, json.dumps(result, ensure_ascii=False)))
             return result
@@ -231,7 +238,7 @@ def install(app, main, open_conn):
             field = "checklistDone" if card.get("checklist") else "notesDone"
             home.state["cardOverrides"].setdefault(eventId, {}).setdefault(field, {})[str(idx)] = body.checked
             home.save()
-            return dict(home.detail(eventId), homeCardPatch=wire.card_view(find(home.doc,eventId), today(), datetime.now(wire.ZONE)))
+            return dict(home.detail(eventId), homeCardPatch=home.card_patch(find(home.doc, eventId)))
 
     @router.post("/home/events/{eventId}/dismiss")
     async def dismiss(eventId: str, body: Dismiss, request: Request, user=auth):
@@ -288,12 +295,11 @@ def install(app, main, open_conn):
                 shift = p.get("shiftMinutes", 30)
                 if type(shift) != int or not 5 <= shift <= 240:
                     raise HTTPException(422, "顺延范围为 5 至 240 分钟")
-                stamp = wire.event_time(target, wire.event_day(target, today()))
-                if not stamp:
-                    raise HTTPException(409, "事项尚无明确时间")
+                updated = shift_schedule(target, wire.event_day(target, today()), shift)
+                if not updated:
+                    raise HTTPException(409, "事项没有可顺延的开始时间")
                 overrides = home.state["cardOverrides"]
-                shifted = stamp + timedelta(minutes=shift)
-                overrides.setdefault(target["id"], {}).update(time=shifted.strftime("%H:%M"), scheduledAt=shifted.isoformat())
+                overrides.setdefault(target["id"], {}).update(updated)
                 previous = next((a for a,b in zip(home.doc["events"],home.doc["events"][1:]) if b["id"]==target["id"]), None)
                 if previous:
                     overrides.setdefault(previous["id"], {})["connectorToNext"] = {"connectorState":"NORMAL_SOLID", "label":"已顺延"}
@@ -323,7 +329,8 @@ def install(app, main, open_conn):
                     spot = next((s for s in connector.get("gapSpots", []) if s["title"] == p.get("title")), None)
                     if not spot:
                         raise HTTPException(409, "当前空档未提供该建议")
-                    home.apply("insert_gap_spot", card_id=card["id"], title=spot["title"], time=spot["time"], subtitle=spot["subtitle"])
+                    home.apply("insert_gap_spot", card_id=card["id"], title=spot["title"], time=spot["time"],
+                               subtitle=spot["subtitle"], duration_minutes=spot.get("durationMinutes"))
             return home.timeline()
 
     @router.get("/home/stream")

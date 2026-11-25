@@ -1,12 +1,16 @@
 """Unit tests for the AuraFlow Home SDUI generator and authenticated API."""
 import os
+import sqlite3
+from contextlib import closing
 import tempfile
 import unittest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+from unittest.mock import patch
 from uuid import uuid4
 
 from fastapi.testclient import TestClient
-from backend import main
+from backend import auraflow_contract, main
+from backend.home_timing import ZONE
 
 
 class HomeSduiTests(unittest.TestCase):
@@ -36,7 +40,7 @@ class HomeSduiTests(unittest.TestCase):
     def req(self, user, method, path, data=None):
         return self.client.request(method, path, json=data, headers={"Authorization": "Bearer " + user["access_token"]})
 
-    def add_event(self, user, text, source_kind="screenshot_ocr", event_type="message"):
+    def add_event(self, user, text, source_kind="screenshot_ocr", event_type="message", **extra):
         payload = {
             "event_id": str(uuid4()),
             "revision": 1,
@@ -44,6 +48,7 @@ class HomeSduiTests(unittest.TestCase):
             "source_kind": source_kind,
             "captured_at": datetime.now(timezone.utc).isoformat(),
             "payload": {"text": text},
+            **extra,
         }
         resp = self.req(user, "POST", "/v1/events", payload)
         self.assertEqual(resp.status_code, 200, resp.text)
@@ -76,7 +81,7 @@ class HomeSduiTests(unittest.TestCase):
     def test_real_clues_classify_connectors_auto_verify_and_cross_day_relay(self):
         # 10:00 morning meeting (confirmed via calendar) + 14:30 travel proposal with return intent + 15:00 dining (conflict < 50m)
         self.add_event(self.alice, "10:00 项目晨会需求对齐", source_kind="calendar", event_type="schedule")
-        travel_ev = self.add_event(self.alice, "周五14:30乘MU5102飞上海出差，周日回")
+        travel_ev = self.add_event(self.alice, "今天14:30乘MU5102飞上海出差，明天09:00回")
         self.add_event(self.alice, "15:00 外滩鹿园4人聚餐")
         self.add_event(self.alice, "20:00 恒隆广场买伴手礼领券")
 
@@ -104,11 +109,25 @@ class HomeSduiTests(unittest.TestCase):
         self.assertEqual(d_card["time"], "15:30")
 
         # Zero-manual SMS/ticket auto-verification: add an OCR ticket confirmation clue
-        self.add_event(self.alice, "航旅纵横：MU5102 已出票，登机口 B24 座位 14A")
+        receipt = self.add_event(self.alice, "航旅纵横：MU5102 已出票，登机口 B24 座位 14A")
         doc = self.req(self.alice, "GET", "/v1/home/sdui").json()
         t_card = next(e for e in doc["events"] if e["id"] == travel_id)
         self.assertEqual(t_card["lifecycleStage"], "CONFIRMED")
         self.assertEqual(t_card["badge"], "已出票")
+        self.assertEqual(len([c for c in doc["events"] if c["category"] == "TRAVEL"]), 1)
+        self.assertIsNone(doc["crossDayRelay"]["ticketSourceEventId"])
+        self.assertEqual(self.req(self.alice, "GET", f"/api/v1/events/{travel_id}/detail").json()["source"],
+                         {"eventId": travel_ev["event_id"], "revision": 1, "receiptEventId": receipt["event_id"]})
+        self.assertEqual(len(self.req(self.alice, "GET", "/v1/events").json()["items"]), 5)
+        today = datetime.now(ZONE).date()
+        current = self.read_day(today.isoformat())
+        anchor, = current["multiDayAnchors"]
+        next_day = today + timedelta(days=1)
+        self.assertEqual(anchor["targetDate"], next_day.isoformat())
+        relay, = self.read_day(next_day.isoformat())["timelineEvents"]
+        self.assertEqual(relay["eventId"], anchor["targetEventId"])
+        self.assertEqual(relay["tripGroupId"], anchor["tripGroupId"])
+        self.assertEqual(relay["timing"]["startAt"], f"{next_day.isoformat()}T09:00:00+08:00")
 
     def test_misjudgment_swipe_dismiss_records_negative_feedback(self):
         joke = self.add_event(self.alice, "走，明天09:00飞巴黎喝咖啡！")
@@ -262,6 +281,102 @@ class HomeSduiTests(unittest.TestCase):
         self.assertTrue(len(confirmed) >= 1)
         self.assertEqual(confirmed[0]["title"], "项目评审")
 
+
+    def read_day(self, day):
+        res = self.req(self.alice, "GET", f"/api/v1/home/timeline?date={day}&clientCapabilities=ANDROID_COMPAT")
+        self.assertEqual(res.status_code, 200, res.text)
+        return res.json()
+
+    def test_wire_shared_time_continues_on_ongoing_card_until_end(self):
+        start, end = "2035-06-01T09:30:00-07:00", "2035-06-01T10:30:00-07:00"
+        event = self.add_event(self.alice, "评审会议", source_kind="calendar", event_type="schedule",
+                               occurred_at=start, ended_at=end)
+        eid = "evt_" + event["event_id"]
+        self.add_event(self.alice, "下一个会议", source_kind="calendar", event_type="schedule",
+                       occurred_at="2035-06-02T02:00:00+08:00")
+        self.add_event(self.alice, "展览全天", source_kind="calendar", event_type="schedule", all_day=True,
+                       occurred_at="2035-06-02T00:00:00+09:00", ended_at="2035-06-03T00:00:00+09:00")
+        self.add_event(self.alice, "次日另一个会议", source_kind="calendar", event_type="schedule",
+                       occurred_at="2035-06-03T01:00:00+08:00")
+        self.assertEqual(self.read_day("2035-06-01")["dayMode"], "EMPTY_EXPLORE")
+        scheduled = self.read_day("2035-06-02")["timelineEvents"]
+        connector = next(c for c in scheduled if c["eventId"] == eid)["connectorToNext"]
+        self.assertEqual((connector["style"], connector["label"]), ("CONFLICT_DASHED", "间隔 30 分钟 · 衔接紧张"))
+
+        with patch.object(auraflow_contract, "home_now", return_value=datetime(2035, 6, 2, 0, 45, tzinfo=ZONE)):
+            home = self.read_day("2035-06-02")
+        focus = home["nowFocusCard"]
+        self.assertEqual((home["timezone"], focus["eventId"], focus["timeDisplay"]), ("UTC+08:00", eid, "00:30"))
+        self.assertEqual((focus["timeStatus"], focus["countdownTargetIso"]), ("IN_PROGRESS", end))
+        actual_timing = {"startAt": start, "endAt": end, "durationMinutes": 60, "allDay": False, "completedAt": None}
+        detail = self.req(self.alice, "GET", f"/api/v1/events/{eid}/detail").json()
+        native = next(c for c in home["nativeState"]["events"] if c["id"] == eid)
+        self.assertEqual([focus["timing"], detail["timing"], native["timing"]], [actual_timing] * 3)
+        all_day = next(c for c in home["timelineEvents"] if c["title"] == "展览全天")
+        self.assertEqual((all_day["timeDisplay"], all_day["timing"]["durationMinutes"]), ("全天", None))
+        self.assertTrue(all_day["timing"]["allDay"])
+
+    def test_home_source_reads_do_not_acquire_the_write_lock(self):
+        event = self.add_event(self.alice, "日程资料", source_kind="manual", event_type="note")
+        with closing(sqlite3.connect(main.database_path())) as writer, writer:
+            writer.execute("BEGIN IMMEDIATE")
+            listed = self.req(self.alice, "GET", "/v1/events")
+            self.assertEqual(listed.status_code, 200, listed.text)
+            self.assertEqual([item["event_id"] for item in listed.json()["items"]], [event["event_id"]])
+            decisions = self.req(self.alice, "GET", "/v1/decisions")
+            self.assertEqual(decisions.status_code, 200, decisions.text)
+
+    def test_calendar_import_projects_legacy_range_with_original_offset(self):
+        event = self.add_event(self.alice, "会议\n12-31 23:55 — 01-01 00:25",
+                               source_kind="calendar", event_type="schedule",
+                               occurred_at="2035-12-31T15:55:00Z")
+        eid = "evt_" + event["event_id"]
+        previous, = self.read_day("2035-12-31")["timelineEvents"]
+        next_day, = self.read_day("2036-01-01")["timelineEvents"]
+        detail = self.req(self.alice, "GET", f"/api/v1/events/{eid}/detail").json()
+        self.assertEqual(previous["timing"], next_day["timing"])
+        self.assertEqual(previous["timing"], detail["timing"])
+        self.assertEqual(previous["timing"]["endAt"], "2035-12-31T16:25:00+00:00")
+        self.assertEqual(previous["timing"]["durationMinutes"], 30)
+
+    def test_delay_across_midnight_keeps_duration_and_archive_state(self):
+        event = self.add_event(self.alice, "会议", source_kind="calendar", event_type="schedule",
+                               occurred_at="2035-06-01T23:45:00+08:00", ended_at="2035-06-01T23:55:00+08:00")
+        eid = "evt_" + event["event_id"]
+        res = self.req(self.alice, "POST", "/api/v1/home/actions/execute",
+                       {"actionId": "SHIFT_EVENT_TIME", "payload": {"targetEventId": eid, "shiftMinutes": 30}})
+        self.assertEqual(res.status_code, 200, res.text)
+        self.assertFalse(self.read_day("2035-06-01")["timelineEvents"])
+        card, = self.read_day("2035-06-02")["timelineEvents"]
+        expected = {"startAt": "2035-06-02T00:15:00+08:00", "endAt": "2035-06-02T00:25:00+08:00",
+                    "durationMinutes": 10, "allDay": False, "completedAt": None}
+        self.assertEqual(card["timing"], expected)
+        action = {"action": "complete_card", "card_id": eid}
+        for _ in range(2):
+            self.assertEqual(self.req(self.alice, "POST", "/v1/home/sdui/actions?live=true", action).status_code, 200)
+        archive, = self.read_day("2035-06-02")["archivedSection"]["items"]
+        self.assertIsNotNone(archive["timing"]["completedAt"])
+        self.assertEqual(archive["timing"], dict(expected, completedAt=archive["timing"]["completedAt"]))
+        self.assertEqual(self.req(self.bob, "GET", f"/api/v1/events/{eid}/detail").status_code, 404)
+
+    def test_gap_duration_in_wire_and_native_uses_same_minutes(self):
+        self.req(self.alice, "POST", "/v1/home/sdui/actions", {"action": "simulate_scenario", "scenario": "load_showcase"})
+        payload = {"action": "insert_gap_spot", "card_id": "evt_morning_prep", "time": "12:15",
+                   "title": "午间书店", "subtitle": "空档内停留 30 分钟"}
+        for minutes in (30, 45):
+            if minutes == 45:
+                payload = dict(payload, duration_minutes=minutes, title="午间展览")
+            res = self.req(self.alice, "POST", "/v1/home/sdui/actions", payload)
+            self.assertEqual(res.status_code, 200, res.text)
+            native = next(c for c in res.json()["events"] if c["title"] == payload["title"])
+            self.assertEqual(native["subtitle"], f"空档内停留 {minutes} 分钟")
+            self.assertEqual(native["exploreMeta"]["duration"], f"{minutes} 分钟")
+            detail = self.req(self.alice, "GET", f"/api/v1/events/{native['id']}/detail").json()
+            self.assertEqual(detail["timing"]["durationMinutes"], minutes)
+            self.assertEqual(detail["timing"]["endAt"][11:16], "12:45" if minutes == 30 else "13:00")
+            home = self.read_day(datetime.now(ZONE).date().isoformat())
+            wire = next(c for c in [home["nowFocusCard"], *home["timelineEvents"]] if c and c["eventId"] == native["id"])
+            self.assertEqual(wire["timing"], detail["timing"])
 
     def test_wire_confirm_retry_budget_and_checklist_are_consistent(self):
         self.req(self.alice, "POST", "/v1/home/sdui/actions", {"action":"simulate_scenario","scenario":"load_showcase"})

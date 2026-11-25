@@ -579,7 +579,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             badge = "补白已定",
             connectorToNext = ConnectorInfo(ConnectorState.NORMAL_SOLID, "准时衔接下一程"),
             entities = listOf("线间补白", spot.time, "顺路推荐"),
-            exploreMeta = ExploreMeta(spot.title, "1.5 小时", spot.subtitle, listOf(ExploreStop(spot.time, spot.title, "当前附近", spot.subtitle)), 0),
+            exploreMeta = ExploreMeta(spot.title, spot.durationMinutes?.let { "${it} 分钟" }.orEmpty(),
+                spot.subtitle, listOf(ExploreStop(spot.time, spot.title, "当前附近", spot.subtitle)), 0),
             detailBlocks = listOf("EXPLORE_ROUTE_CARD")
         )
         dispatchHomeAction(

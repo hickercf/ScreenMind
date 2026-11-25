@@ -17,7 +17,7 @@ from uuid import UUID, uuid4
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Depends, FastAPI, Header, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, StrictBool, field_validator, model_validator
 from screenmind.models import ScreenInput
 
 PASSWORDS = PasswordHasher()
@@ -183,9 +183,15 @@ class ContextEvent(StrictModel):
     timezone: str = Field(default='Asia/Shanghai', max_length=80)
     review_status: Literal['confirmed'] = 'confirmed'
     payload: Payload
+    ended_at: datetime | None = None
+    all_day: StrictBool | None = None
 
     @model_validator(mode='after')
     def structured_capture(self):
+        if self.ended_at is not None and (self.occurred_at is None or self.ended_at <= self.occurred_at):
+            raise ValueError('结束时间必须晚于开始时间')
+        if self.all_day and self.occurred_at is None:
+            raise ValueError('全天事项需提供开始日期')
         if self.payload.screen is None and len(self.payload.text) > 10000:
             raise ValueError('普通线索最多10000字符')
         if self.payload.screen is not None:
@@ -198,7 +204,7 @@ class ContextEvent(StrictModel):
                 raise ValueError('采集时间与结构化屏幕不一致')
         return self
 
-    @field_validator('captured_at', 'occurred_at')
+    @field_validator('captured_at', 'occurred_at', 'ended_at')
     @classmethod
     def aware_time(cls, value):
         if value is not None and value.utcoffset() is None:
@@ -234,6 +240,13 @@ def short_session_user(authorization: str | None = Header(default=None)):
     with closing(sqlite3.connect(database_path())) as conn:
         conn.row_factory = sqlite3.Row
         return session_user(authorization, conn)
+
+
+def read_db():
+    with closing(sqlite3.connect(database_path(), timeout=15, check_same_thread=False)) as conn:
+        conn.row_factory = sqlite3.Row
+        conn.execute('BEGIN')
+        yield conn
 
 
 def issue_session(conn, user_id, username, session_id=None):
@@ -361,7 +374,12 @@ def remove_member(group_id: str, member_id: str, user=Depends(session_user), con
 @app.post('/v1/events')
 async def upsert_event(data: ContextEvent, request: Request, user=Depends(short_session_user)):
     event_id = str(data.event_id)
-    body = data.model_dump_json(exclude={'payload': {'screen'}} if data.payload.screen is None else None)
+    omit = {'payload': {'screen'}} if data.payload.screen is None else {}
+    if data.ended_at is None:
+        omit['ended_at'] = True
+    if data.all_day is None:
+        omit['all_day'] = True
+    body = data.model_dump_json(exclude=omit)
     hub = request.app.state.agent_hub
     async with hub.lock(user['id']):
         with closing(hub.connect()) as conn, conn:
@@ -379,7 +397,7 @@ async def upsert_event(data: ContextEvent, request: Request, user=Depends(short_
 
 
 @app.get('/v1/events')
-def events(user=Depends(session_user), conn=Depends(db)):
+def events(user=Depends(short_session_user), conn=Depends(read_db)):
     rows = conn.execute('SELECT body FROM events WHERE user_id=? ORDER BY rowid DESC', (user['id'],))
     return {'items': [json.loads(row['body']) for row in rows]}
 
@@ -442,7 +460,7 @@ def generate(data: DecisionRequest, user=Depends(session_user), conn=Depends(db)
 
 
 @app.get('/v1/decisions')
-def decisions(user=Depends(session_user), conn=Depends(db)):
+def decisions(user=Depends(short_session_user), conn=Depends(read_db)):
     result = []
     for row in conn.execute('SELECT body FROM decisions WHERE user_id=? ORDER BY rowid DESC', (user['id'],)):
         item = json.loads(row['body'])
