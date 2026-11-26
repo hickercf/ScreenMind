@@ -18,10 +18,11 @@ def work(client, title="生日聚会", agent="party"):
     return response.json()["work"]
 
 
-def evidence(client, texts=None, speaker=None):
+def evidence(client, texts=None, speaker=None, message_at=None):
     texts = texts or ["参加成员：小林、小王、小李、小陈、小张、小周、小吴、小赵", "套餐总价：688元", "人均预算：150元", "蛋糕负责人：小林"]
     body = screen(uid())
-    body["blocks"] = [{"id": "b" + str(i), "kind": "chat", "text": text, "speaker": speaker} for i, text in enumerate(texts)]
+    body["blocks"] = [{"id": "b" + str(i), "kind": "chat", "text": text, "speaker": speaker,
+                       "message_at": message_at} for i, text in enumerate(texts)]
     response = client.post("/api/screens", json=body)
     assert response.status_code == 201, response.text
     return response.json()["screen"]["id"]
@@ -91,6 +92,30 @@ def test_tentative_is_not_declined_and_cancel_does_not_commit(client):
     assert action(client, change, "cancel").status_code == 202
     assert memory(client, w["id"])["memory_version"] == 1
     assert confirm(client, change).status_code == 409
+
+
+def test_party_date_is_preserved_when_only_attendance_changes(client):
+    w = work(client)
+    sid = evidence(client, ["参加成员：小林、小王", "时间：周六 18:30"],
+                   message_at="2026-11-26T17:00:00+08:00")
+    first = task(client, w["id"], sid)
+    assert first["memory_proposal"]["scheduled_at"] == "2026-11-28T18:30:00+08:00"
+    assert confirm(client, first).status_code == 202
+    update = task(client, w["id"], evidence(client, ["我不来了"], "小林",
+                                           message_at="2026-12-03T17:00:00+08:00"))
+    assert update["memory_proposal"]["scheduled_at"] == "2026-11-28T18:30:00+08:00"
+    assert confirm(client, update).status_code == 202
+    assert memory(client, w["id"])["state"]["scheduled_at"] == "2026-11-28T18:30:00+08:00"
+
+
+def test_party_relative_date_without_a_message_time_stays_unset(client):
+    w = work(client)
+    first = task(client, w["id"], evidence(client, ["参加成员：小林、小王", "时间：周六 18:30"]))
+    assert first["memory_proposal"]["scheduled_at"] is None
+    assert "日期待确认" in value(first, "schedule")
+    assert confirm(client, first).status_code == 202
+    plan = client.get(f"/api/works/{w['id']}/plan").json()
+    assert "日期待确认" in plan["confirmed"][0]["rows"][0]["value"]
 
 
 def test_party_completion_needs_separate_evidence_and_confirmation(client):

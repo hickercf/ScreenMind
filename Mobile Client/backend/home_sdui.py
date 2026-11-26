@@ -604,11 +604,14 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
         # Party plan from confirmed state
         plan = state.get("plan")
         if isinstance(plan, dict):
+            from screenmind.agents.party import party_start
+
             participants = plan.get("participants") or []
             attending = [p for p in participants if p.get("status") == "attending"]
             declined = [p for p in participants if p.get("status") == "declined"]
-            at_iso = plan.get("time") or ""
-            time_str, sort_min = extract_time_minutes(at_iso, at_iso, default_minutes=18 * 60)
+            start = timestamp(state.get("scheduled_at")) or party_start(plan.get("time"))
+            at_iso = start.isoformat() if start else None
+            time_str, sort_min = extract_time_minutes("", at_iso) if at_iso else ("日期待确认", 24 * 60)
             active_cards.append({
                 "id": f"work_{wid}_party",
                 "sourceWorkId": wid,
@@ -622,7 +625,7 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
                 "badge": "已确认",
                 "entities": [f"确定 {len(attending)} 人", plan.get("location", "待确认"), f"v{version}"],
                 "selectedPlanIdx": 0,
-                "scheduledAt": plan.get("time"),
+                "scheduledAt": at_iso,
                 "detailBlocks": ["SOURCE_DETAIL"],
                 "reminderStrip": {
                     "text": f"{len(declined)} 人退出 · 请核对包厢与人均费用" if declined else f"已同步 {len(attending)} 位参与者",

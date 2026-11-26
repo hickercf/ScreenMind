@@ -4,6 +4,7 @@ import cn.weiguang.app.data.LocalDecision
 import cn.weiguang.app.data.LocalEvent
 import org.json.JSONObject
 import java.time.Instant
+import java.time.OffsetDateTime
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.Locale
@@ -399,7 +400,11 @@ object AuraFlowEngine {
                 }
                 val plan = state.optJSONObject("plan")
                 if (plan != null) {
-                    val (timeStr, sortMin) = extractTimeMinutes(plan.optString("time"), null, 18 * 60)
+                    val scheduledAt = sequenceOf(state.optString("scheduled_at"), plan.optString("time"))
+                        .mapNotNull { runCatching { OffsetDateTime.parse(it) }.getOrNull() }
+                        .firstOrNull()?.toInstant()?.toString()
+                    val (timeStr, sortMin) = if (scheduledAt != null) extractTimeMinutes("", scheduledAt)
+                        else "日期待确认" to 24 * 60
                     rawCards.add(
                         sortMin to AuraCard(
                             id = "work_${wid}_party",
@@ -412,7 +417,7 @@ object AuraFlowEngine {
                             subtitle = "${plan.optString("location", "待确认")} · 云端聚会 v$version",
                             badge = "已确认",
                             entities = listOf("云端聚会", plan.optString("location", "待确认"), "v$version"),
-                            scheduledAt = plan.optString("time"),
+                            scheduledAt = scheduledAt,
                             detailBlocks = listOf("SOURCE_DETAIL")
                         )
                     )

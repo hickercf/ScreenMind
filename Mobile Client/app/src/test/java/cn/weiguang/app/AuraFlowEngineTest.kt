@@ -5,8 +5,27 @@ import cn.weiguang.app.home.*
 import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
+import java.time.ZonedDateTime
 
 class AuraFlowEngineTest {
+    @Test fun partyUsesConfirmedDateAndKeepsUnresolvedDateUnscheduled() {
+        val thursday = ZonedDateTime.parse("2026-11-26T16:30:00+08:00")
+        fun agenda(scheduledAt: String?): HomeAgenda {
+            val plan = JSONObject().put("title", "聚会").put("time", "周六 18:30")
+            val state = JSONObject().put("plan", plan).put("scheduled_at", scheduledAt ?: JSONObject.NULL)
+            val work = JSONObject().put("id", "party").put("state", state)
+            return AuraFlowEngine.synthesize(emptyList(), emptyList(), listOf(work), LocalAuraMutationState()).agenda(thursday)
+        }
+        val dated = agenda("2026-11-28T18:30:00+08:00")
+        assertTrue(dated.today.isEmpty())
+        assertEquals("2026-11-28", dated.later.single().date.toString())
+        assertEquals("18:30", dated.later.single().card.time)
+        val undated = agenda(null)
+        assertTrue(undated.today.isEmpty())
+        assertEquals("日期待确认", undated.unscheduled.single().card.time)
+        assertNull(undated.unscheduled.single().start(thursday.zone))
+    }
+
     @Test fun emptyDayDispatchesExploreAndAdoptsToTimeline() {
         val state = AuraFlowEngine.synthesize(emptyList(), emptyList(), emptyList(), LocalAuraMutationState())
         assertEquals(DayMode.EMPTY_EXPLORE, state.dayMode)

@@ -117,6 +117,46 @@ class AgentBridgeTests(unittest.TestCase):
         self.assertIsNone(plan["candidate"])
         self.assertEqual(plan["confirmed"][0]["value"], "组会")
 
+    def test_party_weekday_stays_on_the_confirmed_date_in_home_and_detail(self):
+        work = self.work('party')
+        captured = '2026-11-30T12:30:00+08:00'
+        messages = ['参加成员：小林、小王', '时间：周六 18:30']
+        event = self.upload('\n'.join(messages), captured_at=captured, payload={
+            'text': '\n'.join(messages),
+            'screen': {'event_id': 'party-weekday', 'session_id': 'party-weekday', 'app_package': 'com.example.party',
+                       'app_name': '合成聊天', 'page_title': '聚会', 'captured_at': captured,
+                       'blocks': [{'id': str(i), 'kind': 'chat', 'text': text, 'message_at': '2026-11-26T16:30:00+08:00'}
+                                  for i, text in enumerate(messages)]},
+        })
+        task, _ = self.start(work, [event])
+        task = self.wait(task['id'])
+        self.assertEqual(task['memory_proposal']['scheduled_at'], '2026-11-28T18:30:00+08:00')
+        self.assertEqual(self.req('GET', f"agent/works/{work['id']}").json()['work']['state'], {})
+        reply = self.response(task, 'accept_state', proposal_id=task['interaction']['proposal_id'])
+        self.assertEqual(self.req('POST', f"agent/tasks/{task['id']}/responses", reply).status_code, 202)
+        headers = {'Authorization': 'Bearer ' + self.a['access_token']}
+        eid = f"work_{work['id']}_party"
+        def home(day):
+            response = self.client.get('/api/v1/home/timeline', headers=headers,
+                                       params={'date': day, 'clientCapabilities': 'ANDROID_COMPAT'})
+            self.assertEqual(response.status_code, 200, response.text)
+            return response.json()
+        def cards(day):
+            snapshot = home(day)
+            return [c for c in [snapshot['nowFocusCard'], *snapshot['timelineEvents']] if c]
+
+        self.assertNotIn(eid, {c['eventId'] for c in cards('2026-11-26')})
+        saturday = home('2026-11-28')
+        card = next(c for c in [saturday['nowFocusCard'], *saturday['timelineEvents']] if c and c['eventId'] == eid)
+        self.assertEqual(card['timing']['startAt'], '2026-11-28T18:30:00+08:00')
+        self.assertIsNone(card['timing']['endAt'])
+        native = next(c for c in saturday['nativeState']['events'] if c['id'] == eid)
+        self.assertEqual(native['timing'], card['timing'])
+        detail = self.client.get(f'/api/v1/events/{eid}/detail', headers=headers).json()
+        self.assertEqual(detail['timing'], card['timing'])
+        plan = self.req('GET', f"agent/works/{work['id']}/plan").json()
+        self.assertEqual(plan['confirmed'][0]['rows'][0]['value'], '2026年11月28日 18:30')
+
     def structured_event(self):
         text = '周五在A302讨论，记得带电脑'
         screen = {'event_id': 'evt-capture', 'session_id': 'sess-capture', 'app_package': 'com.tencent.mm',

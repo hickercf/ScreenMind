@@ -2,11 +2,79 @@
 import copy
 import json
 import re
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal
 from pydantic import Field, model_validator
 from ..models import Identifier, StrictModel
 from .base import Proposal, ToolError, tool_call
+
+
+PARTY_ZONE = timezone(timedelta(hours=8))
+_ABSOLUTE_TIME = re.compile(r"(\d{4})[年-](\d{1,2})[月-](\d{1,2})日?\s*T?\s*(\d{1,2}):(\d{2})(?::(\d{2}))?")
+_RELATIVE_TIME = re.compile(r"(今天|今日|今晚|明天|后天|(?:(下|本|这)?周([一二三四五六日天])))\s*(\d{1,2}):(\d{2})")
+
+
+def aware_time(value):
+    try:
+        stamp = datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    return stamp if stamp.utcoffset() is not None else None
+
+
+def party_start(value, reference=None):
+    """Resolve a party's explicitly stated date and time. Relative dates need a message timestamp."""
+    value = (value or "").strip()
+    if stamp := aware_time(value):
+        return stamp
+    try:
+        if match := _ABSOLUTE_TIME.fullmatch(value):
+            return datetime(*[int(part or 0) for part in match.groups()], tzinfo=PARTY_ZONE)
+        if reference is not None and (match := _RELATIVE_TIME.fullmatch(value)):
+            label, week, weekday, hour, minute = match.groups()
+            date = reference.astimezone(PARTY_ZONE).date()
+            if weekday:
+                delta = "一二三四五六日".index(weekday.replace("天", "日")) - date.weekday()
+                if week == "下" or (not week and delta < 0):
+                    delta += 7
+            else:
+                delta = {"明天": 1, "后天": 2}.get(label, 0)
+            return datetime.combine(date + timedelta(days=delta), datetime.min.time(), PARTY_ZONE).replace(
+                hour=int(hour), minute=int(minute))
+    except (ValueError, OverflowError):
+        return None
+    return None
+
+
+def party_time_label(value, scheduled_at):
+    stamp = aware_time(scheduled_at) or party_start(value)
+    if stamp is not None:
+        return stamp.astimezone(PARTY_ZONE).strftime("%Y年%m月%d日 %H:%M")
+    return f"{value}（日期待确认）" if value and value != "待确认" else "待确认"
+
+
+def proposed_party_start(value, context, refs, old_state):
+    if stamp := party_start(value):
+        return stamp.isoformat()
+    if not _RELATIVE_TIME.fullmatch(value.strip()):
+        return None
+    compact_time = re.sub(r"\s+", "", value)
+    # A screenshot may show an old chat. Only the cited message's own timestamp anchors relative dates.
+    phrase = re.compile(r"(?<![下本这])" + re.escape(compact_time) + r"(?![\d:])")
+    bundle = context.task.get("memory_context") or {}
+    candidates = set()
+    for screen in bundle.get("screens", []):
+        for block in screen["blocks"]:
+            if block["source_ref"] in refs and phrase.search(re.sub(r"\s+", "", block["text"])):
+                if start := party_start(value, aware_time(block.get("message_at"))):
+                    candidates.add(start.isoformat())
+    if candidates:
+        return next(iter(candidates)) if len(candidates) == 1 else None
+    old_time = (old_state.get("plan") or {}).get("time") or ""
+    if compact_time == re.sub(r"\s+", "", old_time) and aware_time(old_state.get("scheduled_at")):
+        return old_state["scheduled_at"]
+    return None
 
 
 class Participant(StrictModel):
@@ -69,7 +137,8 @@ class PartyAgent:
 职责 status 默认为 pending。分配和承诺均不是完成。只有本轮证据或用户补充明确说已完成同一件职责才标记 completed，引用该证据；保留未变化职责已确认的完成状态。
 source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 authenticated_user_inputs 的引用。
 根据用户补充修改的计划应引用相应 input 引用；方案也必须引用本次屏幕。
-标题/时间/地点缺失时标注待确认。记忆是当前工作独立快照，不能读取其他工作。
+标题/时间/地点缺失时标注待确认。来源给出明确日期时保留日期和时分。相对时间用「周六 18:30」等格式，并引用含原话的屏幕块。日期由系统依据消息时间换算，不自行补全日期。
+记忆是当前工作独立快照，不能读取其他工作。
 候选方案未确认前不生效；你无权发送通知、预订或修改第三方服务。不输出内部推理。"""
 
     def propose(self, arguments, context):
@@ -80,6 +149,8 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
         if not screen_refs.intersection(draft.source_refs):
             raise ToolError("方案必须引用本次屏幕证据")
         plan = draft.state
+        old_state = (context.memory or {}).get("state") or {}
+        scheduled_at = proposed_party_start(plan.time, context, set(draft.source_refs), old_state)
         people = {p.id: p for p in plan.participants}
         attending = [p for p in people.values() if p.status == "attending"]
         tentative = [p for p in people.values() if p.status == "tentative"]
@@ -90,7 +161,7 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
             fields.append({"id": key, "label": label, "value": value, "source_refs": draft.source_refs,
                            "origin": "source", "editable": False})
 
-        add("schedule", "时间与地点", plan.time + " · " + plan.location)
+        add("schedule", "时间与地点", party_time_label(plan.time, scheduled_at) + " · " + plan.location)
         add("attendance", "参与情况", f"确定参加 {len(attending)} 人；待确认 {len(tentative)} 人；退出 {len(declined)} 人")
         add("members", "成员状态", "；".join(p.name + "：" + {"attending": "参加", "tentative": "待确认", "declined": "退出"}[p.status] for p in people.values()))
         risks = []
@@ -126,7 +197,7 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
         if declined:
             risks.append("核对人数变动是否影响套餐或预订；尚未联系商家或发送通知")
         add("next_steps", "待办与影响", "；".join(risks) if risks else "暂无已识别的责任缺口；仍需人工核对时间、地点与价格")
-        old = ((context.memory or {}).get("state") or {}).get("plan")
+        old = old_state.get("plan")
         before = sum(p["status"] == "attending" for p in old["participants"]) if old else None
         summary = f"确定参加人数：{before} → {len(attending)}。" if before is not None else "已生成初始聚会方案。"
         if old and before and attending and old.get("fixed_cost_cents") is not None and plan.fixed_cost_cents is not None:
@@ -135,11 +206,11 @@ source_refs 只能来自本次 read_screens 的屏幕、memory.source_ref 或 au
             if old_share != new_share:
                 summary += f"按确定人数估算，人均 ¥{old_share} → ¥{new_share}。"
         summary += "确认后更新事项。"
-        seen = list(dict.fromkeys((((context.memory or {}).get("state") or {}).get("processed_sources", [])) + sorted(screen_refs)))
+        seen = list(dict.fromkeys(old_state.get("processed_sources", []) + sorted(screen_refs)))
         if len(seen) > 2000:
             raise ToolError("该聚会已达到示例记忆容量，请归档后创建新事项")
         return Proposal({"type": "information", "title": plan.title, "summary": summary, "fields": fields},
-                        {"plan": plan.model_dump(), "processed_sources": seen})
+                        {"plan": plan.model_dump(), "scheduled_at": scheduled_at, "processed_sources": seen})
 
     def mock_reply(self, messages):
         from ..providers import ProviderError

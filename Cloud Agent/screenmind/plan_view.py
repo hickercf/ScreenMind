@@ -1,5 +1,5 @@
 """Read-only presentation shared by the authenticated web and Android plan decks."""
-from .agents.party import PartyState, money
+from .agents.party import PartyState, money, party_time_label
 
 
 def row(label, value, tone="neutral"):
@@ -11,7 +11,7 @@ def card(key, title, value, detail="", rows=(), segments=(), tone="neutral"):
             "rows": list(rows), "segments": list(segments), "tone": tone}
 
 
-def party_cards(data):
+def party_cards(data, scheduled_at=None):
     plan = PartyState.model_validate(data)
     people = {p.id: p for p in plan.participants}
     groups = [(label, tone, [p.name for p in people.values() if p.status == status])
@@ -20,7 +20,7 @@ def party_cards(data):
                   ("tentative", "待确认", "attention"),
                   ("declined", "退出", "muted"))]
     count = len(groups[0][2])
-    overview = card("venue", "聚会安排", plan.location, rows=[row("时间", plan.time)])
+    overview = card("venue", "聚会安排", plan.location, rows=[row("时间", party_time_label(plan.time, scheduled_at))])
     attendees = card("attendees", "参与情况", f"{count} 人参加",
                      rows=[row(label, "、".join(names), tone) for label, tone, names in groups if names],
                      segments=[{"label": label, "count": len(names), "tone": tone}
@@ -51,7 +51,7 @@ def party_cards(data):
 
 def cards_for(state, fallback=()):
     if state.get("plan"):
-        return party_cards(state["plan"])
+        return party_cards(state["plan"], state.get("scheduled_at"))
     items = state.get("items")
     if isinstance(items, dict):
         return [card("slot:" + key, "日程", data["title"],

@@ -95,7 +95,8 @@ private fun entry(card: AuraCard, now: ZonedDateTime): AgendaEntry {
     val date = exact?.toLocalDate() ?: dateIn(timing, reference) ?: captured?.takeIf { clock != null }
     val start = exact ?: if (clock != null && date != null) date.atTime(clock).atZone(now.zone) else null
     val end = instantAt(card.endsAt, now.zone) ?: start?.let { rangeEnd(card, it) }
-    return AgendaEntry(card.copy(time = clock?.format(clockFormat) ?: "时间待定"), date, clock, end)
+    val timeLabel = clock?.format(clockFormat) ?: card.time.takeIf { it == "日期待确认" } ?: "时间待定"
+    return AgendaEntry(card.copy(time = timeLabel), date, clock, end)
 }
 
 fun AuraFlowState.agenda(now: ZonedDateTime): HomeAgenda {
