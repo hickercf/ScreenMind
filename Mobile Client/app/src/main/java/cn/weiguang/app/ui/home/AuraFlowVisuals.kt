@@ -65,7 +65,7 @@ fun KineticAuroraBackground(
         val c1 = Offset(w * (0.48f + 0.14f * sin(phase)), h * (0.04f + 0.04f * cos(phase * 0.8f)))
         drawRect(
             brush = Brush.radialGradient(
-                colors = listOf(accent.copy(alpha = 0.22f), accent.copy(alpha = 0.05f), Color.Transparent),
+                colors = listOf(accent.copy(alpha = 0.10f), accent.copy(alpha = 0.025f), Color.Transparent),
                 center = c1,
                 radius = max(w, h) * 0.62f
             )
@@ -73,104 +73,11 @@ fun KineticAuroraBackground(
         val c2 = Offset(w * (0.86f + 0.08f * cos(phase * 0.9f)), h * (0.86f + 0.06f * sin(phase * 0.7f)))
         drawRect(
             brush = Brush.radialGradient(
-                colors = listOf(alt.copy(alpha = 0.14f), Color.Transparent),
+                colors = listOf(alt.copy(alpha = 0.07f), Color.Transparent),
                 center = c2,
                 radius = max(w, h) * 0.50f
             )
         )
-    }
-}
-
-@Composable
-fun L2PerceptionPill(
-    themeKey: String,
-    sensing: Boolean,
-    sensingText: String,
-    idleText: String = "灵枢感知 · 静默守候",
-    onClick: () -> Unit = {}
-) {
-    val palette = auraPalette(themeKey)
-    val accent by animateColorAsState(palette.accent, tween(500), label = "pillAccent")
-    val infinite = rememberInfiniteTransition(label = "pillWave")
-    val bars = List(5) { idx ->
-        infinite.animateFloat(
-            initialValue = 0.25f,
-            targetValue = 1.0f,
-            animationSpec = infiniteRepeatable(
-                animation = tween(520, delayMillis = idx * 85, easing = FastOutSlowInEasing),
-                repeatMode = RepeatMode.Reverse
-            ),
-            label = "bar$idx"
-        )
-    }
-    val pulse by infinite.animateFloat(
-        initialValue = 0.45f,
-        targetValue = 1.0f,
-        animationSpec = infiniteRepeatable(tween(1200), RepeatMode.Reverse),
-        label = "dotPulse"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 4.dp),
-        contentAlignment = Alignment.Center
-    ) {
-        Row(
-            modifier = Modifier
-                .clip(CircleShape)
-                .background(Color(0xF00B0F19))
-                .border(
-                    width = 1.dp,
-                    color = if (sensing) accent.copy(alpha = 0.72f) else AuraColors.HairlineStrong,
-                    shape = CircleShape
-                )
-                .clickable(onClick = onClick)
-                .padding(horizontal = 14.dp, vertical = 7.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            if (sensing) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(2.5.dp),
-                    modifier = Modifier.height(14.dp)
-                ) {
-                    bars.forEach { frac ->
-                        Box(
-                            modifier = Modifier
-                                .width(2.4.dp)
-                                .height((14f * frac.value).dp)
-                                .clip(CircleShape)
-                                .background(accent)
-                        )
-                    }
-                }
-                Text(
-                    text = sensingText,
-                    color = AuraColors.TextPrimary,
-                    fontSize = 11.5.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            } else {
-                Box(
-                    modifier = Modifier
-                        .size(7.dp)
-                        .clip(CircleShape)
-                        .background(accent.copy(alpha = pulse))
-                )
-                Text(
-                    text = idleText,
-                    color = Color(0xE6CBD5E1),
-                    fontSize = 11.sp,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-            }
-        }
     }
 }
 
@@ -185,7 +92,7 @@ fun ProgressRingBadge(
         Canvas(modifier = Modifier.fillMaxSize()) {
             val stroke = Stroke(width = 2.4.dp.toPx(), cap = StrokeCap.Round)
             drawArc(
-                color = Color(0x22FFFFFF),
+                color = AuraColors.Hairline,
                 startAngle = -90f,
                 sweepAngle = 360f,
                 useCenter = false,
@@ -673,7 +580,7 @@ fun SlideToConfirmBar(
                 .fillMaxWidth()
                 .height(56.dp)
                 .clip(CircleShape)
-                .background(Color(0xF20F172A))
+                .background(AuraColors.Tint)
                 .border(1.dp, palette.accent.copy(alpha = 0.5f), CircleShape)
                 .onSizeChanged { trackWidthPx = it.width.toFloat() }
                 .padding(6.dp)
@@ -702,7 +609,7 @@ fun SlideToConfirmBar(
                     .offset { IntOffset(dragX.roundToInt(), 0) }
                     .size(handleSizeDp)
                     .clip(CircleShape)
-                    .background(Brush.linearGradient(listOf(Color.White, palette.accent)))
+                    .background(palette.accent)
                     .pointerInput(maxDrag) {
                         detectHorizontalDragGestures(
                             onDragEnd = {
@@ -730,7 +637,7 @@ fun SlideToConfirmBar(
                     },
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "滑动确认", tint = Color(0xFF020617), modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Outlined.ArrowForward, contentDescription = "滑动确认", tint = Color.White, modifier = Modifier.size(20.dp))
             }
         }
         Text(
@@ -764,11 +671,7 @@ fun HoloArtifactCard(
     val animTiltX by animateFloatAsState(tiltX, spring(stiffness = Spring.StiffnessMediumLow), label = "tiltX")
     val animTiltY by animateFloatAsState(tiltY, spring(stiffness = Spring.StiffnessMediumLow), label = "tiltY")
 
-    val bgBrush = when (card.category) {
-        AuraCategory.TRAVEL -> Brush.linearGradient(listOf(Color(0xFF0D192B), Color(0xFF101533), Color(0xFF081526)))
-        AuraCategory.DINING -> Brush.linearGradient(listOf(Color(0xFF241311), Color(0xFF1B1018), Color(0xFF190D0B)))
-        else -> Brush.linearGradient(listOf(Color(0xFF092018), Color(0xFF0C1A22), Color(0xFF071912)))
-    }
+    val bgBrush = Brush.linearGradient(listOf(AuraColors.CardSolidTop, AuraColors.CardNowTop, AuraColors.CardNowBottom))
 
     Box(
         modifier = Modifier
@@ -824,8 +727,8 @@ fun HoloArtifactCard(
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text(p.carrier, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-                            Text("${p.modeText} · ${if (isRail) "刷证直进" else "电子登机牌"}", color = Color(0xCC99F6E4), fontSize = 11.sp)
+                            Text(p.carrier, color = AuraColors.TextPrimary, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                            Text("${p.modeText} · ${if (isRail) "刷证直进" else "电子登机牌"}", color = AuraColors.Travel, fontSize = 11.sp)
                         }
                         Box(
                             Modifier
@@ -834,42 +737,42 @@ fun HoloArtifactCard(
                                 .border(1.dp, AuraColors.Travel.copy(alpha = 0.4f), CircleShape)
                                 .padding(horizontal = 8.dp, vertical = 3.dp)
                         ) {
-                            Text("CONFIRMED", color = AuraColors.Travel, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+                            Text("CONFIRMED", color = AuraColors.Travel, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
                         }
                     }
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                         Column {
-                            Text(depCode, color = Color.White, fontSize = 28.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                            Text(p.depHub, color = Color(0xFFCBD5E1), fontSize = 11.sp)
-                            Text(p.dep, color = AuraColors.Travel, fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            Text(depCode, color = AuraColors.TextPrimary, fontSize = 28.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)
+                            Text(p.depHub, color = AuraColors.TextSecondary, fontSize = 11.sp)
+                            Text(p.dep, color = AuraColors.Travel, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.weight(1f).padding(horizontal = 10.dp)) {
                             Box(Modifier.fillMaxWidth().height(1.5.dp).background(Brush.horizontalGradient(listOf(AuraColors.Travel, AuraColors.TravelAlt))))
                             Spacer(Modifier.height(4.dp))
-                            Text(if (isRail) "高铁直达" else "直飞航线", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.Monospace)
+                            Text(if (isRail) "高铁直达" else "直飞航线", color = AuraColors.TextSecondary, fontSize = 10.sp, fontFamily = FontFamily.SansSerif)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text(arrCode, color = Color.White, fontSize = 28.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
-                            Text(p.arrHub, color = Color(0xFFCBD5E1), fontSize = 11.sp)
-                            Text(p.arr, color = Color(0xFF7DD3FC), fontSize = 12.sp, fontFamily = FontFamily.Monospace)
+                            Text(arrCode, color = AuraColors.TextPrimary, fontSize = 28.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)
+                            Text(p.arrHub, color = AuraColors.TextSecondary, fontSize = 11.sp)
+                            Text(p.arr, color = AuraColors.Travel, fontSize = 12.sp, fontFamily = FontFamily.SansSerif)
                         }
                     }
 
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x28FFFFFF)))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(AuraColors.HairlineStrong))
 
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                         Column {
-                            Text("SEAT", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
-                            Text(p.seat, color = AuraColors.Travel, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text("SEAT", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
+                            Text(p.seat, color = AuraColors.Travel, fontSize = 13.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                            Text(if (isRail) "CHECK-IN" else "GATE", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
-                            Text(p.gate, color = Color.White, fontSize = 13.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text(if (isRail) "CHECK-IN" else "GATE", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
+                            Text(p.gate, color = AuraColors.TextPrimary, fontSize = 13.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)
                         }
                         Column(horizontalAlignment = Alignment.End) {
-                            Text("STATUS", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
-                            Text("准点计划中", color = Color(0xFF6EE7B7), fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text("STATUS", color = AuraColors.TextSecondary, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
+                            Text("准点计划中", color = AuraColors.Shopping, fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
 
@@ -880,26 +783,26 @@ fun HoloArtifactCard(
                                 Modifier
                                     .width(if (i % 3 == 0) 3.dp else 1.5.dp)
                                     .fillMaxHeight()
-                                    .background(if (i % 7 == 0) AuraColors.Travel else Color(0xCCE2E8F0))
+                                    .background(if (i % 7 == 0) AuraColors.Travel else AuraColors.TextPrimary)
                             )
                         }
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        Text("ETKT 781-AURAFLOW-5102", color = AuraColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
-                        Text("AURAFLOW VERIFIED", color = AuraColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.Monospace)
+                        Text("ETKT 781-AURAFLOW-5102", color = AuraColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.SansSerif)
+                        Text("AURAFLOW VERIFIED", color = AuraColors.TextSecondary, fontSize = 9.sp, fontFamily = FontFamily.SansSerif)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Box(
                             Modifier
                                 .weight(1f)
                                 .clip(RoundedCornerShape(14.dp))
-                                .background(Color(0x14FFFFFF))
+                                .background(AuraColors.CardSolidTop)
                                 .border(1.dp, AuraColors.Hairline, RoundedCornerShape(14.dp))
                                 .clickable { onQuickAction("已打开选座图 · 当前锁定 ${p.seat}") }
                                 .padding(vertical = 10.dp),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text("值机座位", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Medium)
+                            Text("值机座位", color = AuraColors.TextPrimary, fontSize = 12.sp, fontWeight = FontWeight.Medium)
                         }
                         Box(
                             Modifier
@@ -927,18 +830,18 @@ fun HoloArtifactCard(
                                     .border(1.dp, AuraColors.Dining.copy(alpha = 0.45f), CircleShape)
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("RESERVED · 免排队", color = AuraColors.Dining, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+                                Text("RESERVED · 免排队", color = AuraColors.Dining, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
                             }
                             Spacer(Modifier.height(6.dp))
-                            Text(r.room, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                            Text("${r.name} · ${card.time}", color = Color(0xCCFFEDD5), fontSize = 12.sp)
+                            Text(r.room, color = AuraColors.TextPrimary, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                            Text("${r.name} · ${card.time}", color = AuraColors.TextSecondary, fontSize = 12.sp)
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("平均通勤", color = AuraColors.TextSecondary, fontSize = 10.sp)
-                            Text("${r.avgCommute} min", color = AuraColors.Dining, fontSize = 16.sp, fontFamily = FontFamily.Monospace, fontWeight = FontWeight.Bold)
+                            Text("${r.avgCommute} min", color = AuraColors.Dining, fontSize = 16.sp, fontFamily = FontFamily.SansSerif, fontWeight = FontWeight.Bold)
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x28FFFFFF)))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(AuraColors.HairlineStrong))
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         friends.forEach { f ->
                             Box(
@@ -946,17 +849,17 @@ fun HoloArtifactCard(
                                     .size(32.dp)
                                     .clip(CircleShape)
                                     .background(Brush.linearGradient(listOf(AuraColors.Dining, AuraColors.DiningAlt)))
-                                    .border(1.5.dp, Color(0xFF1B1018), CircleShape),
+                                    .border(1.5.dp, AuraColors.CardSolidTop, CircleShape),
                                 contentAlignment = Alignment.Center
                             ) {
-                                Text(f.short, color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                Text(f.short, color = AuraColors.TextPrimary, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                             }
                         }
                         Spacer(Modifier.weight(1f))
                         Text("已同步群日程", color = AuraColors.TextSecondary, fontSize = 11.sp)
                     }
                     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                        Text(r.address, color = Color(0xFFCBD5E1), fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                        Text(r.address, color = AuraColors.TextSecondary, fontSize = 11.sp, modifier = Modifier.weight(1f), maxLines = 1, overflow = TextOverflow.Ellipsis)
                         Spacer(Modifier.width(8.dp))
                         Box(
                             Modifier
@@ -965,7 +868,7 @@ fun HoloArtifactCard(
                                 .clickable { onQuickAction("已唤起导航前往 ${r.name}") }
                                 .padding(horizontal = 12.dp, vertical = 7.dp)
                         ) {
-                            Text("一键导航", color = Color(0xFF020617), fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
+                            Text("一键导航", color = Color.White, fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                 }
@@ -981,11 +884,11 @@ fun HoloArtifactCard(
                                     .border(1.dp, AuraColors.Shopping.copy(alpha = 0.45f), CircleShape)
                                     .padding(horizontal = 8.dp, vertical = 2.dp)
                             ) {
-                                Text("2 VOUCHERS ACTIVE", color = AuraColors.Shopping, fontSize = 9.5.sp, fontFamily = FontFamily.Monospace)
+                                Text("2 VOUCHERS ACTIVE", color = AuraColors.Shopping, fontSize = 9.5.sp, fontFamily = FontFamily.SansSerif)
                             }
                             Spacer(Modifier.height(6.dp))
-                            Text("恒隆广场 · 现货核销卡", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.Bold)
-                            Text("叠券立省 ¥340 · $done/${card.checklist.size} 完成", color = Color(0xCCA7F3D0), fontSize = 11.5.sp)
+                            Text("恒隆广场 · 现货核销卡", color = AuraColors.TextPrimary, fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                            Text("叠券立省 ¥340 · $done/${card.checklist.size} 完成", color = AuraColors.Shopping, fontSize = 11.5.sp)
                         }
                         // Stylized QR block
                         Canvas(Modifier.size(54.dp).clip(RoundedCornerShape(10.dp)).background(Color.White).padding(5.dp)) {
@@ -1001,14 +904,14 @@ fun HoloArtifactCard(
                             }
                         }
                     }
-                    Box(Modifier.fillMaxWidth().height(1.dp).background(Color(0x28FFFFFF)))
+                    Box(Modifier.fillMaxWidth().height(1.dp).background(AuraColors.HairlineStrong))
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                         card.checklist.forEachIndexed { idx, item ->
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .clip(RoundedCornerShape(12.dp))
-                                    .background(if (item.done) AuraColors.Shopping.copy(alpha = 0.16f) else Color(0x55000000))
+                                    .background(if (item.done) AuraColors.Shopping.copy(alpha = 0.16f) else AuraColors.CardSolidTop)
                                     .border(1.dp, if (item.done) AuraColors.Shopping.copy(alpha = 0.45f) else AuraColors.Hairline, RoundedCornerShape(12.dp))
                                     .clickable { onToggleChecklist(idx) }
                                     .padding(horizontal = 12.dp, vertical = 9.dp),
@@ -1021,19 +924,19 @@ fun HoloArtifactCard(
                                             .size(18.dp)
                                             .clip(RoundedCornerShape(5.dp))
                                             .background(if (item.done) AuraColors.Shopping else Color.Transparent)
-                                            .border(1.dp, if (item.done) AuraColors.Shopping else Color(0x55FFFFFF), RoundedCornerShape(5.dp)),
+                                            .border(1.dp, if (item.done) AuraColors.Shopping else AuraColors.Hairline, RoundedCornerShape(5.dp)),
                                         contentAlignment = Alignment.Center
                                     ) {
-                                        if (item.done) Text("✓", color = Color(0xFF020617), fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                                        if (item.done) Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
                                     }
                                     Text(
                                         text = item.name,
-                                        color = if (item.done) Color(0xAAA7F3D0) else Color.White,
+                                        color = if (item.done) AuraColors.Shopping else AuraColors.TextPrimary,
                                         fontSize = 12.sp,
                                         textDecoration = if (item.done) TextDecoration.LineThrough else TextDecoration.None
                                     )
                                 }
-                                Text(item.price, color = if (item.done) AuraColors.Shopping else Color(0xFFCBD5E1), fontSize = 11.sp, fontFamily = FontFamily.Monospace)
+                                Text(item.price, color = if (item.done) AuraColors.Shopping else AuraColors.TextSecondary, fontSize = 11.sp, fontFamily = FontFamily.SansSerif)
                             }
                         }
                     }

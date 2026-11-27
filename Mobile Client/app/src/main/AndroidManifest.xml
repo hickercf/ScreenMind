@@ -9,8 +9,8 @@
         android:allowBackup="false"
         android:fullBackupContent="false"
         android:dataExtractionRules="@xml/data_extraction_rules"
-        android:label="微光"
-        android:icon="@drawable/ic_launcher"
+        android:label="@string/app_name"
+        android:icon="@drawable/screenmind_launcher"
         android:supportsRtl="true"
         android:theme="@style/Theme.Weiguang"
         android:usesCleartextTraffic="false">
@@ -33,7 +33,7 @@
         <service android:name=".capture.ChatCaptureService" android:exported="false"
             tools:targetApi="30"
             android:enabled="@bool/chat_capture_supported"
-            android:label="微光聊天记录" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            android:label="@string/chat_capture_label" android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter><action android:name="android.accessibilityservice.AccessibilityService" /></intent-filter>
             <meta-data android:name="android.accessibilityservice" android:resource="@xml/chat_accessibility_service" />
         </service>

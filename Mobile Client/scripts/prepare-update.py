@@ -19,7 +19,7 @@ sys.path.insert(0, str(ROOT))
 from backend.app_updates import Release
 
 
-def prepare(apk, channel, output, sdk, java, notes='', download_base_url=''):
+def prepare(apk, channel, output, sdk, java, notes='', download_base_url='', *, allow_local_test=False):
     apk = apk.resolve(strict=True)
     candidates = sorted((sdk / 'build-tools').glob('*/aapt2*'), reverse=True)
     candidates = [p for p in candidates if p.name in ('aapt2', 'aapt2.exe')]
@@ -38,6 +38,13 @@ def prepare(apk, channel, output, sdk, java, notes='', download_base_url=''):
     debuggable = 'application-debuggable' in badging
     if debuggable != (channel == 'debug'):
         raise ValueError('APK debug flag does not match the requested channel')
+    if not allow_local_test:
+        manifest_tree = subprocess.run(
+            [str(aapt), 'dump', 'xmltree', '--file', 'AndroidManifest.xml', str(apk)],
+            check=True, capture_output=True, text=True, encoding='utf-8', errors='replace',
+        ).stdout
+        if not re.search(r'android:usesCleartextTraffic\(0x[0-9a-fA-F]+\)=false\s*$', manifest_tree, re.M):
+            raise ValueError('请用 -PscreenmindPublished=true 构建公网内测包。仅供本机联调的更新可使用 --local-test。')
     if download_base_url:
         url = urlsplit(download_base_url)
         if url.scheme != 'https' or not url.hostname or url.username or url.password or url.query or url.fragment:
@@ -88,13 +95,16 @@ def main():
     parser.add_argument('--java', type=Path)
     parser.add_argument('--notes', default='')
     parser.add_argument('--download-base-url', default='')
+    parser.add_argument('--local-test', action='store_true',
+                        help='Allow a development APK for a local gateway and a separate test release directory.')
     args = parser.parse_args()
     java = args.java
     if java is None:
         local = ROOT / '.tools' / 'java-home.txt'
         java_home = os.getenv('JAVA_HOME') or (local.read_text(encoding='utf-8-sig').strip() if local.exists() else '')
         java = Path(java_home) / 'bin' / ('java.exe' if os.name == 'nt' else 'java') if java_home else Path('java')
-    release, fingerprint = prepare(args.apk, args.channel, args.output, args.sdk, java, args.notes, args.download_base_url)
+    release, fingerprint = prepare(args.apk, args.channel, args.output, args.sdk, java, args.notes,
+                                   args.download_base_url, allow_local_test=args.local_test)
     print(f'Prepared {release.channel} {release.version_name} (code {release.version_code}), {release.size_bytes} bytes')
     print('SHA-256: ' + release.sha256)
     print(fingerprint)

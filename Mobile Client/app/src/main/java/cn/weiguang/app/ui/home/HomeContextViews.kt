@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -30,7 +31,7 @@ import java.time.format.DateTimeFormatter
 @Composable
 private fun HomePickerTheme(content: @Composable () -> Unit) {
     val colors = MaterialTheme.colorScheme.copy(
-        primary = AuraColors.Travel,
+        primary = AuraColors.Rose,
         onPrimary = AuraColors.ScreenBg,
         surface = AuraColors.SheetBg,
         surfaceContainer = AuraColors.SheetBg,
@@ -52,7 +53,7 @@ internal fun HomeWeatherButton(context: HomeLocalContext, enabled: Boolean, onCl
         context.weather.status == "unavailable" -> "$city · 天气暂不可用"
         else -> "$city · 查看天气"
     }
-    TextButton(onClick = onClick, enabled = enabled) { Text(label, color = AuraColors.TextPrimary) }
+    AssistChip(onClick = onClick, enabled = enabled, label = { Text(label, color = AuraColors.Rose) })
 }
 
 @Composable

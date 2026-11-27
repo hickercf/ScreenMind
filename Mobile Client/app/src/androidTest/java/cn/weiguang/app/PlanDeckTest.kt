@@ -50,7 +50,7 @@ class PlanDeckTest {
             plan.value = JSONObject(initial.toString()).put("version", 2).put("confirmed", revised)
                 .put("candidate", JSONObject.NULL)
         }
-        compose.onNodeWithText("已确认 · v2").assertIsDisplayed()
+        compose.onNodeWithText("已确认 · 第 2 版").assertIsDisplayed()
         compose.onNodeWithTag("plan-candidate").assertDoesNotExist()
         compose.onNodeWithText("¥98.29").assertIsDisplayed()
     }

@@ -157,7 +157,7 @@ def test_work_isolation_and_router_binding(client):
         r = client.post("/api/tasks", json={"event_id": uid(), "instruction": "整理", "screen_ids": [sid], "work_id": wid, "subagent_id": agent})
         assert r.status_code == 422
     route = client.post("/api/tasks", json={"event_id": uid(), "instruction": "规划聚会", "screen_ids": [evidence(client)]})
-    assert route.status_code == 422 and "work_id" in route.text
+    assert route.status_code == 422 and "请先选择或创建一个“聚会协调”事项" in route.text
 
 
 def test_restart_keeps_memory(settings):

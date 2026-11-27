@@ -67,10 +67,36 @@ class AppUpdateTests(unittest.TestCase):
         (self.root / 'update-debug.json').write_text('{broken', encoding='utf-8')
         self.assertEqual(self.client.get('/v1/app/update').status_code, 503)
 
+    def test_incomplete_pilot_does_not_prevent_debug_download(self):
+        self.publish()
+        (self.root / 'update-pilot.json').write_text('{broken', encoding='utf-8')
+        response = self.client.get('/download')
+        self.assertEqual(response.status_code, 200)
+        self.assertIn(f'/v1/app/releases/{self.digest}.apk', response.text)
+        self.assertIn('ARM64 轻量内测版暂时无法下载，请稍后再试。', response.text)
+        self.assertEqual(self.client.get('/v1/app/update?channel=pilot').status_code, 503)
+
     def test_external_https_asset_does_not_require_local_copy(self):
         self.publish(download_url='https://cdn.example.org/app.apk')
         (self.root / (self.digest + '.apk')).unlink()
         self.assertEqual(self.client.get('/v1/app/update').status_code, 200)
+
+    def test_sakura_preview_is_listed_without_entering_the_update_channel(self):
+        self.publish()
+        preview = b'sakura-preview'
+        sha = hashlib.sha256(preview).hexdigest()
+        preview_manifest = self.root / 'preview-sakura.json'
+        preview_manifest.write_text(json.dumps(dict(sha256=sha, version_name='0.4.17', size_bytes=len(preview))),
+                                    encoding='utf-8')
+        self.assertNotIn('樱花粉预览版', self.client.get('/download').text)
+        (self.root / (sha + '.apk')).write_bytes(preview)
+        self.assertIn(f'/v1/app/releases/{sha}.apk', self.client.get('/download').text)
+        self.assertEqual(self.client.get('/v1/app/update?channel=debug').json(), self.manifest)
+        self.assertEqual(self.client.get('/v1/app/update?channel=pilot').status_code, 204)
+        response = self.client.get(f'/v1/app/releases/{sha}.apk', headers={'Range': 'bytes=0-5'})
+        self.assertEqual(response.status_code, 206)
+        self.assertEqual(response.content, preview[:6])
+        self.assertIn('ScreenMind-Sakura-0.4.17-arm64.apk', response.headers['content-disposition'])
 
     def test_unsafe_download_urls_rejected(self):
         for url in ('http://example.org/app.apk', 'https://user:secret@example.org/a.apk', 'file:///a.apk'):

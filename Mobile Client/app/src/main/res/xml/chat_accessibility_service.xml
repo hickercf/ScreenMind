@@ -2,5 +2,5 @@
     android:accessibilityEventTypes="typeWindowStateChanged|typeWindowContentChanged|typeViewScrolled" android:accessibilityFeedbackType="feedbackGeneric"
     android:packageNames="com.tencent.mm,com.tencent.mobileqq"
     android:canRetrieveWindowContent="true" android:accessibilityFlags="flagRetrieveInteractiveWindows"
-    android:canTakeScreenshot="true" android:notificationTimeout="350"
+    android:canTakeScreenshot="true" android:notificationTimeout="0"
     android:description="@string/chat_capture_description" />

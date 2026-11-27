@@ -120,7 +120,7 @@ class AgentBridgeTests(unittest.TestCase):
     def test_party_weekday_stays_on_the_confirmed_date_in_home_and_detail(self):
         work = self.work('party')
         captured = '2026-11-30T12:30:00+08:00'
-        messages = ['参加成员：小林、小王', '时间：周六 18:30']
+        messages = ['聚会名称：合成事项（标题待确认）', '参加成员：小林、小王', '时间：周六 18:30', '地点：湖畔餐厅']
         event = self.upload('\n'.join(messages), captured_at=captured, payload={
             'text': '\n'.join(messages),
             'screen': {'event_id': 'party-weekday', 'session_id': 'party-weekday', 'app_package': 'com.example.party',
@@ -152,6 +152,12 @@ class AgentBridgeTests(unittest.TestCase):
         self.assertIsNone(card['timing']['endAt'])
         native = next(c for c in saturday['nativeState']['events'] if c['id'] == eid)
         self.assertEqual(native['timing'], card['timing'])
+        self.assertIn(work['title'], native['title'])
+        self.assertNotIn('标题待确认', native['title'])
+        clue_id = f"evt_{event['event_id']}"
+        self.assertNotIn(clue_id, {c['id'] for c in saturday['nativeState']['events']})
+        self.assertNotIn(clue_id, {c['eventId'] for c in cards('2026-11-30')})
+        self.assertIn(event['event_id'], {row['event_id'] for row in self.req('GET', 'events').json()['items']})
         detail = self.client.get(f'/api/v1/events/{eid}/detail', headers=headers).json()
         self.assertEqual(detail['timing'], card['timing'])
         plan = self.req('GET', f"agent/works/{work['id']}/plan").json()

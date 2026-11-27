@@ -60,36 +60,63 @@ class IntegratedCaptureTest {
         assertTrue(payload.blocks.any { it.messageAt != null })
         runBlocking { repo.setCaptureTarget(wid,true) }
 
+        val event = runBlocking { requireNotNull(ChronoCapture.save(app,payload,account,wid,automatic=true)) }
+        assertNull(runBlocking { ChronoCapture.save(app,payload,account,wid,automatic=true) })
+        assertEquals("local", event.syncState)
+        assertFalse(event.consentToUpload)
+        assertNull(event.agentWorkId)
+        assertNull(event.agentRequestId)
+        assertEquals(0, runBlocking { repo.agentSnapshot(null,wid).getJSONArray("tasks").length() })
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("open-agent").fetchSemanticsNodes().isNotEmpty() }
+        ready()
+        compose.onNodeWithText("线索", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("上传", substring = false).performScrollTo().performClick()
+        capture(screenshots, "upload-confirmation")
+
         // The host runner closes the actual TCP forward, not a fake transport or a synthetic error.
         instrumentation.sendStatus(2,Bundle().apply { putString("integration_stage","disconnect") })
         Thread.sleep(1500)
-        val event = runBlocking {
-            requireNotNull(ChronoCapture.save(app,payload,account,wid,automatic=true))
-        }
-        assertNull(runBlocking { ChronoCapture.save(app,payload,account,wid,automatic=true) })
+        compose.onNodeWithText("确认上传", substring = false).performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("确认上传").fetchSemanticsNodes().isEmpty() }
+        ready()
         try { runBlocking { repo.sync() }; fail("Expected real offline request failure") }
-        catch (_: IOException) { /* Durable evidence and stable task request must survive. */ }
+        catch (_: IOException) { /* The explicitly approved upload must survive. */ }
         val pending = runBlocking { app.database.events().get(account,event.eventId)!! }
         assertNotNull(pending.screenJson)
-        assertNotNull(pending.agentRequestId)
+        assertTrue(pending.consentToUpload)
+        assertNull(pending.agentRequestId)
         assertNull(pending.agentTaskId)
         assertEquals("failed",pending.syncState)
         instrumentation.sendStatus(2,Bundle().apply { putString("integration_stage","reconnect") })
         Thread.sleep(1500)
         runBlocking { repo.sync() }
         val sent = runBlocking { app.database.events().get(account,event.eventId)!! }
-        assertEquals(pending.agentRequestId,sent.agentRequestId)
+        assertEquals(pending.screenJson, sent.screenJson)
         assertEquals("synced",sent.syncState)
-        val tid = requireNotNull(sent.agentTaskId)
-        // Repeated sync is idempotent even after the model task has been accepted.
+        assertNull(sent.agentTaskId)
         runBlocking { repo.sync() }
-        assertEquals(tid,runBlocking { app.database.events().get(account,event.eventId)!!.agentTaskId })
-        var snapshot = runBlocking { repo.agentSnapshot(tid,wid) }
-        val deadline = System.currentTimeMillis()+20000
-        while (snapshot.getJSONObject("task").optString("status") in listOf("queued","running") && System.currentTimeMillis()<deadline) {
-            Thread.sleep(200)
-            snapshot = runBlocking { repo.agentSnapshot(tid,wid) }
+        assertEquals(0, runBlocking { repo.agentSnapshot(null,wid).getJSONArray("tasks").length() })
+
+        compose.onNodeWithText("首页", useUnmergedTree = true).performClick()
+        compose.onNodeWithTag("open-agent").performScrollTo().performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithText("模拟器三端联调").fetchSemanticsNodes().isNotEmpty() }
+        ready()
+        compose.onNodeWithText("模拟器三端联调").performScrollTo().performClick()
+        val source = "agent-source-${event.eventId}"
+        compose.waitUntil(30000) { compose.onAllNodesWithTag(source).fetchSemanticsNodes().isNotEmpty() }
+        ready()
+        compose.waitUntil(15000) {
+            compose.onAllNodes(hasText("已加入上传队列") or hasText("同步完成")).fetchSemanticsNodes().isEmpty()
         }
+        compose.onNodeWithTag(source).performScrollTo().performClick().assertIsOn()
+        capture(screenshots, "select-source")
+        compose.onNodeWithTag("agent-start").performScrollTo().performClick()
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
+        ready()
+        val tasks = runBlocking { repo.agentSnapshot(null,wid).getJSONArray("tasks") }
+        assertEquals(1, tasks.length())
+        val tid = tasks.getJSONObject(0).getString("id")
+        val snapshot = runBlocking { repo.agentSnapshot(tid,wid) }
         assertEquals(1,snapshot.getJSONArray("tasks").length())
         val screen = snapshot.getJSONObject("task").getJSONObject("memory_context").getJSONArray("screens").getJSONObject(0)
         assertEquals("com.tencent.mm",screen.getString("app_package"))
@@ -99,30 +126,33 @@ class IntegratedCaptureTest {
         assertEquals(4,block.getJSONArray("bbox").length())
         assertEquals(0,snapshot.getJSONObject("work").getInt("memory_version"))
 
-        compose.waitUntil(30000) { compose.onAllNodesWithTag("open-agent").fetchSemanticsNodes().isNotEmpty() }
-        ready()
-        compose.onNodeWithTag("open-agent").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithText("模拟器三端联调").fetchSemanticsNodes().isNotEmpty() }
-        ready()
-        compose.onNodeWithText("模拟器三端联调").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-task-$tid").fetchSemanticsNodes().isNotEmpty() }
-        ready()
-        compose.onNodeWithTag("agent-task-$tid").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
-        ready()
-        compose.onNodeWithTag("agent-accept-state").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithText("已确认状态 v1",substring=true).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithTag("agent-accept-state").performScrollTo()
+        capture(screenshots, "candidate")
+        compose.onNodeWithTag("agent-accept-state").performClick()
+        compose.waitUntil(30000) {
+            compose.onAllNodes(hasTestTag("plan-confirmed") and hasText("已确认 · 第 1 版")).fetchSemanticsNodes().isNotEmpty()
+        }
         assertEquals(1,runBlocking { repo.agentSnapshot(null,wid) }.getJSONObject("work").getInt("memory_version"))
         compose.onNodeWithTag("capture-toggle").performScrollTo().performClick()
         ready()
         assertNull(runBlocking { repo.captureTarget(account) })
-        compose.onNodeWithTag("agent-state-version").performScrollTo()
-        instrumentation.uiAutomation.takeScreenshot().let { image ->
-            File(screenshots,"integrated-confirmed.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
-            image.recycle()
-        }
+        compose.onNodeWithTag("plan-confirmed").performScrollTo()
+        capture(screenshots, "confirmed")
         instrumentation.sendStatus(2,Bundle().apply { putString("integration_stage","confirmed") })
     }
 
     private fun ready() { compose.waitUntil(30000) { compose.onAllNodesWithTag("operation-progress").fetchSemanticsNodes().isEmpty() } }
+
+    private fun capture(directory: File, name: String) {
+        compose.waitForIdle()
+        val instrumentation = InstrumentationRegistry.getInstrumentation()
+        instrumentation.waitForIdleSync()
+        Thread.sleep(300)
+        val image = checkNotNull(instrumentation.uiAutomation.takeScreenshot())
+        try {
+            File(directory,"integrated-$name.png").outputStream().use { image.compress(Bitmap.CompressFormat.PNG,100,it) }
+        } finally {
+            image.recycle()
+        }
+    }
 }

@@ -55,7 +55,7 @@ class CaptureServiceFlowTest {
             launchFixture("CaptureFixtureActivity")
             waitFor("actual service screenshot and OCR", 60_000) { events(account).any { it.text.contains("A302") } }
             assertTrue(CaptureRuntime.status.value.screenshots > 0)
-            assertTrue(events(account).all { !it.text.contains("微光") && !it.text.contains("暂停") })
+            assertTrue(events(account).all { !it.text.contains("ScreenMind", ignoreCase = true) && !it.text.contains("暂停") })
             stages += "actual_window_screenshot_and_ppocr_without_overlay_text"
             screenshot(out, "overlay-running")
 

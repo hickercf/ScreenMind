@@ -6,6 +6,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, Field, model_validator
 from ..models import StrictModel, Identifier
+from ..schedule_note import DATE_QUESTION, REVIEW_SUMMARY, answer_change, apply_missing_date, schedule_field
 from .base import Proposal, ToolError, tool_call
 
 
@@ -71,6 +72,9 @@ source_refs 只能用当前屏幕块或本任务用户补充。历史材料仅�
             all_refs.update(refs)
             old = items.get(change.id)
             if "at" in change.model_fields_set and change.at is None:
+                title = change.title or (old or {}).get("title")
+                if title:
+                    return question(f"“{title}”定在什么时候？请回复日程名称、完整日期、时间和时区。", refs)
                 return question("时间仍不明确，请提供带日期和时区的具体时间。", refs)
             stamp = max((times[r] for r in refs if times[r]), key=datetime.fromisoformat, default=None)
             stamp_dt = datetime.fromisoformat(stamp) if stamp else None
@@ -116,13 +120,13 @@ source_refs 只能用当前屏幕块或本任务用户补充。历史材料仅�
                 if item == previous["items"][key]:
                     refs = set()
                 refs.add(context.memory["source_ref"])
-            dependency = " · 须早于：" + "、".join(items[i]["title"] for i in item["before"]) if item["before"] else " · 无先后约束"
-            fields.append({"id": key, "label": item["title"], "value": item["at"] + " · " + item["status"] + dependency,
+            before = "、".join(items[i]["title"] for i in item["before"])
+            fields.append({"id": key, "label": item["title"], "value": schedule_field(item["at"], item["status"], before),
                            "source_refs": sorted(refs)[:20], "editable": False})
         if not fields:
             return question("请提供至少一项明确日程。", all_refs)
-        card = {"title": "日程安排", "summary": ("忽略较早的通知；" if ignored else "") +
-                ("当前安排没有变化" if state == previous else "核对时间与依赖后确认更新"), "fields": fields}
+        card = {"title": "日程安排", "summary": ("已保留较新的通知。" if ignored else "") +
+                ("当前安排没有变化" if state == previous else REVIEW_SUMMARY), "fields": fields}
         return Proposal(card, state if state != previous else None)
 
     @staticmethod
@@ -130,7 +134,7 @@ source_refs 只能用当前屏幕块或本任务用户补充。历史材料仅�
         return state.get("items", {}).get(item_id)
 
     def mock_reply(self, messages):
-        # Reproducible mock protocol, not a natural-language date parser.
+        # Structured fixtures and explicit dated answers use the same proposal and confirmation path.
         evidence = next((json.loads(m["content"]) for m in messages if m.get("name") == "read_screens"), None)
         if evidence is None:
             return tool_call("read_screens", {})
@@ -143,14 +147,23 @@ source_refs 只能用当前屏幕块或本任务用户补充。历史材料仅�
                     continue
                 for c in payload.get("schedule_changes", []) if isinstance(payload, dict) else []:
                     changes[c["id"]] = {**changes.get(c["id"], {}), **c, "source_refs": [block["source_ref"]]}
+        state = (evidence.get("memory") or {}).get("state") or {}
+        items = state.get("items", {})
         for i in evidence["authenticated_user_inputs"]:
             try:
                 payload = json.loads(i["message"])
             except ValueError:
+                if changes:
+                    apply_missing_date(changes, items, i)
                 continue
             for c in payload.get("schedule_changes", []) if isinstance(payload, dict) else []:
                 changes[c["id"]] = {**changes.get(c["id"], {}), **c, "source_refs": [i["source_ref"]]}
         if not changes:
-            ref = evidence["screens"][0]["blocks"][0]["source_ref"]
-            return tool_call("ask_clarification", {"question": "模拟模式请提供 schedule_changes JSON；真实模型可处理自然语言。", "source_refs": [ref]})
+            answers = evidence["authenticated_user_inputs"]
+            ref = answers[-1]["source_ref"] if answers else evidence["screens"][0]["blocks"][0]["source_ref"]
+            if answers:
+                change = answer_change(answers[-1], items)
+                if change:
+                    return tool_call(self.output_tool, {"changes": [change]})
+            return tool_call("ask_clarification", {"question": DATE_QUESTION, "source_refs": [ref]})
         return tool_call(self.output_tool, {"changes": list(changes.values())})

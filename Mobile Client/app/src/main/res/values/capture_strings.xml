@@ -1,4 +1,5 @@
 <resources>
     <string name="capture_overlay_work">事项：%1$s</string>
-    <string name="chat_capture_description">在微光开启本机记录后，识别前台微信或QQ页面上的文字并存为本机线索。你可以先核对文字再选择上传。原始截图不上传。可以在悬浮窗暂停或结束记录。</string>
+    <string name="chat_capture_label">ScreenMind 聊天记录</string>
+    <string name="chat_capture_description">在 ScreenMind 开启本机记录后，识别前台微信或QQ页面上的文字并存为本机线索。你可以先核对文字再选择上传。原始截图不上传。可以在悬浮窗暂停或结束记录。</string>
 </resources>

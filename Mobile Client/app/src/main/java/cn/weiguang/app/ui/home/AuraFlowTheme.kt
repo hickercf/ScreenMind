@@ -1,42 +1,41 @@
 package cn.weiguang.app.ui.home
 
 import androidx.compose.ui.graphics.Color
+import cn.weiguang.app.ui.SakuraLight
 import java.util.Locale
 
-/**
- * Scoped AuraFlow Obsidian Kinetic Aurora tokens.
- * Used ONLY inside the Home module (tab == 0) so other tabs keep WeiguangTheme intact.
- */
+/** The light sakura palette for the agenda and its detail sheets. */
 object AuraColors {
-    val ObsidianBg = Color(0xFF05070B)
-    val ScreenBg = Color(0xFF06080F)
-    val CardSolidTop = Color(0xF0151B2A)
-    val CardSolidBottom = Color(0xF70C101A)
-    val CardNowTop = Color(0xE6131A2C)
-    val CardNowBottom = Color(0xF20A0E18)
-    val GlassPanel = Color(0xE0101522)
-    val SheetBg = Color(0xF5060911)
-    val MiniSheetTop = Color(0xFA131826)
-    val MiniSheetBottom = Color(0xFC090C16)
+    val ScreenBg = SakuraLight.background
+    val CardSolidTop = SakuraLight.surface
+    val CardSolidBottom = Color(0xFFFFF8FA)
+    val CardNowTop = Color(0xFFFFE9EF)
+    val CardNowBottom = Color(0xFFF8D1E0)
+    val GlassPanel = SakuraLight.surface
+    val SheetBg = SakuraLight.background
+    val MiniSheetTop = SakuraLight.surface
+    val MiniSheetBottom = SakuraLight.primaryContainer
 
-    val TextPrimary = Color(0xFFF8FAFC)
-    val TextSecondary = Color(0xFF94A3B8)
-    val TextMuted = Color(0xFF64748B)
-    val Hairline = Color(0x1CFFFFFF)
-    val HairlineStrong = Color(0x2BFFFFFF)
+    val TextPrimary = SakuraLight.onSurface
+    val TextSecondary = SakuraLight.onSurfaceVariant
+    val TextMuted = Color(0xFF805E6D)
+    val Hairline = SakuraLight.outlineVariant
+    val HairlineStrong = Color(0xFFE0BCCB)
+    val Rose = SakuraLight.primary
+    val Tint = SakuraLight.surfaceVariant
 
-    val Travel = Color(0xFF00E5FF)
-    val TravelAlt = Color(0xFF3B82F6)
-    val Dining = Color(0xFFFF914D)
-    val DiningAlt = Color(0xFFF43F5E)
-    val Shopping = Color(0xFF00E676)
-    val ShoppingAlt = Color(0xFF14B8A6)
-    val Explore = Color(0xFFC084FC)
-    val ExploreGold = Color(0xFFFBBF24)
-    val Office = Color(0xFF818CF8)
-    val OfficeAlt = Color(0xFF6366F1)
-    val Rest = Color(0xFF94A3B8)
-    val Alert = Color(0xFFFF4D6D)
+    val Travel = Color(0xFF4D6283)
+    val TravelAlt = Color(0xFF758DB2)
+    val Dining = Color(0xFFA3425A)
+    val DiningAlt = Color(0xFFC87B88)
+    val Shopping = Color(0xFF476D5C)
+    val ShoppingAlt = Color(0xFF73A58C)
+    val Explore = Color(0xFF9C456E)
+    val ExploreGold = Color(0xFF89501F)
+    val Office = Color(0xFF705485)
+    val OfficeAlt = Color(0xFF9F85B5)
+    val Rest = Color(0xFF775F72)
+    val Alert = Color(0xFFA23742)
 }
 
 data class AuraPalette(

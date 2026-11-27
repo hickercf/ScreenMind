@@ -13,6 +13,7 @@ import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityWindowInfo
 import cn.weiguang.app.BuildConfig
 import cn.weiguang.app.WeiguangApp
+import cn.weiguang.app.data.needsReconciliation
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.combine
 import kotlin.coroutines.resume
@@ -51,8 +52,8 @@ class ChatCaptureService : AccessibilityService() {
                 }
                 val relevant = events.filter { target != null && it.agentWorkId == target.workId && !it.deleted }
                 val waiting = relevant.count { it.syncState in listOf("pending", "failed") }
-                val failed = relevant.count { it.syncState == "conflict" || it.agentError != null }
-                queueSummary = "待同步 $waiting · 已交给Agent ${relevant.count { it.agentTaskId != null }}" + if (failed > 0) " · 需检查 $failed" else ""
+                val failed = relevant.count { it.needsReconciliation || it.agentError != null }
+                queueSummary = "待同步 $waiting · 已提交整理 ${relevant.count { it.agentTaskId != null }}" + if (failed > 0) " · 需检查 $failed" else ""
                 render()
                 if (changed && target != null && !target.paused) requestActive()
             }
@@ -212,7 +213,7 @@ class ChatCaptureService : AccessibilityService() {
                 else repository.setCapturePaused(!target.paused, target.token)
                 // Stay blocked until the grant collector observes the new authorization.
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (_: Exception) { changing = false; publish("控制未完成，请在微光中检查事项") }
+            catch (_: Exception) { changing = false; publish("控制未完成，请在 ScreenMind 中检查事项") }
         }
     }
 

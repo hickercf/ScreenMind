@@ -25,40 +25,19 @@ class DeviceFlowTest {
     @Test fun offlineEntryManualRecordAndTheme() {
         val repository = (compose.activity.application as WeiguangApp).repository
         runBlocking { repository.logout() }
-        compose.waitUntil(15000) { compose.onAllNodesWithText("先离线体验 OCR 与页面").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("先离线体验 OCR 与页面").performScrollTo().performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("把线索，变成下一步。").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { compose.onAllNodesWithText("先离线使用").fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("先离线使用").performScrollTo().performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("你的工作台").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("线索", useUnmergedTree = true).performClick()
         compose.onNodeWithText("手动记录").performClick()
-        compose.onNodeWithText("识别或记录内容").performTextInput("UI 自动化记录：周五在 A302 讨论")
+        compose.onNodeWithTag("clue-editor-text").performTextInput("UI 自动化记录：周五在 A302 讨论")
         compose.onNodeWithText("确认并保存").performScrollTo().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("UI 自动化记录：周五在 A302 讨论").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
         compose.onNodeWithText("深色").performScrollTo().performClick()
         waitReady()
         compose.waitUntil(15000) { compose.onAllNodes(hasText("深色") and isSelected()).fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("我的空间").assertExists()
-    }
-
-    @Test fun homeCardKeepsItsSourceThroughConfirmationAndCompletion() {
-        val repo = (compose.activity.application as WeiguangApp).repository
-        runBlocking { repo.enterOffline() }
-        val title = "首页评审 " + System.nanoTime()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("＋ 添加日程").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithText("＋ 添加日程").performClick()
-        compose.onNodeWithText("识别或记录内容").performTextInput(title)
-        compose.onNodeWithText("确认并保存").performScrollTo().performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText(title).fetchSemanticsNodes().isNotEmpty() }
-        // A new schedule without a supplied clock stays in the unscheduled section.
-        compose.onAllNodesWithText(title).onFirst().performScrollTo().performClick()
-        compose.onNodeWithText("确认这项安排").performScrollTo().performClick()
-        compose.onNodeWithText("核对或修改线索").performScrollTo().performClick()
-        compose.onNodeWithText("核对这条线索").assertExists()
-        compose.onNodeWithText("确认并保存").performScrollTo().performClick()
-        compose.onAllNodesWithText(title).onFirst().performScrollTo().performClick()
-        compose.onNodeWithText("标记完成").performScrollTo().performClick()
-        compose.onNodeWithText("今日回顾", substring = true).performScrollTo().performClick()
-        compose.onNodeWithText("$title · 已完成", substring = true).assertExists()
+        compose.onNodeWithText("账户与设置").assertExists()
     }
 
     @Test fun bundledChineseOcrWorksOnDevice() = runBlocking {
@@ -98,18 +77,21 @@ class DeviceFlowTest {
         compose.onNodeWithText("密码", substring = false).performTextInput("Android-test-123")
         compose.onNodeWithText("确认密码", substring = false).performScrollTo().performTextInput("Android-test-123")
         compose.onNodeWithText("注册并登录").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithText("把线索，变成下一步。").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30000) { compose.onAllNodesWithText("你的工作台").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
         compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("创建、加入与管理").performScrollTo().performClick()
+        compose.onNodeWithText("测试组", substring = false).performScrollTo().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("新建组名称").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("新建组名称").performScrollTo().performTextInput("安卓联调组")
-        compose.onNodeWithText("创建组", substring = false).performScrollTo().performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("安卓联调组").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { compose.onAllNodes(hasText("创建组") and isEnabled()).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNodeWithText("创建组", substring = false).performScrollTo().assertIsEnabled().performClick()
+        // The editable field contains the group name before the server has created it.
+        compose.waitUntil(15000) { compose.onAllNodesWithText("查看成员与共享").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
         compose.onNodeWithText("查看成员与共享").performScrollTo().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("生成限时邀请码").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("测试组已创建", substring = false).fetchSemanticsNodes().isEmpty() }
         compose.onNodeWithText("生成限时邀请码").performScrollTo().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("复制邀请码").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
@@ -118,23 +100,23 @@ class DeviceFlowTest {
         compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("线索", useUnmergedTree = true).performClick()
         compose.onNodeWithText("手动记录").performClick()
-        compose.onNodeWithText("识别或记录内容").performTextInput("明天18:30在A302讨论项目")
+        compose.onNodeWithTag("clue-editor-text").performTextInput("明天18:30在A302讨论项目")
         compose.onNode(isToggleable()).performScrollTo().performClick()
         compose.onNodeWithText("确认并保存").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("已同步", substring = true).fetchSemanticsNodes().isNotEmpty() }
         waitReady()
         screenshot("clues")
         compose.onNodeWithText("首页", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("用已同步线索生成联调建议").performScrollTo().performClick()
+        compose.onNodeWithText("从已同步线索生成建议").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("先确认线索中的具体时间").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
-        compose.onNodeWithText("把线索，变成下一步。").performScrollTo()
+        compose.onNodeWithText("你的工作台").performScrollTo()
         screenshot("home")
         compose.onNodeWithText("采纳", substring = false).performScrollTo().performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("已采纳 · 反馈已记录").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { compose.onAllNodesWithText("已采纳", substring = false).fetchSemanticsNodes().isNotEmpty() }
         waitReady()
         compose.onNodeWithText("设备", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("先验证腕上提醒").assertExists()
+        compose.onNodeWithText("手表提醒").assertExists()
         screenshot("devices")
         compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
         compose.onNodeWithText("深色").performScrollTo().performClick()

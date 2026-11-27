@@ -6,15 +6,17 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.viewModelScope
 import cn.weiguang.app.capture.CalendarEntry
 import cn.weiguang.app.capture.CaptureService
+import cn.weiguang.app.capture.ScreenshotImportException
 import cn.weiguang.app.data.*
 import cn.weiguang.app.home.*
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -29,11 +31,26 @@ import java.util.UUID
 data class EditorDraft(val text: String = "", val source: String = "manual", val type: String = "note", val id: String? = null, val upload: Boolean = false, val occurredAt: String? = null, val uploaded: Boolean = false, val imageUri: Uri? = null,
     val screenJson: String? = null)
 
-class AppViewModel(application: Application) : AndroidViewModel(application) {
+class ClueEditor(val original: EditorDraft, val accountKey: String, val openedEvent: LocalEvent? = null) {
+    var draft by mutableStateOf(original)
+}
+
+data class SharedScreenshot(val uri: Uri, val accountKey: String?, val deliveryId: String, val problem: String? = null)
+
+data class AgentWorkDraft(val title: String = "", val type: String = "information")
+private data class WorkSubmission(val draft: AgentWorkDraft, val eventId: String, val fromWork: String?, val fromTask: String?)
+
+class AppViewModel(application: Application, private val savedState: SavedStateHandle) : AndroidViewModel(application) {
     val updater = AppUpdater(application, viewModelScope)
     val repository = (application as WeiguangApp).repository
     private val capture = CaptureService(application)
     val session = repository.session
+    var sharedScreenshot by mutableStateOf(savedState.get<Uri>("share.uri")?.let {
+        SharedScreenshot(it, savedState["share.owner"], savedState["share.id"] ?: UUID.randomUUID().toString(), savedState["share.problem"])
+    })
+        private set
+    var recognizingShare by mutableStateOf<SharedScreenshot?>(null)
+        private set
     val captureGrant = repository.captureGrants.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), null)
     val events = repository.events.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
     val decisions = repository.decisions.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -42,7 +59,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var busy by mutableStateOf(false)
         private set
     var message by mutableStateOf<String?>(null)
-    var editor by mutableStateOf<EditorDraft?>(null)
+    var loginError by mutableStateOf<String?>(null)
+        private set
+    var editor by mutableStateOf<ClueEditor?>(null)
+        private set
     var calendarEntries by mutableStateOf<List<CalendarEntry>?>(null)
     var groups by mutableStateOf<List<Group>>(emptyList())
         private set
@@ -72,6 +92,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     var selectedWorkId by mutableStateOf<String?>(null)
         private set
     private var selectedTaskId: String? = null
+    var workDraft by mutableStateOf(AgentWorkDraft())
+        private set
+    private var workSubmission: WorkSubmission? = null
     private var pollingAgent = false
     private var homeAccount by mutableStateOf<String?>(null)
     private val homePreferences = application.getSharedPreferences("home_card_states", 0)
@@ -86,6 +109,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         private set
     private var pillJob: Job? = null
 
+    fun changeWorkDraft(draft: AgentWorkDraft) {
+        if (workspaceAccount == session.value?.accountKey) workDraft = draft
+    }
+
     fun action(block: suspend () -> Unit) {
         if (busy) return
         viewModelScope.launch {
@@ -98,18 +125,23 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             finally { busy = false }
         }
     }
-    fun resetForAccount() { groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
+    private var workspaceAccount: String? = null
+    fun useAccount(accountKey: String?) {
+        sharedScreenshot?.let { image ->
+            if (image.accountKey != accountKey) {
+                setPendingShare(if (image.accountKey == null && accountKey != null) image.copy(accountKey = accountKey) else null)
+            }
+        }
+        if (workspaceAccount == accountKey) return
+        workspaceAccount = accountKey
+        workDraft = AgentWorkDraft()
+        workSubmission = null
+        groups = emptyList(); groupDetail = null; invite = null; editor = null; calendarEntries = null; generationRequest = null
+        loginError = null
         agentWorks = emptyList(); agentCapabilities = emptyList(); agentTasks = emptyList(); agentWork = null; agentPlan = null; agentTask = null; agentReceipt = null
         selectedWorkId = null; selectedTaskId = null; agentError = null; agentMode = "正在连接"
-        pillJob?.cancel()
-        homeAccount = session.value?.accountKey
-        fun saved(field: String) = homePreferences.getStringSet("$homeAccount/$field", emptySet()).orEmpty().toSet()
-        demoHomeMutation = LocalAuraMutationState()
-        val completed = JSONObject(homePreferences.getString("$homeAccount/completionTimes", "{}") ?: "{}")
-        localHomeMutation = LocalAuraMutationState(confirmedIds = saved("confirmed"),
-            completedAt = completed.keys().asSequence().associateWith { completed.getString(it) },
-            dismissedIds = saved("dismissed"), dismissedReminders = saved("reminders"))
-        serverHomeSdui = null; homePillActive = false; homePillText = ""; homePillTheme = null
+        resetHome()
+        if (accountKey != null && session.value?.endpoint != "offline") sync(showSuccess = false)
     }
 
     private suspend fun loadAgent() {
@@ -117,13 +149,33 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         if (session.value?.endpoint == "offline") return
         val taskId = selectedTaskId; val workId = selectedWorkId
         val snapshot = repository.agentSnapshot(taskId, workId)
+        if (account != session.value?.accountKey) return
+        snapshot.optJSONObject("recovered_work")?.let { receipt ->
+            val eventId = receipt.getString("event_id")
+            val work = receipt.getJSONObject("work")
+            val submitted = workSubmission
+            val matching = submitted?.eventId == eventId
+            val originStillOpen = if (submitted == null) workId == null && taskId == null
+                else matching && submitted.fromWork == workId && submitted.fromTask == taskId
+            val opened = if (matching || submitted == null) {
+                if (matching) workSubmission = null
+                showCreatedWork(work, originStillOpen && selectedWorkId == workId && selectedTaskId == taskId)
+            } else false
+            repository.acknowledgeRecoveredWork(account, eventId)
+            if (opened && (workId != selectedWorkId || taskId != selectedTaskId) &&
+                account == session.value?.accountKey && selectedWorkId == work.getString("id") && selectedTaskId == null
+            ) {
+                loadAgent()
+                return
+            }
+        }
         if (account != session.value?.accountKey || selectedTaskId != taskId || selectedWorkId != workId) return
         agentWorks = snapshot.itemObjects("works"); agentCapabilities = snapshot.itemObjects("subagents"); agentTasks = snapshot.itemObjects("tasks")
         agentWork = snapshot.optJSONObject("work"); agentTask = snapshot.optJSONObject("task"); agentReceipt = snapshot.optJSONObject("action")
         val nextPlan = snapshot.optJSONObject("plan")
         if (agentPlan?.toString() != nextPlan?.toString()) agentPlan = nextPlan
         val health = snapshot.getJSONObject("health")
-        agentMode = if (health.optString("provider") == "mock") "模拟模型 · 验证流程" else "真实模型 · ${health.optString("model")}"
+        agentMode = if (health.optString("provider") == "mock") "演示模式" else "云端分析"
         agentError = null
     }
     suspend fun pollAgent() {
@@ -136,9 +188,18 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         finally { pollingAgent = false }
     }
     fun refreshAgent() = action { loadAgent() }
+    fun submitPlanOpinion(workId: String, body: JSONObject) = action {
+        val result = repository.agentMutation("works/$workId/plan/opinions", body)
+        if (selectedWorkId == workId) {
+            selectedTaskId = result.getJSONObject("task").getString("id")
+            agentTask = null
+            loadAgent()
+        }
+        message = "意见已提交，等待新方案"
+    }
     fun setAutoCapture(enabled: Boolean) = action {
         repository.setCaptureTarget(selectedWorkId, enabled)
-        message = if (enabled) "已允许将聊天文字整理到当前事项，请在系统设置开启微光聊天记录" else "已关闭事项自动记录"
+        message = if (enabled) "已允许将聊天文字整理到当前事项，请在系统设置开启 ScreenMind 聊天记录" else "已关闭事项自动记录"
     }
     fun pauseAutoCapture() = action {
         val target = requireNotNull(captureGrant.value)
@@ -147,18 +208,49 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun selectAgentWork(id: String, taskId: String? = null) = action {
         selectedWorkId = id
         selectedTaskId = taskId
-        agentWork = null
-        agentPlan = null
-        agentTask = null
-        agentReceipt = null
+        agentWork = null; agentPlan = null; agentTask = null; agentReceipt = null
         loadAgent()
     }
-    fun selectAgentTask(task: JSONObject) = selectAgentWork(task.getString("work_id"), task.getString("id"))
-    fun createAgentWork(title: String, plugin: String) = action {
-        check(title.isNotBlank()) { "请填写事项名称" }
-        val result = repository.agentMutation("works", JSONObject().put("event_id", UUID.randomUUID().toString()).put("title", title.trim()).put("subagent_id", plugin))
-        selectedWorkId = result.getJSONObject("work").getString("id"); selectedTaskId = null
+    fun selectAgentTask(task: JSONObject) = action {
+        selectedTaskId = task.getString("id"); selectedWorkId = task.getString("work_id")
         agentWork = null; agentTask = null; agentReceipt = null; loadAgent()
+    }
+    private fun showCreatedWork(work: JSONObject, mayOpen: Boolean): Boolean {
+        val matches = workDraft.title.trim() == work.getString("title") && workDraft.type == work.getString("subagent_id")
+        if (matches) workDraft = workDraft.copy(title = "")
+        val open = mayOpen && workDraft.title.isBlank()
+        if (open) {
+            selectedWorkId = work.getString("id")
+            selectedTaskId = null
+            agentWork = null; agentPlan = null; agentTask = null; agentReceipt = null
+        }
+        message = if (open) "事项已创建，可以选择线索开始处理。" else "刚才的事项已创建。"
+        return open
+    }
+
+    fun createAgentWork() = action {
+        val account = requireNotNull(session.value).accountKey
+        val draft = workDraft.copy(title = workDraft.title.trim())
+        check(draft.title.isNotBlank()) { "请填写事项名称" }
+        if (workSubmission?.draft?.let { it != draft } == true) loadAgent()
+        if (session.value?.accountKey != account) return@action
+        val attempt = workSubmission?.takeIf { it.draft == draft }
+            ?: WorkSubmission(draft, UUID.randomUUID().toString(), selectedWorkId, selectedTaskId)
+        workSubmission = attempt
+        val result = try {
+            repository.agentMutation("works", JSONObject().put("event_id", attempt.eventId)
+                .put("title", draft.title).put("subagent_id", draft.type))
+        } catch (_: java.io.IOException) {
+            message = "暂时没收到创建结果。恢复连接后会自动核对，也可以点刷新。"
+            return@action
+        } catch (error: ApiFailure) {
+            if (error.status in 400..499 && workSubmission === attempt) workSubmission = null
+            throw error
+        }
+        if (session.value?.accountKey != account) return@action
+        if (workSubmission === attempt) workSubmission = null
+        showCreatedWork(result.getJSONObject("work"), selectedWorkId == attempt.fromWork && selectedTaskId == attempt.fromTask)
+        loadAgent()
     }
     fun startAgentTask(instruction: String, selected: List<LocalEvent>) = action {
         val wid = requireNotNull(selectedWorkId) { "请先创建或选择事项" }
@@ -208,53 +300,131 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         message = "日历文件已保存，请在日历应用中导入；保存文件不代表导入完成。"
     }
     fun login(username: String, password: String, register: Boolean) = action {
-        repository.authenticate(username.trim(), password, register)
-        message = if (register) "账号已创建" else "登录成功"
+        loginError = null
+        try {
+            repository.authenticate(username.trim(), password, register)
+        }
+        catch (cancelled: CancellationException) { throw cancelled }
+        catch (error: Exception) {
+            loginError = if (error is java.io.IOException) "无法连接登录服务，请检查服务地址和网络后重试" else error.message ?: "登录未完成，请重试"
+        }
     }
+    fun clearLoginError() { loginError = null }
     fun offline() = action { repository.enterOffline() }
     fun logout() = action {
         val revoked = repository.logout()
-        resetForAccount()
+        useAccount(null)
         message = if (revoked) "已退出登录" else "已在本机退出，服务端会话因网络问题未能撤销，将按有效期失效"
     }
     fun saveEndpoint(value: String) = action { repository.setEndpoint(value); message = "服务地址已保存" }
     fun setTheme(value: String) = action { repository.setTheme(value) }
-    fun recognize(uri: Uri) = action {
-        val account = requireNotNull(session.value).accountKey
-        val payload = capture.structured(uri)
-        check(account == session.value?.accountKey) { "账号已变化，请重新导入" }
-        editor = EditorDraft(text = payload.blocks.joinToString("\n") { it.text }, source = "screenshot_ocr", type = "message",
-            imageUri = uri, screenJson = payload.toJson().toString())
+    fun receiveSharedScreenshot(uri: Uri) {
+        message = null
+        setPendingShare(SharedScreenshot(uri, session.value?.accountKey, UUID.randomUUID().toString()))
+    }
+
+    fun dismissSharedScreenshot(image: SharedScreenshot) {
+        if (sharedScreenshot === image) setPendingShare(null)
+    }
+
+    private fun setPendingShare(image: SharedScreenshot?) {
+        sharedScreenshot = image
+        savedState["share.uri"] = image?.uri
+        savedState["share.owner"] = image?.accountKey
+        savedState["share.id"] = image?.deliveryId
+        savedState["share.problem"] = image?.problem
+    }
+
+    fun recognize(uri: Uri, selectedFor: String) = action {
+        if (session.value?.accountKey == selectedFor) readScreenshot(uri, null)
+    }
+
+    fun recognize(image: SharedScreenshot) = action {
+        if (sharedScreenshot !== image) return@action
+        if (session.value == null && image.accountKey == null) {
+            repository.enterOffline()
+            useAccount(session.value?.accountKey)
+        }
+        val pending = sharedScreenshot ?: return@action
+        if (pending.deliveryId == image.deliveryId) readScreenshot(pending.uri, pending)
+    }
+
+    private suspend fun readScreenshot(uri: Uri, share: SharedScreenshot?) {
+        val account = session.value?.accountKey ?: return
+        fun stillSelected() = session.value?.accountKey == account && (share == null || sharedScreenshot === share)
+        if (!stillSelected() || (share != null && share.accountKey != account)) return
+        recognizingShare = share
+        try {
+            val payload = capture.structured(uri)
+            if (stillSelected()) {
+                openEditor(EditorDraft(text = payload.blocks.joinToString("\n") { it.text }, source = "screenshot_ocr", type = "message",
+                    imageUri = uri, screenJson = payload.toJson().toString()))
+                if (share != null) dismissSharedScreenshot(share)
+            }
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (stillSelected()) {
+                val reason = (error as? ScreenshotImportException)?.message ?: "这次没能识别图片里的文字，请重试或选择更清晰的截图。"
+                if (share == null) message = reason else setPendingShare(share.copy(problem = reason))
+            }
+        } finally {
+            recognizingShare = null
+        }
     }
     fun readCalendar() = action { calendarEntries = capture.calendar() }
     fun location() = action {
         val point = capture.location()
-        editor = EditorDraft(
+        openEditor(EditorDraft(
             text = String.format(Locale.US, "位置 %.4f, %.4f\n估计精度 %.0f 米\n定位采样 %s", point.latitude, point.longitude, point.accuracy, Instant.ofEpochMilli(point.time)),
             source = "location", type = "location", occurredAt = Instant.ofEpochMilli(point.time).toString()
-        )
+        ))
     }
     fun notifyTest() = action { capture.notifyTest(); message = "手机通知已发出，请人工检查穿戴设备是否收到" }
-    fun edit(event: LocalEvent) {
-        if (event.syncState in listOf("pending", "failed")) { message = "请先同步这条线索，再修改内容"; return }
-        editor = EditorDraft(event.text, event.sourceKind, event.eventType, event.eventId, event.consentToUpload, event.occurredAt, event.serverRevision > 0)
+    fun openEditor(initial: EditorDraft = EditorDraft()) {
+        val account = session.value?.accountKey ?: return
+        editor = ClueEditor(initial, account)
     }
-    fun saveEditor(value: EditorDraft) = action {
-        if (value.screenJson != null && value.id == null) {
+    fun dismissEditor() { editor = null }
+    fun edit(event: LocalEvent) {
+        if (event.accountKey != session.value?.accountKey) return
+        if (event.syncState in listOf("pending", "failed")) { message = "请先同步这条线索，再修改内容"; return }
+        if (event.needsReconciliation) { message = "先点顶部的同步，手机会为你保留这次修改。"; return }
+        val draft = EditorDraft(event.text, event.sourceKind, event.eventType, event.eventId, event.consentToUpload,
+            event.occurredAt, event.serverRevision > 0, screenJson = event.screenJson)
+        editor = ClueEditor(draft, event.accountKey, event)
+    }
+    fun saveEditor(editing: ClueEditor) = action {
+        if (editor !== editing || editing.accountKey != session.value?.accountKey) return@action
+        val value = editing.draft
+        if (value.id != null && value == editing.original) {
+            editor = null
+            return@action
+        }
+        val saved = if (value.screenJson != null && value.id == null) {
             val payload = com.chronocapsule.contract.ScreenContract.Payload.fromJson(JSONObject(value.screenJson))
-            cn.weiguang.app.capture.ChronoCapture.save(getApplication(), payload, requireNotNull(session.value).accountKey,
+            cn.weiguang.app.capture.ChronoCapture.save(getApplication(), payload, editing.accountKey,
                 upload = value.upload, occurredAt = value.occurredAt)
-        } else repository.saveEvent(value.text, value.source, value.type, value.upload, value.id, value.occurredAt)
+        } else repository.saveEvent(
+            value.text, value.source, value.type, value.upload, value.id, value.occurredAt,
+            clearOccurredAt = editing.original.occurredAt != null && value.occurredAt == null,
+            expectedAccount = editing.accountKey, openedEvent = editing.openedEvent,
+        )
         editor = null
-        message = if (value.upload && session.value?.endpoint != "offline") "已保存，等待网络上传" else "已保存在本机"
+        message = when {
+            saved?.syncState == "local_copy" && saved.eventId != value.id -> "原线索有变化，你的修改已另存为本机副本。"
+            saved?.syncState == "synced" -> "已和云端的线索一致"
+            saved?.consentToUpload == true -> "已保存，等待网络上传"
+            else -> "已保存在本机"
+        }
     }
     fun upload(id: String) = action { repository.uploadEvent(id); message = "已加入上传队列" }
-    fun delete(id: String) = action { repository.removeEvent(id); message = "已移除线索，已上传内容将同步删除" }
-    fun sync() = action {
+    fun delete(id: String) = action { repository.removeEvent(id); message = "已删除这条线索" }
+    fun sync(showSuccess: Boolean = true) = action {
         repository.sync()
-        repository.refreshRemote()
-        fetchServerHomeSduiSilent()
-        message = "同步完成"
+        val copies = repository.refreshRemote()
+        if (copies > 0) message = "有修改未同步，已在这台手机保留副本。"
+        else if (showSuccess) message = "同步完成"
     }
     fun generate() = action {
         repository.sync()
@@ -263,7 +433,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         val request = generationRequest?.takeIf { it.first == ids } ?: (ids to UUID.randomUUID().toString()).also { generationRequest = it }
         repository.generate(ids, request.second)
         generationRequest = null
-        message = "规则演示建议已生成，队友可替换为 AI 服务"
+        message = "已根据线索生成建议"
     }
     fun feedback(id: String, value: String) = action { repository.feedback(id, value); repository.refreshRemote(); message = "反馈已保存" }
     fun loadGroups() = action { groups = repository.groups() }
@@ -275,9 +445,17 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     fun share(groupId: String, eventId: String) = action { repository.share(groupId, eventId); message = "所选文字已共享到测试组" }
     fun unshare(groupId: String, eventId: String) = action { repository.unshare(groupId, eventId); message = "该测试组中的共享已撤回" }
 
-    // =========================================================================
-    // AURAFLOW HOME SDUI CONTROLLER (SCOPED TO HOME MODULE)
-    // =========================================================================
+    private fun resetHome() {
+        pillJob?.cancel()
+        homeAccount = session.value?.accountKey
+        fun saved(field: String) = homePreferences.getStringSet("$homeAccount/$field", emptySet()).orEmpty().toSet()
+        demoHomeMutation = LocalAuraMutationState()
+        val completed = JSONObject(homePreferences.getString("$homeAccount/completionTimes", "{}") ?: "{}")
+        localHomeMutation = LocalAuraMutationState(confirmedIds = saved("confirmed"),
+            completedAt = completed.keys().asSequence().associateWith { completed.getString(it) },
+            dismissedIds = saved("dismissed"), dismissedReminders = saved("reminders"))
+        serverHomeSdui = null; homePillActive = false; homePillText = ""; homePillTheme = null
+    }
 
     fun effectiveHomeSdui(localEvents: List<LocalEvent>, localDecisions: List<LocalDecision>): AuraFlowState {
         if (homeAccount != session.value?.accountKey) return AuraFlowEngine.synthesize(localEvents, localDecisions, emptyList(), LocalAuraMutationState())
@@ -716,4 +894,3 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 }
-

@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import asynccontextmanager
 import hmac
+from os import getenv
 from pathlib import Path
 from urllib.parse import urlparse
 from fastapi import FastAPI, Query, Request
@@ -91,12 +92,17 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
                 store.close()
             lock.close()
 
-    app = FastAPI(title="ScreenMind Super Agent", version="0.5.0", lifespan=lifespan)
+    app = FastAPI(title="ScreenMind Super Agent", version="0.5.0", lifespan=lifespan,
+                  root_path=getenv("SCREENMIND_ROOT_PATH", ""))
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=list(settings.allowed_hosts))
 
     @app.middleware("http")
     async def boundary(request: Request, call_next):
-        if request.url.path.startswith("/api/"):
+        path = request.scope["path"]
+        prefix = request.scope.get("root_path", "").rstrip("/")
+        if prefix and (path == prefix or path.startswith(prefix + "/")):
+            path = path[len(prefix):] or "/"
+        if path.startswith("/api/"):
             if settings.api_key:
                 supplied = request.headers.get("authorization", "")
                 if not hmac.compare_digest(supplied.encode(), ("Bearer " + settings.api_key).encode()):
@@ -122,9 +128,9 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
         response = await call_next(request)
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
-        if request.url.path.startswith("/api/"):
+        if path.startswith("/api/"):
             response.headers["Cache-Control"] = "no-store"
-        if request.url.path == "/" or request.url.path.startswith("/static/"):
+        if path == "/" or path.startswith("/static/"):
             response.headers["Content-Security-Policy"] = "default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; img-src 'self' data:; frame-ancestors 'none'; base-uri 'none'; form-action 'self'"
         return response
 
@@ -174,10 +180,18 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
     async def work(wid: str):
         return {"work": app.state.store.work(wid), "history": app.state.store.memory_history(wid)}
 
+    from .plan_view import PlanOpinion, read_plan, submit_opinion
+
     @app.get("/api/works/{wid}/plan")
     async def plan(wid: str):
-        from .plan_view import read_plan
         return read_plan(app.state.store, wid)
+
+    @app.post("/api/works/{wid}/plan/opinions", status_code=202)
+    async def plan_opinion(wid: str, body: PlanOpinion):
+        task, replayed = submit_opinion(app.state.store, wid, body)
+        if not replayed and body.mode == "candidate":
+            app.state.runtime.interrupt(task["id"])
+        return {"task": task, "replayed": replayed}
 
     @app.get("/api/works/{wid}/memory-index")
     async def memory_index(wid: str):
@@ -235,8 +249,15 @@ def create_app(settings=None, provider=None, registry=None, memory_provider=None
         return {"screen": value, "replayed": replayed}
 
     @app.get("/api/screens")
-    async def screens():
-        return {"screens": app.state.store.list_screens()}
+    async def screens(limit: int | None = Query(None, ge=1, le=100),
+                      before: str | None = Query(None, min_length=1, max_length=128)):
+        if limit is None and before is None:
+            return {"screens": app.state.store.list_screens()}
+        return app.state.store.screen_page(limit or 25, before)
+
+    @app.get("/api/screens/{sid}")
+    async def screen_detail(sid: str):
+        return {"screen": app.state.store.get_screen(sid)}
 
     @app.delete("/api/screens/{sid}")
     async def delete_screen(sid: str):

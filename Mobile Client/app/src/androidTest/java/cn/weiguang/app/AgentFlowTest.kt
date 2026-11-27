@@ -26,6 +26,7 @@ class AgentFlowTest {
         val event = runBlocking {
             repository.logout()
             repository.setEndpoint("http://127.0.0.1:8765")
+            repository.setTheme("light")
             repository.authenticate("agent_" + System.nanoTime(), "Agent-test-123", true)
             assertEquals("Run the device suite against SCREENMIND_PROVIDER=mock", "mock",
                 repository.agentSnapshot(null, null).getJSONObject("health").getString("provider"))
@@ -37,6 +38,19 @@ class AgentFlowTest {
         }
         compose.waitUntil(30000) { compose.onAllNodesWithTag("open-agent").fetchSemanticsNodes().isNotEmpty() }
         ready()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("同步完成", substring = false).fetchSemanticsNodes().isEmpty() }
+        val recordedTime = cn.weiguang.app.ui.ReadableText.scheduleTime("2026-12-10T18:00:00+08:00")
+        val clue = "组会，$recordedTime"
+        compose.onNodeWithText(clue).performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("schedule_changes", substring = true).assertCountEquals(0)
+        compose.onNodeWithText(clue).assertHasClickAction().performClick()
+        compose.onNodeWithTag("clue-editor-text").assertTextContains(clue)
+        compose.onAllNodesWithText("schedule_changes", substring = true).assertCountEquals(0)
+        compose.onNodeWithText("完成").performScrollTo().performClick()
+        compose.waitUntil(10000) { compose.onAllNodesWithTag("clue-editor-text").fetchSemanticsNodes().isEmpty() }
+        val unchanged = runBlocking { requireNotNull(repository.database.events().get(event.accountKey, event.eventId)) }
+        assertEquals(1, unchanged.revision)
+        assertEquals("synced", unchanged.syncState)
         compose.onNodeWithTag("open-agent").performScrollTo().performClick()
         compose.onNodeWithTag("agent-work-title").performTextInput("设备端日程测试")
         compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-plugin-schedule").fetchSemanticsNodes().isNotEmpty() }
@@ -44,21 +58,27 @@ class AgentFlowTest {
         compose.onNodeWithTag("agent-create-work").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-source-${event.eventId}").fetchSemanticsNodes().isNotEmpty() }
         ready()
-        compose.onNodeWithTag("agent-source-${event.eventId}").performScrollTo().performClick()
-        compose.onNodeWithTag("agent-start").performScrollTo().performClick()
+        compose.waitUntil(15000) { compose.onAllNodesWithText("同步完成", substring = false).fetchSemanticsNodes().isEmpty() }
+        compose.onNodeWithTag("agent-source-${event.eventId}").assertTextContains(clue)
+        compose.onNodeWithTag("agent-source-${event.eventId}").performScrollTo().performClick().assertIsOn()
+        compose.onNodeWithTag("agent-start").performScrollTo().assertIsEnabled().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
         ready()
-        compose.onNodeWithTag("agent-state-version").assertTextContains("已确认状态 v0", substring = true)
-        val taskId = runBlocking { repository.agentSnapshot(null, null).getJSONArray("tasks").getJSONObject(0).getString("id") }
-        compose.onNodeWithContentDescription("返回").performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithTag("home-card-task_$taskId").fetchSemanticsNodes().isNotEmpty() }
-        compose.onNodeWithTag("home-card-task_$taskId").performScrollTo().performClick()
-        compose.onNodeWithText("处理关联任务").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithTag("agent-accept-state").fetchSemanticsNodes().isNotEmpty() }
-        ready()
+        compose.onNodeWithTag("plan-confirmed").assertTextContains("尚未确认方案")
+        compose.onNodeWithText("$recordedTime · 待完成", substring = true).assertExists()
+        compose.onAllNodesWithText("2026-12-10T18:00", substring = true).assertCountEquals(0)
+        compose.onAllNodesWithText("pending", substring = true).assertCountEquals(0)
         compose.onNodeWithTag("agent-accept-state").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithText("已确认状态 v1", substring = true).fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30000) { compose.onAllNodes(hasTestTag("plan-confirmed") and hasText("已确认 · 第 1 版")).fetchSemanticsNodes().isNotEmpty() }
         compose.onAllNodesWithTag("agent-accept-state").assertCountEquals(0)
+        compose.onNodeWithText("选择结束日期和时间").performScrollTo().performClick()
+        compose.onNodeWithText("下一步").performClick()
+        compose.onNodeWithText("确定").performClick()
+        val expectedEnd = cn.weiguang.app.ui.ReadableText.dateTime("2026-12-10T18:30:00+08:00", java.time.ZoneId.systemDefault())
+        compose.onNodeWithText("结束于 $expectedEnd").assertExists()
+        compose.onNodeWithText("预览日历").performScrollTo().assertIsEnabled().performClick()
+        compose.waitUntil(30_000) { compose.onAllNodesWithText("授权执行这个动作").fetchSemanticsNodes().isNotEmpty() }
+        compose.onAllNodesWithText("保存日历文件").assertCountEquals(0)
     }
 
     @Test fun roomUpgradePreservesEvidenceAndPendingCommandsSurviveReopen() = runBlocking {

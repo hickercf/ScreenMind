@@ -1,5 +1,7 @@
 package cn.weiguang.app.ui.home
 
+import cn.weiguang.app.data.clueDisplayText
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,22 +51,22 @@ internal fun HomeAgendaView(
     }
 
     val first = agenda.today.firstOrNull { it.clock != null } ?: agenda.today.firstOrNull()
-    val accent = first?.let { auraPalette(it.card.themeKey).accent } ?: AuraColors.Explore
+    val accent = AuraColors.Rose
     val shape = RoundedCornerShape(24.dp)
     var idea by rememberSaveable(now.toLocalDate().toString()) { mutableIntStateOf(0) }
     Column(
         Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.linearGradient(listOf(accent.copy(alpha = .19f), AuraColors.CardNowBottom)))
-            .border(1.dp, accent.copy(alpha = .45f), shape)
+            .background(Brush.linearGradient(listOf(AuraColors.CardNowTop, AuraColors.CardNowBottom)))
+            .border(1.dp, AuraColors.HairlineStrong, shape)
             .then(if (first != null) Modifier.clickable { onDetail(first.card) } else Modifier)
             .padding(20.dp).testTag("home-focus"), verticalArrangement = Arrangement.spacedBy(9.dp)
     ) {
         if (first == null) {
-            Text("今日暂无待办日程", color = accent, fontSize = 13.sp)
-            Text(ideas[idea], color = Color.White, fontWeight = FontWeight.SemiBold, fontSize = 24.sp)
+            Text("今日灵感", color = accent, fontSize = 13.sp)
+            Text(ideas[idea], color = AuraColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 23.sp)
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = { onDraft(ideas[idea], now.plusMinutes(30).withSecond(0).withNano(0)) },
-                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = AuraColors.ScreenBg)) { Text("加入日程") }
+                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.White)) { Text("加入日程") }
                 TextButton(onClick = { idea = (idea + 1) % ideas.size }) { Text("换个灵感", color = AuraColors.TextPrimary) }
             }
         } else {
@@ -81,25 +83,31 @@ internal fun HomeAgendaView(
                     else -> "距开始 ${(seconds + 59) / 60} 分钟"
                 }, color = accent, fontSize = 13.sp)
             }
-            Text(first.card.title, color = Color.White, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
+            Text(first.card.title, color = AuraColors.TextPrimary, fontSize = 23.sp, fontWeight = FontWeight.SemiBold)
             Text("${first.card.time}  ·  ${first.card.subtitle}  ·  ${first.card.badge}", color = AuraColors.TextSecondary, fontSize = 13.sp)
+            val duration = first.start(now.zone)?.let { start -> first.end?.let { Duration.between(start, it).seconds } }
+            if (seconds != null && seconds <= 0 && remaining != null && duration != null && duration > 0) {
+                LinearProgressIndicator(progress = { (1f - remaining.toFloat() / duration).coerceIn(0f, 1f) },
+                    modifier = Modifier.fillMaxWidth().height(5.dp).clip(RoundedCornerShape(8.dp)),
+                    color = accent, trackColor = AuraColors.CardSolidTop)
+            }
         }
     }
 
-    @Composable fun node(item: AgendaEntry) {
+    @Composable fun node(item: AgendaEntry, connectToNext: Boolean = false) {
         val card = item.card
         key(card.id) {
-            TimelineCardNode(card, { onDetail(card) }, { onReminder(card.id) }, { onDismiss(card.id) })
+            TimelineCardNode(card, { onDetail(card) }, { onReminder(card.id) }, { onDismiss(card.id) }, connectToNext)
             if (alertWords.containsMatchIn(card.originalText)) {
                 TextButton(onClick = { onDetail(card) }) { Text("线索提示行程有变动 · 核对详情", color = AuraColors.Alert) }
             }
         }
     }
     if (agenda.today.isNotEmpty()) {
-        Text("今日时间轴", color = Color.White, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+        Text("今日时间轴", color = AuraColors.TextPrimary, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
         agenda.today.forEachIndexed { index, item ->
-            node(item)
             val next = agenda.today.getOrNull(index + 1)
+            node(item, connectToNext = next != null)
             val start = item.end ?: item.start(now.zone)
             val nextStart = next?.start(now.zone)
             if (start != null && next != null && nextStart != null) {
@@ -191,7 +199,7 @@ internal fun SourceDetailSheet(card: AuraCard, dateLabel: String, onClose: () ->
             if (card.originalText.isNotBlank()) {
                 HorizontalDivider(color = AuraColors.Hairline)
                 Text("原始线索", color = palette.accent, fontSize = 12.sp)
-                Text(card.originalText)
+                Text(clueDisplayText(card.originalText))
             }
             card.notes.forEach { Text(it.text, color = AuraColors.TextSecondary) }
             if (onAgent != null) Button(onClick = onAgent) { Text(if (card.sourceTaskId != null) "处理关联任务" else "查看云端事项") }

@@ -14,7 +14,7 @@ class Registry:
     def get(self, agent_id):
         from ..store import DomainError
         if agent_id not in self.agents:
-            raise DomainError("未知 SubAgent", 422)
+            raise DomainError("找不到所选的处理方式，请刷新后重新选择。", 422)
         return self.agents[agent_id]
 
     def catalog(self):

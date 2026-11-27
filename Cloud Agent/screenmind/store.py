@@ -6,6 +6,8 @@ import json
 from pathlib import Path
 import sqlite3
 import uuid
+from .information_labels import read_excerpt_labels
+from .schedule_note import DATE_QUESTION, LEGACY_QUESTION, read_schedule_card
 
 
 def now():
@@ -107,6 +109,8 @@ class Store:
         """)
         if "deleted_at" not in {r[1] for r in self.db.execute("PRAGMA table_info(screens)")}:
             self.db.execute("ALTER TABLE screens ADD COLUMN deleted_at TEXT")
+        self.db.execute("CREATE INDEX IF NOT EXISTS screens_visible_order "
+                        "ON screens(owner, created_at DESC, id DESC) WHERE deleted_at IS NULL")
         # Additive migration keeps v0.1 tasks and receipts usable.
         columns = {r[1] for r in self.db.execute("PRAGMA table_info(tasks)")}
         for name, definition in {"work_id": "TEXT REFERENCES works(id)",
@@ -146,14 +150,34 @@ class Store:
                         (self.owner, scope, body["event_id"], fingerprint(scope, body), result_id))
 
     def get_screen(self, screen_id):
-        row = self.db.execute("SELECT * FROM screens WHERE id=? AND owner=? AND deleted_at IS NULL", (screen_id, self.owner)).fetchone()
-        if not row:
+        result = self._screen_if_available(screen_id)
+        if result is None:
             raise DomainError("屏幕记录不存在", 404)
-        return {"id": row["id"], **json.loads(row["payload"])}
+        return result
+
+    def _screen_if_available(self, screen_id):
+        row = self.db.execute("SELECT * FROM screens WHERE id=? AND owner=? AND deleted_at IS NULL", (screen_id, self.owner)).fetchone()
+        return {"id": row["id"], **json.loads(row["payload"])} if row else None
+
+    def screen_page(self, limit, before=None):
+        clause = "owner=? AND deleted_at IS NULL"
+        params = [self.owner]
+        if before:
+            cursor = self.db.execute("SELECT created_at FROM screens WHERE id=? AND owner=?",
+                                     (before, self.owner)).fetchone()
+            if cursor is None:
+                raise DomainError("找不到这段线索，请刷新后再试。", 404)
+            clause += " AND (created_at, id) < (?, ?)"
+            params.extend((cursor["created_at"], before))
+        rows = self.db.execute(f"SELECT id, payload FROM screens WHERE {clause} "
+                               "ORDER BY created_at DESC, id DESC LIMIT ?", [*params, limit + 1]).fetchall()
+        total = self.db.execute("SELECT count(*) FROM screens WHERE owner=? AND deleted_at IS NULL",
+                                (self.owner,)).fetchone()[0]
+        return {"screens": [{"id": row["id"], **json.loads(row["payload"])} for row in rows[:limit]],
+                "next_before": rows[limit - 1]["id"] if len(rows) > limit else None, "total": total}
 
     def list_screens(self):
-        rows = self.db.execute("SELECT id FROM screens WHERE owner=? AND deleted_at IS NULL ORDER BY created_at DESC LIMIT 100", (self.owner,)).fetchall()
-        return [self.get_screen(r["id"]) for r in rows]
+        return self.screen_page(100)["screens"]
 
     def work(self, wid):
         row = self.db.execute("SELECT * FROM works WHERE id=? AND owner=?", (wid, self.owner)).fetchone()
@@ -162,6 +186,7 @@ class Store:
         result = dict(row)
         result.pop("owner")
         result["state"] = json.loads(result["state"])
+        read_excerpt_labels([result["state"].get("card")], self._screen_if_available)
         result["source_ref"] = f"memory:{wid}:{result['memory_version']}"
         return result
 
@@ -171,8 +196,10 @@ class Store:
 
     def memory_history(self, wid):
         self.work(wid)
-        return [{"version": r["version"], "task_id": r["task_id"], "state": json.loads(r["state"]), "at": r["at"]}
-                for r in self.db.execute("SELECT * FROM memories WHERE work_id=? ORDER BY version DESC LIMIT 100", (wid,))]
+        history = [{"version": r["version"], "task_id": r["task_id"], "state": json.loads(r["state"]), "at": r["at"]}
+                   for r in self.db.execute("SELECT * FROM memories WHERE work_id=? ORDER BY version DESC LIMIT 100", (wid,))]
+        read_excerpt_labels((entry["state"].get("card") for entry in history), self._screen_if_available)
+        return history
 
     def create_work(self, body):
         with self.transaction():
@@ -259,6 +286,16 @@ class Store:
         task["inputs"] = [json.loads(r[0]) for r in self.db.execute("SELECT payload FROM inputs WHERE task_id=? ORDER BY seq", (tid,))]
         interaction = self.db.execute("SELECT payload FROM interactions WHERE task_id=? ORDER BY version DESC LIMIT 1", (tid,)).fetchone()
         task["interaction"] = json.loads(interaction[0]) if interaction else None
+        output = task["interaction"] or {}
+        if task["subagent_id"] == "schedule":
+            if output.get("kind") == "clarification" and output.get("question") == LEGACY_QUESTION:
+                output["question"] = DATE_QUESTION
+            for card in (task["card"], task["previous_card"], output.get("card")):
+                read_schedule_card(card)
+        read_excerpt_labels([task["card"], task["previous_card"], output.get("card"),
+                             (output.get("candidate_state") or {}).get("card"),
+                             (task["memory_proposal"] or {}).get("card"), (task["memory_snapshot"] or {}).get("card")],
+                            self._screen_if_available)
         return task
 
     def list_tasks(self):

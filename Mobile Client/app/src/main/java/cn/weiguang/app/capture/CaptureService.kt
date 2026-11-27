@@ -36,9 +36,7 @@ data class CalendarEntry(val title: String, val text: String, val startsAt: Stri
 
 class CaptureService(private val context: Context) {
     suspend fun structured(uri: Uri): com.chronocapsule.contract.ScreenContract.Payload = withContext(Dispatchers.IO) {
-        val bitmap = context.contentResolver.openInputStream(uri).use { input ->
-            requireNotNull(android.graphics.BitmapFactory.decodeStream(requireNotNull(input))) { "无法打开图片" }
-        }
+        val bitmap = decodeScreenshot(context, uri)
         try { ChronoCapture.recognize(context, bitmap) } finally { bitmap.recycle() }
     }
     suspend fun recognize(uri: Uri): String = withContext(Dispatchers.IO) {
@@ -115,7 +113,7 @@ class CaptureService(private val context: Context) {
         manager.createNotificationChannel(NotificationChannel("weiguang-test", "设备联调提醒", NotificationManager.IMPORTANCE_DEFAULT))
         check(manager.areNotificationsEnabled()) { "系统通知已关闭，请在系统设置中开启" }
         manager.notify(41, NotificationCompat.Builder(context, "weiguang-test")
-            .setSmallIcon(R.drawable.ic_launcher).setContentTitle("微光 · 通知测试")
+            .setSmallIcon(R.drawable.ic_launcher).setContentTitle("ScreenMind · 通知测试")
             .setContentText("如已开启穿戴应用的通知转发，请检查腕上是否收到这条提醒。")
             .setStyle(NotificationCompat.BigTextStyle().bigText("如已开启穿戴应用的通知转发，请检查腕上是否收到这条提醒。此测试不表示已接入健康数据。"))
             .setAutoCancel(true).build())

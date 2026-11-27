@@ -1,5 +1,20 @@
 """Read-only presentation shared by the authenticated web and Android plan decks."""
+from typing import Literal
+from pydantic import Field
 from .agents.party import PartyState, money, party_time_label
+from .models import ActionInput, Identifier, ShortText, StrictModel, TaskInput
+from .store import DomainError
+
+
+class PlanOpinion(StrictModel):
+    event_id: Identifier
+    card_id: Identifier
+    version: int = Field(ge=0)
+    text: ShortText
+    mode: Literal["confirmed", "candidate"]
+    task_id: Identifier | None = None
+    revision: int | None = Field(default=None, ge=1)
+    card_version: int | None = Field(default=None, ge=1)
 
 
 def row(label, value, tone="neutral"):
@@ -79,3 +94,44 @@ def read_plan(store, wid):
                                "card_version": task["card_version"], "summary": output.get("summary", ""),
                                "cards": cards_for(task["memory_proposal"], output.get("fields", ()))}
     return result
+
+
+def submit_opinion(store, wid, opinion):
+    body = opinion.model_dump(mode="json")
+    scope = f"plan.opinion:{wid}"
+    previous = store.replay(scope, body)
+    if previous:
+        return store.task(previous), True
+    plan = read_plan(store, wid)
+    if plan["version"] != opinion.version:
+        raise DomainError("方案已更新，请刷新后重新提交意见")
+    candidate = plan["candidate"]
+    if opinion.mode == "candidate":
+        if not candidate or any(candidate[key] != body[key] for key in ("task_id", "revision", "card_version")):
+            raise DomainError("这张待确认卡片已更新，请重新打开")
+        source_task = candidate["task_id"]
+        cards = candidate["cards"]
+    else:
+        owner_version = store.db.execute("SELECT task_id FROM memories WHERE work_id=? AND version=?",
+                                         (wid, opinion.version)).fetchone()
+        if not owner_version:
+            raise DomainError("还没有已确认的方案可供修改")
+        source_task = owner_version["task_id"]
+        cards = plan["confirmed"]
+    selected = next((item for item in cards if item["id"] == opinion.card_id), None)
+    if selected is None:
+        raise DomainError("此卡片已变化，请重新打开", 409)
+    message = f"我对「{selected['title']}」的意见：{opinion.text}\n请保留其他安排，按我的意见重新整理，待我确认。"
+    source = store.task(source_task)
+    if not store.sources_live(source):
+        raise DomainError("原材料已删除，请添加新的线索后继续", 409)
+    if opinion.mode == "candidate":
+        action = ActionInput(event_id=opinion.event_id, expected_revision=opinion.revision,
+                             card_version=opinion.card_version, kind="revise", message=message)
+        result, replayed = store.action(source_task, action.model_dump(mode="json"))
+    else:
+        task = TaskInput(event_id=opinion.event_id, work_id=wid, screen_ids=source["screen_ids"],
+                         instruction=message, interaction_protocol="cloud-v1")
+        result, replayed = store.create_task(task.model_dump(mode="json"))
+    store.receipt(scope, body, result["id"])
+    return result, replayed

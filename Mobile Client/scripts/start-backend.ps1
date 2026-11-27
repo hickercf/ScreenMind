@@ -14,7 +14,7 @@ try {
     @'
 from importlib.metadata import version, PackageNotFoundError
 import sys
-expected = {'fastapi':'0.136.1', 'pydantic':'2.13.4', 'uvicorn':'0.46.0', 'starlette':'1.10.0', 'httpx':'0.28.1', 'argon2-cffi':'25.1.0'}
+expected = {'fastapi':'0.136.1', 'pydantic':'2.13.4', 'uvicorn':'0.46.0', 'starlette':'1.10.0', 'httpx':'0.28.1', 'argon2-cffi':'25.1.0', 'tzdata':'2026.6'}
 try:
     sys.exit(0 if all(version(k) == v for k,v in expected.items()) else 1)
 except PackageNotFoundError:

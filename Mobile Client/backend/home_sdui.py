@@ -537,18 +537,18 @@ def _link_ticket_receipts(cards):
     return [c for c in cards if c["id"] not in linked]
 
 
-def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]], list[dict[str, Any]], set[tuple[str, int]]]:
     """Read confirmed and waiting_input cards from user's isolated Cloud Agent store if initialized."""
     active_cards: list[dict[str, Any]] = []
     archived_cards: list[dict[str, Any]] = []
+    party_sources: set[tuple[str, int]] = set()
     if agent_hub is None or user_id not in getattr(agent_hub, "entries", {}):
-        return active_cards, archived_cards
-    child, _ = agent_hub.entries[user_id]
-    store = child.state.store
+        return active_cards, archived_cards, party_sources
+    store = agent_hub.entries[user_id].app.state.store
     try:
         works = store.list_works()
     except Exception:
-        return active_cards, archived_cards
+        return active_cards, archived_cards, party_sources
 
     for work in works:
         wid = work["id"]
@@ -609,9 +609,19 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
             participants = plan.get("participants") or []
             attending = [p for p in participants if p.get("status") == "attending"]
             declined = [p for p in participants if p.get("status") == "declined"]
+            screens = {ref.partition(":")[0] for ref in state.get("processed_sources", [])}
+            if screens:
+                rows = store.db.execute(
+                    "SELECT event_id, revision, screen_id FROM mobile_evidence WHERE work_id=?",
+                    (wid,),
+                )
+                party_sources.update((row["event_id"], row["revision"]) for row in rows if row["screen_id"] in screens)
             start = timestamp(state.get("scheduled_at")) or party_start(plan.get("time"))
             at_iso = start.isoformat() if start else None
             time_str, sort_min = extract_time_minutes("", at_iso) if at_iso else ("日期待确认", 24 * 60)
+            party_title = re.sub(r"\s*[（(](?:标题|名称)?待确认[）)]\s*$", "", plan.get("title") or "").strip()
+            if not party_title or party_title in ("待确认", "标题待确认", "名称待确认"):
+                party_title = work["title"]
             active_cards.append({
                 "id": f"work_{wid}_party",
                 "sourceWorkId": wid,
@@ -620,7 +630,7 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
                 "lifecycleStage": "CONFIRMED",
                 "time": time_str,
                 "_sortMin": sort_min,
-                "title": f"{plan.get('title', work['title'])}（{len(attending)}人）",
+                "title": f"{party_title}（{len(attending)}人）",
                 "subtitle": f"{plan.get('location', '待确认地点')} · 云端聚会 v{version}",
                 "badge": "已确认",
                 "entities": [f"确定 {len(attending)} 人", plan.get("location", "待确认"), f"v{version}"],
@@ -665,7 +675,7 @@ def _collect_agent_cards(agent_hub, user_id: str) -> tuple[list[dict[str, Any]],
                 "hasAlert": False,
             })
 
-    return active_cards, archived_cards
+    return active_cards, archived_cards, party_sources
 
 
 def _compute_connectors(events: list[dict[str, Any]], day, alert_card_id: str | None) -> None:
@@ -770,7 +780,7 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
     raw_events = [json.loads(r["body"]) for r in event_rows]
 
     # Collect Agent works & tasks
-    agent_active, agent_archived = _collect_agent_cards(agent_hub, user_id)
+    agent_active, agent_archived, party_sources = _collect_agent_cards(agent_hub, user_id)
 
     showcase_mode = bool(user_state.get("showcaseMode"))
     archived_events: list[dict[str, Any]] = []
@@ -803,7 +813,15 @@ def build_home_sdui(conn, agent_hub, user_id: str, *, live: bool = False) -> dic
     else:
         archived_events.extend(agent_archived)
         timeline_events.extend(agent_active)
-        clue_cards = [card for event in raw_events if (card := _build_card_from_event(event))]
+        clue_cards = []
+        for event in raw_events:
+            card = _build_card_from_event(event)
+            if card is None:
+                continue
+            if (card["category"] == "DINING" and not event.get("occurred_at")
+                    and (event["event_id"], event["revision"]) in party_sources):
+                continue
+            clue_cards.append(card)
         for card in _link_ticket_receipts(clue_cards):
             timeline_events.append(card)
             if cross_day_relay is None and card["id"] not in dismissed:

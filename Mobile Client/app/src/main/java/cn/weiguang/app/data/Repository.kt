@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.preferencesDataStore
+import androidx.room.withTransaction
 import androidx.work.*
 import cn.weiguang.app.WeiguangApp
 import cn.weiguang.app.BuildConfig
@@ -17,15 +18,38 @@ import kotlinx.coroutines.sync.withLock
 import org.json.JSONArray
 import org.json.JSONObject
 import java.time.Instant
+import java.time.temporal.ChronoUnit
 import java.util.UUID
 import java.util.concurrent.TimeUnit
 
 private val Context.settingsDataStore by preferencesDataStore("settings")
+private const val AgentWorksPath = "/v1/agent/works"
+
+private fun sameMoment(first: String?, second: String?): Boolean = first == second ||
+    (first != null && second != null && runCatching {
+        Instant.parse(first).truncatedTo(ChronoUnit.MICROS) == Instant.parse(second).truncatedTo(ChronoUnit.MICROS)
+    }.getOrDefault(false))
+
+private fun LocalEvent.sameContents(other: LocalEvent): Boolean =
+    text == other.text && eventType == other.eventType && sourceKind == other.sourceKind &&
+        sameMoment(occurredAt, other.occurredAt) && sameMoment(capturedAt, other.capturedAt) &&
+        timezone == other.timezone && screenJson == other.screenJson
+
+private fun LocalEvent.asPrivateCopy() = copy(
+    eventId = UUID.randomUUID().toString(), revision = 1, serverRevision = 0, syncState = "local_copy",
+    consentToUpload = false, deleted = false, agentWorkId = null, agentRequestId = null, agentTaskId = null, agentError = null,
+)
+
+internal val LocalEvent.needsReconciliation: Boolean get() = syncState == "conflict" || syncState == "rejected"
 
 @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class Repository(private val context: Context, val database: AppDatabase) {
     private val sessions = SessionStore(context)
     private val api = ApiClient()
+
+    fun homeUpdates(account: String) = api.homeUpdates(requireNotNull(session.value).also {
+        check(it.accountKey == account) { "账号已变化" }
+    })
     private val mutex = Mutex()
     private val sessionState = MutableStateFlow(sessions.load()?.let {
         if (CloudEndpoint.acceptsSession(it.endpoint)) it else {
@@ -34,9 +58,6 @@ class Repository(private val context: Context, val database: AppDatabase) {
         }
     })
     val session: StateFlow<UserSession?> = sessionState.asStateFlow()
-    fun homeUpdates(account: String) = api.homeUpdates(requireNotNull(session.value).also {
-        check(it.accountKey == account) { "账号已变化" }
-    })
     private val settings = context.settingsDataStore
     val endpoint = settings.data.map { CloudEndpoint.selected(it[stringPreferencesKey("endpoint")]) }
     val theme = settings.data.map { it[stringPreferencesKey("theme")] ?: "system" }
@@ -47,7 +68,7 @@ class Repository(private val context: Context, val database: AppDatabase) {
     }.distinctUntilChanged()
 
     suspend fun setEndpoint(value: String) {
-        check(!BuildConfig.LOCK_CLOUD_ENDPOINT) { "此版本已连接微光云端" }
+        check(!BuildConfig.LOCK_CLOUD_ENDPOINT) { "此版本已连接 ScreenMind 云端" }
         check(session.value == null) { "请退出当前账号后切换服务" }
         val address = ApiClient.validateEndpoint(value)
         settings.edit { it[stringPreferencesKey("endpoint")] = address }
@@ -108,20 +129,48 @@ class Repository(private val context: Context, val database: AppDatabase) {
         revoked
     }
 
-    suspend fun saveEvent(text: String, source: String, type: String, upload: Boolean, existingId: String? = null, occurredAt: String? = null): LocalEvent = mutex.withLock {
-        Validation.eventText(text)?.let { throw IllegalArgumentException(it) }
+    suspend fun saveEvent(
+        text: String, source: String, type: String, upload: Boolean,
+        existingId: String? = null, occurredAt: String? = null, clearOccurredAt: Boolean = false,
+        expectedAccount: String? = null, openedEvent: LocalEvent? = null,
+    ): LocalEvent = mutex.withLock {
         val current = requireNotNull(session.value) { "请先登录或进入离线体验" }
-        val old = existingId?.let { database.events().get(current.accountKey, it) }
-        check(old?.syncState !in listOf("pending", "failed")) { "请先完成这条线索的同步，再修改内容" }
+        check(expectedAccount == null || expectedAccount == current.accountKey) { "账号已变化，请重新打开这条线索。" }
+        check(openedEvent == null || (openedEvent.accountKey == current.accountKey && openedEvent.eventId == existingId)) {
+            "账号或线索已变化，请重新打开。"
+        }
+        val latest = existingId?.let { database.events().get(current.accountKey, it) }?.takeUnless { it.deleted }
+        val changedWhileEditing = openedEvent != null &&
+            (latest == null || latest.needsReconciliation || !openedEvent.sameContents(latest))
+        val old = if (changedWhileEditing) openedEvent else latest
+        check(existingId == null || old != null) { "这条线索已移除，请返回线索列表。" }
+        check(changedWhileEditing || (old?.syncState !in listOf("pending", "failed") && old?.needsReconciliation != true)) {
+            "请先完成这条线索的同步，再修改内容"
+        }
         val shouldUpload = (upload || (old?.serverRevision ?: 0) > 0) && current.endpoint != "offline"
-        val event = LocalEvent(
-            accountKey = current.accountKey, eventId = old?.eventId ?: UUID.randomUUID().toString(),
-            revision = if ((old?.serverRevision ?: 0) > 0) old!!.serverRevision + 1 else 1,
-            text = text.trim(), sourceKind = old?.sourceKind ?: source, eventType = old?.eventType ?: type,
-            capturedAt = old?.capturedAt ?: Instant.now().toString(), occurredAt = occurredAt ?: old?.occurredAt,
-            syncState = if (shouldUpload) "pending" else "local", consentToUpload = shouldUpload,
-            serverRevision = old?.serverRevision ?: 0
+        val keepScreen = old?.screenJson != null && text == old.text
+        if (!keepScreen) Validation.eventText(text)?.let { throw IllegalArgumentException(it) }
+        val body = if (keepScreen) text else text.trim()
+        val base = old ?: LocalEvent(accountKey = current.accountKey, text = body, sourceKind = source, eventType = type)
+        val sameText = if (base.screenJson != null) keepScreen else body == base.text.trim()
+        val event = base.copy(
+            revision = base.serverRevision + 1,
+            text = body, occurredAt = if (clearOccurredAt) null else occurredAt ?: base.occurredAt,
+            syncState = when {
+                shouldUpload -> "pending"
+                base.syncState == "local_copy" -> "local_copy"
+                else -> "local"
+            }, consentToUpload = shouldUpload,
+            screenJson = base.screenJson.takeIf { sameText },
+            agentWorkId = base.agentWorkId.takeIf { sameText }, agentRequestId = base.agentRequestId.takeIf { sameText },
+            agentTaskId = base.agentTaskId.takeIf { sameText }, agentError = base.agentError.takeIf { sameText },
         )
+        if (changedWhileEditing) {
+            if (latest?.syncState == "synced" && latest.sameContents(event)) return@withLock latest
+            val copy = event.asPrivateCopy()
+            database.events().save(copy)
+            return@withLock copy
+        }
         database.events().save(event)
         if (shouldUpload) scheduleSync(current.accountKey)
         event
@@ -205,9 +254,9 @@ class Repository(private val context: Context, val database: AppDatabase) {
         WorkManager.getInstance(context).enqueueUniqueWork("sync:$accountKey", ExistingWorkPolicy.APPEND_OR_REPLACE, work)
     }
 
-    suspend fun sync(expectedAccount: String? = null) = mutex.withLock {
-        val current = session.value ?: return@withLock
-        if (current.endpoint == "offline" || (expectedAccount != null && expectedAccount != current.accountKey)) return@withLock
+    suspend fun sync(expectedAccount: String? = null): Boolean = mutex.withLock {
+        val current = session.value ?: return@withLock false
+        if (current.endpoint == "offline" || (expectedAccount != null && expectedAccount != current.accountKey)) return@withLock false
         for (event in database.events().pending(current.accountKey)) {
             try {
                 if (event.deleted) {
@@ -218,13 +267,18 @@ class Repository(private val context: Context, val database: AppDatabase) {
                     database.events().mark(current.accountKey, event.eventId, event.revision, "synced", event.revision)
                 }
             } catch (error: Exception) {
-                val status = if (error is ApiFailure && error.status in listOf(409, 422)) "conflict" else "failed"
+                val status = when ((error as? ApiFailure)?.status) {
+                    409 -> "conflict"
+                    422 -> "rejected"
+                    else -> "failed"
+                }
                 database.events().mark(current.accountKey, event.eventId, event.revision, status, event.serverRevision)
-                throw error
+                if (status == "failed") throw error
             }
         }
         // Every accepted capture has its own request; never drop a screen while another task runs.
-        for (event in database.events().all(current.accountKey).filter {
+        val saved = database.events().all(current.accountKey)
+        for (event in saved.filter {
             !it.deleted && it.syncState == "synced" && it.agentWorkId != null && it.agentTaskId == null && it.agentError == null
         }) {
             val body = JSONObject().put("request_id", requireNotNull(event.agentRequestId))
@@ -239,13 +293,14 @@ class Repository(private val context: Context, val database: AppDatabase) {
                 } else throw error // transient errors keep the same durable request for WorkManager retry
             }
         }
+        saved.any { it.needsReconciliation }
     }
 
     suspend fun uploadEvent(id: String) = mutex.withLock {
         val current = requireNotNull(session.value)
         check(current.endpoint != "offline") { "请登录测试账号后上传" }
         val event = requireNotNull(database.events().get(current.accountKey, id))
-        check(event.syncState != "conflict") { "版本冲突，请先从云端恢复这条记录" }
+        check(!event.deleted && !event.needsReconciliation) { "请先同步，再打开这条线索。" }
         database.events().save(event.copy(consentToUpload = true, syncState = "pending"))
         scheduleSync(current.accountKey)
     }
@@ -260,27 +315,57 @@ class Repository(private val context: Context, val database: AppDatabase) {
         database.decisions().clear(current.accountKey)
     }
 
-    suspend fun refreshRemote() = mutex.withLock {
-        val current = session.value ?: return@withLock
-        if (current.endpoint == "offline") return@withLock
-        val remoteEvents = authenticated("/v1/events").itemObjects()
-        val remoteIds = remoteEvents.map { it.getString("event_id") }.toSet()
-        for (local in database.events().all(current.accountKey)) {
-            if (local.syncState in listOf("synced", "conflict") && local.eventId !in remoteIds) {
-                database.events().remove(current.accountKey, local.eventId)
-            }
-        }
-        for (item in remoteEvents) {
+    suspend fun refreshRemote(expectedAccount: String? = null): Int = mutex.withLock {
+        val current = session.value ?: return@withLock 0
+        val account = current.accountKey
+        if (current.endpoint == "offline" || (expectedAccount != null && expectedAccount != account)) return@withLock 0
+        val items = authenticated("/v1/events").getJSONArray("items")
+        val incoming = mutableMapOf<String, LocalEvent>()
+        for (index in 0 until items.length()) {
+            val item = items.getJSONObject(index)
             val id = item.getString("event_id")
-            val local = database.events().get(current.accountKey, id)
-            if (local?.syncState in listOf("pending", "failed") || local?.deleted == true) continue
-            database.events().save(LocalEvent(current.accountKey, id, item.getInt("revision"), item.getString("event_type"), item.getString("source_kind"), item.getJSONObject("payload").getString("text"), item.getString("captured_at"), if (item.isNull("occurred_at")) null else item.getString("occurred_at"), item.getString("timezone"), "synced", true, false, item.getInt("revision"),
-                screenJson = item.getJSONObject("payload").optJSONObject("screen")?.toString(),
-                agentWorkId = local?.agentWorkId, agentRequestId = local?.agentRequestId, agentTaskId = local?.agentTaskId, agentError = local?.agentError))
+            val revision = item.getInt("revision")
+            val payload = item.getJSONObject("payload")
+            incoming[id] = LocalEvent(accountKey = account, eventId = id, revision = revision, serverRevision = revision,
+                eventType = item.getString("event_type"), sourceKind = item.getString("source_kind"), text = payload.getString("text"),
+                capturedAt = item.getString("captured_at"), occurredAt = if (item.isNull("occurred_at")) null else item.getString("occurred_at"),
+                timezone = item.getString("timezone"), syncState = "synced", consentToUpload = true,
+                screenJson = payload.optJSONObject("screen")?.toString())
         }
-        val remote = authenticated("/v1/decisions").itemObjects()
-        database.decisions().clear(current.accountKey)
-        for (item in remote) database.decisions().save(LocalDecision(current.accountKey, item.getString("decision_id"), item.toString()))
+        val decisions = authenticated("/v1/decisions").getJSONArray("items")
+        database.withTransaction {
+            val events = database.events()
+            var copies = 0
+            for (local in events.all(account)) {
+                val remote = incoming.remove(local.eventId)
+                if (local.syncState in listOf("pending", "failed")) continue
+                if (local.deleted) {
+                    if (remote == null) events.remove(account, local.eventId)
+                    continue
+                }
+                val protectLocal = local.needsReconciliation || (remote != null && !local.consentToUpload)
+                if (protectLocal && (remote == null || !local.sameContents(remote))) {
+                    events.save(local.asPrivateCopy())
+                    copies++
+                }
+                if (remote == null) {
+                    if (local.syncState == "synced" || local.needsReconciliation) events.remove(account, local.eventId)
+                    continue
+                }
+                val updated = if (local.syncState == "synced" && local.serverRevision == remote.revision) {
+                    remote.copy(agentWorkId = local.agentWorkId, agentRequestId = local.agentRequestId,
+                        agentTaskId = local.agentTaskId, agentError = local.agentError)
+                } else remote
+                if (updated != local) events.save(updated)
+            }
+            for (event in incoming.values) events.save(event)
+            database.decisions().clear(account)
+            for (index in 0 until decisions.length()) {
+                val item = decisions.getJSONObject(index)
+                database.decisions().save(LocalDecision(account, item.getString("decision_id"), item.toString()))
+            }
+            copies
+        }
     }
 
     suspend fun generate(ids: List<String>, requestId: String): Unit = mutex.withLock {
@@ -311,11 +396,11 @@ class Repository(private val context: Context, val database: AppDatabase) {
 
     // Persist the exact command before sending. An uncertain response is retried with
     // the same id and parameters, including after process death; never invent a new id.
-    private suspend fun sendAgentCommand(command: AgentCommand): JSONObject {
+    private suspend fun sendAgentCommand(command: AgentCommand, keepReceipt: Boolean = false): JSONObject {
         check(session.value?.accountKey == command.accountKey) { "账号已变化，请重新打开事项" }
         return try {
             val result = authenticated(command.path, "POST", JSONObject(command.body))
-            database.agentCommands().remove(command.accountKey, command.path)
+            if (!keepReceipt) database.agentCommands().remove(command.accountKey, command.path)
             result
         } catch (error: ApiFailure) {
             if (error.status in listOf(400,403,404,409,422)) database.agentCommands().remove(command.accountKey, command.path)
@@ -327,7 +412,13 @@ class Repository(private val context: Context, val database: AppDatabase) {
         val account = requireNotNull(session.value).accountKey
         val fullPath = "/v1/agent/$path"
         val prior = database.agentCommands().get(account, fullPath)
-        check(prior == null) { "上次操作结果尚未确定，请刷新以核对原请求" }
+        if (prior != null && fullPath == AgentWorksPath) {
+            val original = JSONObject(prior.body)
+            if (original.getString("title") == body.getString("title") &&
+                original.getString("subagent_id") == body.getString("subagent_id")
+            ) return@withLock sendAgentCommand(prior)
+        }
+        check(prior == null) { "上一次操作还在确认中，请稍后刷新。" }
         val command = AgentCommand(account, fullPath, body.toString())
         database.agentCommands().save(command)
         sendAgentCommand(command)
@@ -335,12 +426,20 @@ class Repository(private val context: Context, val database: AppDatabase) {
 
     suspend fun agentSnapshot(taskId: String?, workId: String?): JSONObject = mutex.withLock {
         val account = requireNotNull(session.value).accountKey
-        for (pending in database.agentCommands().all(account)) sendAgentCommand(pending)
+        var recoveredWork: JSONObject? = null
+        for (pending in database.agentCommands().all(account)) {
+            val creatingWork = pending.path == AgentWorksPath
+            val receipt = sendAgentCommand(pending, keepReceipt = creatingWork)
+            if (creatingWork) recoveredWork = JSONObject()
+                .put("work", receipt.getJSONObject("work"))
+                .put("event_id", JSONObject(pending.body).getString("event_id"))
+        }
         val result = JSONObject().put("account", account)
             .put("health", authenticated("/v1/agent/health"))
             .put("subagents", authenticated("/v1/agent/subagents").getJSONArray("subagents"))
             .put("works", authenticated("/v1/agent/works").getJSONArray("works"))
             .put("tasks", authenticated("/v1/agent/tasks").getJSONArray("tasks"))
+        if (recoveredWork != null) result.put("recovered_work", recoveredWork)
         if (workId != null) {
             result.put("work", authenticated("/v1/agent/works/$workId").getJSONObject("work"))
             try {
@@ -356,6 +455,13 @@ class Repository(private val context: Context, val database: AppDatabase) {
             if (output?.optString("kind") == "action_proposal") result.put("action", authenticated("/v1/agent/actions/${output.getString("action_id")}").getJSONObject("action"))
         }
         result
+    }
+
+    suspend fun acknowledgeRecoveredWork(account: String, eventId: String) = mutex.withLock {
+        if (session.value?.accountKey != account) return@withLock
+        val commands = database.agentCommands()
+        val saved = commands.get(account, AgentWorksPath) ?: return@withLock
+        if (JSONObject(saved.body).getString("event_id") == eventId) commands.remove(account, AgentWorksPath)
     }
 
     suspend fun agentCalendar(actionId: String): JSONObject = mutex.withLock {
@@ -403,7 +509,10 @@ class SyncWorker(context: Context, parameters: WorkerParameters) : CoroutineWork
     override suspend fun doWork(): Result {
         val expectedAccount = inputData.getString("account") ?: return Result.failure()
         val repository = (applicationContext as WeiguangApp).repository
-        return try { repository.sync(expectedAccount); Result.success() }
+        return try {
+            if (repository.sync(expectedAccount)) repository.refreshRemote(expectedAccount)
+            Result.success()
+        }
         catch (error: ApiFailure) { if (error.status in listOf(400, 401, 403, 409, 422)) Result.failure() else Result.retry() }
         catch (_: java.io.IOException) { Result.retry() }
     }

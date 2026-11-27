@@ -1,7 +1,9 @@
 import asyncio
+from contextlib import closing
 from dataclasses import replace
 from datetime import datetime, timezone, timedelta
 import json
+import sqlite3
 from pathlib import Path
 import time
 import uuid
@@ -18,6 +20,7 @@ from screenmind.memory_service import MemoryService
 from screenmind.models import ActionInput, ScreenInput, TaskInput
 from screenmind.retrieval import HashDemoEmbedding, LanceIndex
 from screenmind.simplemem_adapter import RawExtractor, SimpleMemExtractor
+from screenmind.schedule_note import DATE_QUESTION, LEGACY_QUESTION, REVIEW_SUMMARY, answer_change, apply_missing_date, dated_answer, read_schedule_card
 from screenmind.store import Store, DomainError, encode
 from screenmind.agents.base import ToolError
 from test_engine import settings, client, screen, wait_task
@@ -51,6 +54,99 @@ def initial_schedule(client):
     task = wait_task(client, task["id"])
     assert confirm_schedule(client, task).status_code == 202
     return w, sid
+
+
+def test_explicit_dated_answers_keep_offsets_and_leave_ambiguous_times_unresolved():
+    assert dated_answer("读书会定在2027年2月8日下午2点半（台北时间）。") == ("读书会", "2027-02-08T14:30:00+08:00")
+    assert dated_answer("复盘，2026-12-10 09:05:12 UTC+05:45") == ("复盘", "2026-12-10T09:05:12+05:45")
+    for value in ("明天下午读书", "读书，2027年2月30日 12:00 北京时间", "读书，2027年2月8日 18:00",
+                  "读书，2027年2月8日 晚上12点 北京时间", "读书，2026-11-01 01:30 纽约时间",
+                  "读书，2026-03-08 02:30 纽约时间", "取消读书，2027年2月8日 18:00 北京时间"):
+        assert dated_answer(value) is None
+    original = {"source_ref": "input:task_a:2", "message": "读书，2027年2月8日 18:00 北京时间"}
+    revised = {**original, "source_ref": "input:task_a:3", "message": "读书，2027年2月8日 19:00 北京时间"}
+    assert answer_change(original, {})["id"] == answer_change(revised, {})["id"]
+    assert answer_change(original, {"saved": {"title": "读书"}})["id"] == "saved"
+    assert answer_change(original, {"a": {"title": "读书"}, "b": {"title": "读书"}}) is None
+
+
+def test_saved_demo_question_can_be_answered_without_rewriting_its_original(settings):
+    app = create_app(settings)
+    with TestClient(app) as client:
+        work = schedule_work(client)
+        source = client.post("/api/screens", json=screen(uid(), "想和大家去读书，时间待定")).json()["screen"]
+        task = client.post("/api/tasks", json={"event_id": uid(), "instruction": "记一下读书会",
+            "screen_ids": [source["id"]], "work_id": work["id"], "interaction_protocol": "cloud-v1"}).json()["task"]
+        tid = task["id"]
+        first = wait_task(client, tid)["interaction"]
+        assert first["question"] == DATE_QUESTION
+        old = {**first, "question": LEGACY_QUESTION}
+        with closing(sqlite3.connect(settings.db_path)) as archive:
+            with archive:
+                archive.execute("UPDATE interactions SET payload=? WHERE task_id=? AND version=?",
+                                (encode(old), tid, first["output_version"]))
+            reopened = client.get("/api/tasks/"+tid).json()["task"]
+            assert reopened["interaction"] == first
+            persisted = archive.execute("SELECT payload FROM interactions WHERE task_id=? AND version=?",
+                                        (tid, first["output_version"])).fetchone()[0]
+        assert json.loads(persisted)["question"] == LEGACY_QUESTION
+        ambiguous = response(first, "answer", question_id=first["question_id"], answer="下周找个下午")
+        assert respond(client, reopened, ambiguous).status_code == 202
+        waiting = wait_task(client, tid)
+        assert waiting["interaction"]["kind"] == "clarification" and waiting["memory_proposal"] is None
+        out = waiting["interaction"]
+        answer = response(out, "answer", question_id=out["question_id"], answer="读书会，2027-02-08 09:05 UTC+05:45")
+        assert respond(client, waiting, answer).status_code == 202
+        proposal = wait_task(client, tid)
+        assert proposal["interaction"]["kind"] == "state_proposal"
+        entry, = proposal["memory_proposal"]["items"].values()
+        assert entry["at"] == "2027-02-08T09:05:00+05:45" and entry["source_refs"] == [f"input:{tid}:3"]
+        assert client.get("/api/works/"+work["id"]).json()["work"]["memory_version"] == 0
+
+
+def test_partial_schedule_accepts_named_dates_across_two_answers(client):
+    work = schedule_work(client)
+    task, sid = schedule_task(client, work["id"], [
+        {"id": "books", "title": "旧书交换会", "at": None},
+        {"id": "walk", "title": "河边散步", "at": None},
+    ])
+    for line in ("旧书交换会定在2027年2月8日下午2点半（台北时间）", "河边散步，2027-02-08 18:05 UTC+05:45"):
+        waiting = wait_task(client, task["id"])
+        question = waiting["interaction"]
+        assert question["kind"] == "clarification"
+        assert respond(client, waiting, response(question, "answer", question_id=question["question_id"], answer=line)).status_code == 202
+    proposal = wait_task(client, task["id"])
+    assert proposal["interaction"]["kind"] == "state_proposal"
+    assert proposal["card"]["summary"] == REVIEW_SUMMARY
+    assert all(field["value"].endswith(" · 待完成") for field in proposal["card"]["fields"])
+    items = proposal["memory_proposal"]["items"]
+    assert set(items) == {"books", "walk"}
+    assert items["books"]["at"] == "2027-02-08T14:30:00+08:00"
+    assert items["walk"]["at"] == "2027-02-08T18:05:00+05:45"
+    for index, key in enumerate(("books", "walk"), 2):
+        assert any(sid in ref for ref in items[key]["source_refs"])
+        assert f"input:{task['id']}:{index}" in items[key]["source_refs"]
+        assert items[key]["status"] == "pending"
+    assert client.get("/api/works/"+work["id"]).json()["work"]["memory_version"] == 0
+
+
+def test_date_answer_only_fills_an_unambiguous_time_and_old_cards_keep_user_fields():
+    response = {"message": "读书会定在2027年2月8日 下午2点半（台北时间）", "source_ref": "input:reading:2"}
+    pending = {"title": "读书会", "at": None, "source_refs": ["screen:notice"]}
+    twins = {k: dict(pending, id=k) for k in ("a", "b")}
+    apply_missing_date(twins, {}, response)
+    assert all(item["at"] is None for item in twins.values())
+    protected = {"a": dict(pending, id="a", status="completed")}
+    apply_missing_date(protected, {}, response)
+    assert protected["a"]["source_refs"] == ["screen:notice"] and protected["a"]["at"] is None
+    card = {"title": "日程安排", "summary": "核对时间与依赖后确认更新", "fields": [
+        {"value": "2027-02-08T14:30:00+08:00 · pending · 无先后约束", "editable": False},
+        {"value": "2027-02-08T15:30:00+08:00 · completed · 须早于：图书馆关门", "editable": False},
+        {"value": "我想保留原话：无先后约束", "editable": True}]}
+    read_schedule_card(card)
+    assert card["summary"] == REVIEW_SUMMARY
+    assert [field["value"] for field in card["fields"]] == [
+        "2027-02-08T14:30:00+08:00 · 待完成", "2027-02-08T15:30:00+08:00 · 已完成 · 在图书馆关门之前", "我想保留原话：无先后约束"]
 
 
 def test_schedule_change_clarification_confirmation_and_feedback(client):

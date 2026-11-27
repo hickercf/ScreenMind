@@ -11,11 +11,14 @@ import cn.weiguang.app.BuildConfig
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import okhttp3.Call
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import org.json.JSONObject
 import java.io.File
+import java.io.IOException
 import java.net.URI
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
@@ -51,28 +54,34 @@ class AppUpdater(private val context: Context, private val scope: CoroutineScope
     val state = mutable.asStateFlow()
     private val client = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS)
         .readTimeout(30, TimeUnit.SECONDS).followRedirects(false).followSslRedirects(false).build()
+    private val transfer = ApkTransfer(client)
     private val root get() = File(context.filesDir, "updates").apply { mkdirs() }
     private var operation: Job? = null
-    @Volatile private var activeCall: Call? = null
+    private val busy get() = operation?.isCompleted == false
+    private var selectedEndpoint: String? = null
     private val checkedAt = mutableMapOf<String, Long>()
 
     fun check(rawEndpoint: String, manual: Boolean = true) {
-        if (!BuildConfig.ENABLE_SELF_UPDATE || operation?.isActive == true) return
+        if (!BuildConfig.ENABLE_SELF_UPDATE) return
         val updateEndpoint = CloudEndpoint.selected(rawEndpoint)
-        val now = System.currentTimeMillis()
-        if (!manual && now - (checkedAt[updateEndpoint] ?: 0) < 4 * 60 * 60 * 1000L) return
-        checkedAt[updateEndpoint] = now
-        val prior = mutable.value
+        val changed = selectedEndpoint != updateEndpoint
+        val recentlyChecked = System.currentTimeMillis() - (checkedAt[updateEndpoint] ?: 0) < TimeUnit.HOURS.toMillis(4)
+        if (!changed && (busy || !manual && recentlyChecked)) return
+        if (changed) {
+            operation?.cancel()
+            selectedEndpoint = updateEndpoint
+            mutable.value = UpdateState()
+        }
+        val previous = mutable.value
         operation = scope.launch {
-            mutable.value = prior.copy(phase = "checking", message = "正在检查更新…")
+            mutable.value = previous.copy(phase = "checking", message = "正在检查更新…")
             try {
                 val endpoint = ApiClient.validateEndpoint(updateEndpoint)
                 val release = withContext(Dispatchers.IO) {
                     val call = client.newCall(Request.Builder().url("$endpoint/v1/app/update?channel=${BuildConfig.BUILD_TYPE}&version_code=${BuildConfig.VERSION_CODE}").build())
-                    activeCall = call
-                    call.execute().use { response ->
-                        if (response.code == 204) return@withContext null
-                        check(response.isSuccessful) { "更新服务暂不可用（${response.code}）" }
+                    call.readCancellable { response ->
+                        if (response.code == 204) return@readCancellable null
+                        check(response.isSuccessful) { "更新服务暂时无法使用，请稍后重试。" }
                         val body = requireNotNull(response.body)
                         require(body.contentLength() <= 20000) { "更新信息过大" }
                         val bytes = body.byteStream().use { input ->
@@ -87,75 +96,122 @@ class AppUpdater(private val context: Context, private val scope: CoroutineScope
                         }
                         require(bytes.size <= 20000) { "更新信息过大" }
                         AppRelease.parse(JSONObject(String(bytes, Charsets.UTF_8)), endpoint, BuildConfig.BUILD_TYPE, BuildConfig.ALLOW_LOCAL_HTTP).also {
-                            require(CloudEndpoint.acceptsDownload(it.url)) { "安装包地址与微光云端不一致" }
+                            require(CloudEndpoint.acceptsDownload(it.url)) { "安装包地址与 ScreenMind 云端不一致" }
                         }
                     }
                 }
-                if (release == null || release.code <= BuildConfig.VERSION_CODE) {
-                    mutable.value = UpdateState(phase = "current", message = "当前服务器没有可用的新版本。")
-                } else {
-                    require(Build.VERSION.SDK_INT >= release.minSdk) { "新版需要更高版本的 Android 系统" }
-                    val ready = withContext(Dispatchers.IO) {
-                        val file = File(root, release.sha256 + ".apk")
-                        file.exists() && runCatching { verify(file, release); true }.getOrDefault(false)
+                val available = release?.takeIf { it.code > BuildConfig.VERSION_CODE }
+                if (available != null) require(Build.VERSION.SDK_INT >= available.minSdk) { "新版需要更高版本的 Android 系统" }
+                val result = withContext(Dispatchers.IO) {
+                    cacheLock.withLock {
+                        prune(available)
+                        if (available == null) UpdateState(phase = "current", message = "暂无可用更新。")
+                        else cachedState(available)
                     }
-                    mutable.value = UpdateState(if (ready) "ready" else "available", release,
-                        message = if (ready) "新版已下载并校验，可以安装。" else "发现新版本 ${release.name}。")
                 }
+                checkedAt[updateEndpoint] = System.currentTimeMillis()
+                mutable.value = result
             } catch (cancelled: CancellationException) { throw cancelled }
-            catch (error: Exception) { mutable.value = prior.copy(message = if (error is java.io.IOException) "暂时无法连接更新服务，请检查服务地址或稍后重试。" else error.message ?: "检查更新失败") }
-            finally { activeCall = null }
+            catch (error: Exception) {
+                ensureActive()
+                mutable.value = previous.copy(message = if (error is IOException) "暂时无法连接更新服务，请检查网络后重试。" else error.message ?: "这次没有查到更新，请稍后重试。")
+            }
         }
+    }
+
+    private fun cachedState(release: AppRelease): UpdateState {
+        val file = File(root, release.sha256 + ".apk")
+        if (file.isFile) {
+            try {
+                verify(file, release)
+                return UpdateState("ready", release, 100, "新版已下载，可以安装。")
+            } catch (_: IllegalArgumentException) {
+                file.delete()
+            }
+        }
+        val partial = File(root, release.sha256 + ".part")
+        if (partial.length() > release.size) partial.delete()
+        val bytes = partial.length()
+        return pending(release, bytes, if (bytes > 0) "已保留上次的下载进度。" else "发现新版本 ${release.name}。")
+    }
+
+    private fun pending(release: AppRelease, bytes: Long, message: String) =
+        UpdateState(if (bytes > 0) "paused" else "available", release, (bytes.coerceIn(0, release.size) * 100 / release.size).toInt(), message)
+
+    private fun prune(release: AppRelease?) {
+        // A development build can alternate between servers with different releases.
+        val expiry = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(14)
+        root.listFiles()?.filter { file ->
+            file.isFile && cacheName.matches(file.name) && file.nameWithoutExtension != release?.sha256 &&
+                (BuildConfig.LOCK_CLOUD_ENDPOINT || file.lastModified() < expiry)
+        }?.forEach { it.delete() }
     }
 
     fun download() {
-        if (operation?.isActive == true) return
+        if (!BuildConfig.ENABLE_SELF_UPDATE || busy || mutable.value.phase !in setOf("available", "paused")) return
         val release = mutable.value.release ?: return
         operation = scope.launch {
-            mutable.value = UpdateState("downloading", release, message = "正在下载安装包，请保持应用开启。")
+            mutable.value = mutable.value.copy(phase = "downloading", message = "正在下载，暂停后可以接着下载。")
+            val partial = File(root, release.sha256 + ".part")
             try {
                 withContext(Dispatchers.IO) {
-                    val destination = File(root, release.sha256 + ".apk")
-                    val partial = File(root, release.sha256 + ".part")
-                    try {
-                        val call = client.newCall(Request.Builder().url(release.url).build())
-                        activeCall = call
-                        call.execute().use { response ->
-                            check(response.isSuccessful) { "下载未完成（${response.code}），请重试" }
-                            val body = requireNotNull(response.body)
-                            require(body.contentLength() == -1L || body.contentLength() == release.size) { "安装包大小与版本信息不符" }
-                            var total = 0L; var lastPercent = -1
-                            body.byteStream().use { input -> partial.outputStream().use { output ->
-                                val buffer = ByteArray(64 * 1024)
-                                while (true) {
-                                    ensureActive()
-                                    val count = input.read(buffer)
-                                    if (count < 0) break
-                                    total += count
-                                    require(total <= release.size) { "安装包超过预期大小" }
-                                    output.write(buffer, 0, count)
-                                    val percent = (total * 100 / release.size).toInt()
-                                    if (percent != lastPercent) { mutable.value = mutable.value.copy(progress = percent); lastPercent = percent }
+                    cacheLock.withLock {
+                        var lastPercent = -1
+                        transfer.receive(release.url, release.size, partial) { bytes ->
+                            val percent = (bytes * 100 / release.size).toInt()
+                            if (percent != lastPercent) {
+                                ensureActive()
+                                mutable.update { state ->
+                                    if (state.release == release && state.phase == "downloading") state.copy(progress = percent) else state
                                 }
-                            } }
-                            require(total == release.size) { "下载不完整，请重试" }
+                                lastPercent = percent
+                            }
                         }
                         ensureActive()
-                        verify(partial, release)
-                        check(partial.renameTo(destination)) { "无法保存安装包，请重试" }
-                    } finally { partial.delete() }
+                        mutable.update { state ->
+                            if (state.release == release && state.phase == "downloading") {
+                                UpdateState("verifying", release, 100, "下载完成，正在核对安装包。")
+                            } else state
+                        }
+                        try {
+                            verify(partial, release)
+                        } catch (invalid: IllegalArgumentException) {
+                            partial.delete()
+                            throw invalid
+                        }
+                        ensureActive()
+                        check(partial.renameTo(File(root, release.sha256 + ".apk"))) { "无法保存安装包，请检查手机的剩余空间。" }
+                    }
                 }
-                mutable.value = UpdateState("ready", release, 100, "下载和签名校验完成，点击安装后由系统确认。")
+                mutable.value = UpdateState("ready", release, 100, "新版已下载，可以安装。")
             } catch (cancelled: CancellationException) {
-                mutable.value = UpdateState("available", release, message = "下载已取消，可以重新下载。")
+                if (cancelled is DownloadPaused && selectedEndpoint == release.endpoint) {
+                    mutable.value = pending(release, partial.length(), "下载已暂停。")
+                }
                 throw cancelled
             } catch (error: Exception) {
-                mutable.value = UpdateState("available", release, message = if (error is java.io.IOException) "下载中断，请重新下载。" else error.message ?: "下载校验失败")
-            } finally { activeCall = null }
+                ensureActive()
+                val bytes = partial.length()
+                val message = when {
+                    error !is IOException -> error.message ?: "安装包校验失败，请重新下载。"
+                    bytes > 0 -> "下载中断，已保留进度。恢复网络后可以继续。"
+                    else -> "下载没有开始，请检查网络和剩余空间后重试。"
+                }
+                mutable.value = pending(release, bytes, message)
+            }
         }
     }
 
-    fun cancel() { activeCall?.cancel(); operation?.cancel() }
+    fun pause() {
+        if (mutable.value.phase == "downloading") operation?.cancel(DownloadPaused())
+    }
+
+    private class DownloadPaused : CancellationException()
+
+    private companion object {
+        val cacheLock = Mutex()
+        val cacheName = Regex("""[a-f0-9]{64}\.(apk|part)""")
+    }
 
     @Suppress("DEPRECATION")
     private fun verify(file: File, release: AppRelease) {
@@ -175,15 +231,30 @@ class AppUpdater(private val context: Context, private val scope: CoroutineScope
     }
 
     fun install() {
-        if (!BuildConfig.ENABLE_SELF_UPDATE || operation?.isActive == true || mutable.value.phase != "ready") return
+        if (!BuildConfig.ENABLE_SELF_UPDATE || busy || mutable.value.phase != "ready") return
         val release = mutable.value.release ?: return
         operation = scope.launch {
             try {
                 val file = File(root, release.sha256 + ".apk")
-                withContext(Dispatchers.IO) { verify(file, release) }
+                val valid = withContext(Dispatchers.IO) {
+                    cacheLock.withLock {
+                        if (!file.isFile) return@withLock false
+                        try {
+                            verify(file, release)
+                            true
+                        } catch (_: IllegalArgumentException) {
+                            file.delete()
+                            false
+                        }
+                    }
+                }
+                if (!valid) {
+                    mutable.value = pending(release, 0, "安装包已失效，请重新下载。")
+                    return@launch
+                }
                 if (!context.packageManager.canRequestPackageInstalls()) {
                     context.startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-                    mutable.value = mutable.value.copy(message = "请允许微光安装更新，返回后再次点击安装。")
+                    mutable.value = mutable.value.copy(message = "请允许 ScreenMind 安装更新，返回后再次点击安装。")
                 } else {
                     val uri = FileProvider.getUriForFile(context, context.packageName + ".updates", file)
                     context.startActivity(Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")

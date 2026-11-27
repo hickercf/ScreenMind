@@ -1,0 +1,5 @@
+<resources>
+    <color name="workspace_accent">#2859C7</color>
+    <color name="workspace_window_background">#F5F7FB</color>
+    <bool name="workspace_light_system_bars">true</bool>
+</resources>

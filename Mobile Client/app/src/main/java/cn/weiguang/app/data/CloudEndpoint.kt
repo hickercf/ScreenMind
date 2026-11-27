@@ -20,7 +20,7 @@ internal object CloudEndpoint {
 
     fun request(endpoint: String): String {
         if (!BuildConfig.LOCK_CLOUD_ENDPOINT) return endpoint
-        require(acceptsSession(endpoint) && endpoint != "offline") { "请重新登录微光云端" }
+        require(acceptsSession(endpoint) && endpoint != "offline") { "请重新登录 ScreenMind 云端" }
         return production
     }
 

@@ -7,7 +7,7 @@ name = "screenmind-superagent"
 version = "0.5.0"
 description = "Event-driven OCR task engine and interactive card prototype"
 requires-python = ">=3.12"
-dependencies = ["fastapi==0.136.1", "uvicorn==0.46.0", "httpx==0.28.1", "pydantic==2.13.4"]
+dependencies = ["fastapi==0.136.1", "uvicorn==0.46.0", "httpx==0.28.1", "pydantic==2.13.4", "tzdata==2026.6"]
 
 [project.optional-dependencies]
 test = ["pytest==9.0.3"]
@@ -18,7 +18,7 @@ qwen = ["sentence-transformers==5.1.1", "transformers==4.57.1"]
 include = ["screenmind*"]
 
 [tool.setuptools.package-data]
-screenmind = ["static/*"]
+screenmind = ["static/*", "static/workbench/*", "static/workbench/assets/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

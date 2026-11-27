@@ -4,18 +4,19 @@ No client-supplied owner, no model calls inside the mobile database transaction.
 The legacy /v1/decisions rule provider remains an explicitly labeled compatibility path.
 """
 import asyncio
-from contextlib import AsyncExitStack, closing
-from dataclasses import replace
+from contextlib import AsyncExitStack, asynccontextmanager, closing
+from dataclasses import dataclass, field, replace
 import hashlib
 import json
 import os
 from pathlib import Path
 import secrets
 import sqlite3
+from time import monotonic
 from uuid import UUID
 
 import httpx
-from fastapi import APIRouter, Depends, Header, HTTPException, Request, Response, Query
+from fastapi import APIRouter, Depends, FastAPI, Header, HTTPException, Request, Response, Query
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import Field
@@ -24,6 +25,7 @@ from screenmind.config import Settings
 from screenmind.models import StrictModel, Identifier, Text, WorkInput, ActionInput
 from screenmind.interactions import InteractionResponse
 from screenmind.actions import CalendarRequest
+from screenmind.plan_view import PlanOpinion
 
 
 class EventRef(StrictModel):
@@ -38,7 +40,24 @@ class TaskRequest(StrictModel):
     events: list[EventRef] = Field(min_length=1, max_length=10)
 
 
+@dataclass
+class Workspace:
+    app: FastAPI
+    client: httpx.AsyncClient
+    lifetime: AsyncExitStack
+    last_used: float
+
+
+@dataclass
+class AccountRequests:
+    lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    count: int = 0
+
+
 class AgentHub:
+    max_open = 8
+    idle_seconds = 60
+
     def __init__(self, database_path, settings=None):
         self.database_path = database_path
         self.settings = settings or Settings.from_env()
@@ -46,50 +65,89 @@ class AgentHub:
         self.entries = {}
         self.locks = {}
         self.open_lock = asyncio.Lock()
-        self.stack = AsyncExitStack()
 
-    def lock(self, uid):
-        return self.locks.setdefault(uid, asyncio.Lock())
+    @asynccontextmanager
+    async def lock(self, uid):
+        requests = self.locks.setdefault(uid, AccountRequests())
+        requests.count += 1
+        try:
+            async with requests.lock:
+                yield
+        finally:
+            requests.count -= 1
+            if not requests.count:
+                del self.locks[uid]
+            if workspace := self.entries.get(uid):
+                workspace.last_used = monotonic()
 
     def connect(self):
         conn = sqlite3.connect(self.database_path(), timeout=15)
         conn.row_factory = sqlite3.Row
         return conn
 
-    def workspace_path(self, uid):
-        return self.root / hashlib.sha256(uid.encode()).hexdigest()
-
     async def restore_existing(self, uid):
-        if uid in self.entries or (self.workspace_path(uid) / 'state.sqlite3').is_file():
+        path = self.root / hashlib.sha256(uid.encode()).hexdigest() / 'state.sqlite3'
+        if uid in self.entries or path.is_file():
             await self.ready(uid)
 
     async def entry(self, uid):
-        if uid in self.entries:
-            return self.entries[uid]
+        if workspace := self.entries.get(uid):
+            return workspace.app, workspace.client
         async with self.open_lock:
-            if uid in self.entries:
-                return self.entries[uid]
-            # Bounded internal pilot. A production worker pool is a separate deployment task.
-            if len(self.entries) >= 8:
-                raise HTTPException(503, '当前内测服务已达到8个用户工作区上限，请联系维护者')
-            root = self.workspace_path(uid)
+            if workspace := self.entries.get(uid):
+                return workspace.app, workspace.client
+            if len(self.entries) >= self.max_open:
+                await self.release_idle()
+            root = self.root / hashlib.sha256(uid.encode()).hexdigest()
             key = secrets.token_urlsafe(32)
             cfg = replace(self.settings, owner=uid, db_path=root / 'state.sqlite3',
                 index_path=root / 'index', action_path=root / 'exports', api_key=key,
                 allowed_hosts=('agent.internal',), caldav_url='', caldav_username='', caldav_password='')
             child = create_app(cfg)
-            await self.stack.enter_async_context(child.router.lifespan_context(child))
-            client = await self.stack.enter_async_context(httpx.AsyncClient(
-                transport=httpx.ASGITransport(app=child), base_url='http://agent.internal',
-                headers={'Authorization': 'Bearer ' + key}, timeout=40))
-            child.state.store.db.execute('''CREATE TABLE IF NOT EXISTS mobile_evidence(
-                event_id TEXT NOT NULL, revision INTEGER NOT NULL, work_id TEXT NOT NULL,
-                screen_id TEXT NOT NULL, PRIMARY KEY(event_id,revision,work_id))''')
-            self.entries[uid] = (child, client)
+            async with AsyncExitStack() as starting:
+                await starting.enter_async_context(child.router.lifespan_context(child))
+                client = await starting.enter_async_context(httpx.AsyncClient(
+                    transport=httpx.ASGITransport(app=child), base_url='http://agent.internal',
+                    headers={'Authorization': 'Bearer ' + key}, timeout=40))
+                child.state.store.db.execute('''CREATE TABLE IF NOT EXISTS mobile_evidence(
+                    event_id TEXT NOT NULL, revision INTEGER NOT NULL, work_id TEXT NOT NULL,
+                    screen_id TEXT NOT NULL, PRIMARY KEY(event_id,revision,work_id))''')
+                self.entries[uid] = Workspace(child, client, starting.pop_all(), monotonic())
             return child, client
 
+    async def release_idle(self):
+        cutoff = monotonic() - self.idle_seconds
+        for uid, workspace in sorted(self.entries.items(), key=lambda item: item[1].last_used):
+            if uid in self.locks or workspace.last_used > cutoff:
+                continue
+            store = workspace.app.state.store
+            if any(not task.done() for task in workspace.app.state.runtime.running.values()):
+                continue
+            if store.db.execute("""SELECT 1 FROM tasks WHERE owner=? AND status IN ('queued','running')
+                UNION ALL SELECT 1 FROM external_actions WHERE owner=? AND status IN ('authorized','executing','reconciling')
+                LIMIT 1""", (uid, uid)).fetchone():
+                continue
+            if store.memory_service and (store.memory_service.lock.locked() or store.db.execute(
+                """SELECT 1 FROM memory_jobs WHERE owner=? AND
+                (status='running' OR (status IN ('pending','delete_pending') AND attempts<3)) LIMIT 1""", (uid,)
+            ).fetchone()):
+                continue
+            # Remove before yielding. A concurrent request for this account will join open_lock.
+            del self.entries[uid]
+            closing_task = asyncio.create_task(workspace.lifetime.aclose())
+            try:
+                await asyncio.shield(closing_task)
+            except asyncio.CancelledError:
+                await closing_task
+                raise
+            return
+        raise HTTPException(503, '云端正在处理其他请求，请稍后再试。', headers={'Retry-After': '5'})
+
     async def close(self):
-        await self.stack.aclose()
+        async with self.open_lock, AsyncExitStack() as closing_workspaces:
+            for workspace in self.entries.values():
+                closing_workspaces.push_async_callback(workspace.lifetime.aclose)
+            self.entries.clear()
 
     async def call(self, uid, method, path, body=None):
         _, client = await self.entry(uid)
@@ -102,7 +160,7 @@ class AgentHub:
         # Durable outbox is created in the SAME transaction as the event edit/delete.
         if uid not in self.entries:
             return
-        child, _ = self.entries[uid]
+        child = self.entries[uid].app
         store = child.state.store
         with closing(self.connect()) as conn:
             jobs = conn.execute('SELECT seq,event_id,revision FROM agent_invalidations WHERE user_id=? ORDER BY seq', (uid,)).fetchall()
@@ -178,7 +236,7 @@ class AgentHub:
             'instruction': data.instruction, 'screen_ids': screens, 'interaction_protocol': 'cloud-v1'})).json()
 
     def decorate(self, uid, task):
-        store = self.entries[uid][0].state.store
+        store = self.entries[uid].app.state.store
         ids = set(task['screen_ids'])
         bundle = task.get('memory_context')
         if bundle:
@@ -240,7 +298,12 @@ def install(app, main):
     @router.get('/works/{wid}/plan')
     async def plan(wid: Identifier, request: Request, response: Response, user=Depends(authenticated_user)):
         response.headers["Cache-Control"] = "no-store"
-        return await forward(request, user, 'GET', f'works/{wid}/plan')
+        plan = await forward(request, user, 'GET', f'works/{wid}/plan')
+        return {**plan, 'supports_opinions': True}
+
+    @router.post('/works/{wid}/plan/opinions', status_code=202)
+    async def plan_opinion(wid: Identifier, body: PlanOpinion, request: Request, user=Depends(authenticated_user)):
+        return await forward(request, user, 'POST', f'works/{wid}/plan/opinions', body.model_dump(mode="json"))
 
     @router.get('/works/{wid}/memory-index')
     async def memory_status(wid: Identifier, request: Request, user=Depends(authenticated_user)):

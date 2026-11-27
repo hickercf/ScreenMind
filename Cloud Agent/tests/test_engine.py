@@ -6,6 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from screenmind.api import create_app, ProcessLock
 from screenmind.config import Settings
+from screenmind.information_labels import read_excerpt_labels
 from screenmind.models import ScreenInput
 from screenmind.providers import CompatibleProvider, MockProvider, ProviderError
 from screenmind.store import DomainError, Store
@@ -77,6 +78,92 @@ def test_full_edit_continue_confirm_roundtrip(client):
     events = client.get("/api/events", params={"task_id": task["id"]}).json()["events"]
     assert any(e["kind"] == "tool.started" and e["payload"]["tool"] == "read_screens" for e in events)
     assert sum(e["kind"] == "card.published" for e in events) == 2
+
+
+@pytest.mark.parametrize("archived", [False, True])
+def test_excerpt_headings_survive_reopen_and_keep_the_author_and_text(client, monkeypatch, archived):
+    data = screen()
+    data["blocks"] += [
+        {"id": "note", "kind": "paragraph", "text": "保留原文里的 paragraph 这个词"},
+        {"id": "chat", "kind": "chat", "text": "图书馆门口集合"},
+        {"id": "card", "kind": "card", "text": "带上借书证"},
+        {"id": "speaker", "kind": "chat", "speaker": "chat", "text": "这位读者的名字就是 chat"},
+    ]
+    sid = client.post("/api/screens", json=data).json()["screen"]["id"]
+    wid = client.post("/api/works", json={"event_id": "reading", "title": "周五读书会",
+                                          "subagent_id": "information"}).json()["work"]["id"]
+    with monkeypatch.context() as legacy:
+        if archived:
+            legacy.setattr("screenmind.agents.information.MOCK_EXCERPT_TITLE", "屏幕信息整理 · 模拟结果")
+            legacy.setattr("screenmind.agents.information.mock_excerpt_summary", lambda count, more:
+                           f"模拟模型按原文整理，不执行语义分析。当前收录 {count} 份屏幕；用户修订由服务端保留。")
+            legacy.setattr("screenmind.agents.information.excerpt_label",
+                           lambda app, block: app + " · " + (block.get("speaker") or block["kind"]))
+            legacy.setattr("screenmind.store.read_excerpt_labels", lambda cards, get_screen: None)
+        response = client.post("/api/tasks", json={"event_id": "meeting", "instruction": "整理读书会",
+            "work_id": wid, "screen_ids": [sid], "interaction_protocol": "cloud-v1"})
+        tid = response.json()["task"]["id"]
+        task = wait_task(client, tid)
+        original = task["card"]["fields"]
+        if archived:
+            assert original[0]["label"] == "示例 · key_value"
+        output = task["interaction"]
+        accepted = client.post(f"/api/tasks/{tid}/responses", json={"event_id": "accept-meeting",
+            "kind": "accept_state", "expected_revision": task["revision"], "output_version": output["output_version"],
+            "proposal_id": output["proposal_id"]})
+        assert accepted.status_code == 202, accepted.text
+    expected = ["示例 · 截止时间", "示例 · 正文摘录", "示例 · 聊天消息", "示例 · 卡片内容", "示例 · chat"]
+    get_fields = lambda card: [f["label"] for f in card["fields"]]
+    task = client.get("/api/tasks/" + tid).json()["task"]
+    assert get_fields(task["card"]) == expected
+    assert get_fields(task["previous_card"]) == expected
+    assert get_fields(task["interaction"]["card"]) == expected
+    assert get_fields(task["interaction"]["candidate_state"]["card"]) == expected
+    persisted = client.get("/api/works/" + wid).json()
+    assert get_fields(persisted["work"]["state"]["card"]) == expected
+    assert get_fields(persisted["history"][0]["state"]["card"]) == expected
+    for card in (task["card"], task["previous_card"], task["interaction"]["card"],
+                 persisted["work"]["state"]["card"], persisted["history"][0]["state"]["card"]):
+        assert card["title"] == "线索摘录"
+        assert card["summary"] == "摘录自 1 份线索。"
+    assert [c["title"] for c in client.get(f"/api/works/{wid}/plan").json()["confirmed"]] == expected
+    assert [{k: v for k, v in f.items() if k != "label"} for f in original] == [
+        {k: v for k, v in f.items() if k != "label"} for f in task["card"]["fields"]]
+    assert client.delete("/api/screens/" + sid).status_code == 200
+    withdrawn = client.get("/api/tasks/" + tid).json()["task"]["card"]
+    assert not any(f["label"].endswith("key_value") for f in withdrawn["fields"])
+
+
+def test_phone_metadata_in_a_model_field_preserves_custom_headings_and_user_corrections():
+    text = ("用户确认的来源渠道：manual；语义类型：note；时区：Asia/Shanghai；事项发生时间：未知。"
+            "此时间不是消息发送时间，采集时间也不是消息发送时间。")
+    source = {"event_id":"mobile:test","app_name":"微光 · 用户确认线索","app_package":"cn.weiguang.app",
+              "blocks":[{"id":"metadata","kind":"key_value","text":text}]}
+    model = {"id":"model_heading","value":text,"label":"这条笔记的来源","origin":"source","source_refs":["scr_test:metadata"]}
+    edited = {**model,"id":"my_correction","origin":"user"}
+    fields = [model.copy(), edited.copy()]
+    read_excerpt_labels([{"type":"information","fields":fields}], lambda sid:source)
+    assert fields[0] == {**model,"value":"你手动记下了这条备忘。"}
+    assert fields[1] == edited
+    original = model.copy()
+    foreign = {**source,"app_package":"org.example.notes"}
+    read_excerpt_labels([{"type":"information","fields":[original]}], lambda sid:foreign)
+    assert original == model
+
+
+def test_only_the_complete_old_mock_card_gets_the_new_intro():
+    title = "屏幕信息整理 · 模拟结果"
+    summary = "模拟模型按原文整理，不执行语义分析。当前收录 3 份屏幕；用户修订由服务端保留。 本轮已收到补充要求；真实语义处理需配置模型。"
+    generated = {"type":"information", "title":title, "summary":summary}
+    previous = {"type":"information", "title":"线索摘录",
+                "summary":"你选了 2 份记录。演示模式按原文摘录，每条都保留了出处。"}
+    custom = [{**generated, "title":"借书清单"}, {**generated, "summary":"这是我整理的三条摘录。"},
+              {**generated, "summary":summary + " 周五要带过去。"}]
+    originals = [card.copy() for card in custom]
+    read_excerpt_labels([generated, previous, *custom], lambda _:None)
+    assert generated["title"] == "线索摘录" and generated["summary"].endswith("已记下这次补充。")
+    assert previous["summary"] == "摘录自 2 份线索。"
+    assert custom == originals
 
 
 def test_screen_upload_never_creates_task(client):
@@ -219,6 +306,20 @@ def test_api_key_required(tmp_path):
         assert client.get('/').status_code == 200
 
 
+def test_workbench_prefix_keeps_the_connection_key_required(tmp_path, monkeypatch):
+    monkeypatch.setenv("SCREENMIND_ROOT_PATH", "/workbench")
+    config = Settings(db_path=tmp_path/"workbench.sqlite3", api_key="test-workbench", allowed_hosts=("testserver",))
+    with TestClient(create_app(config)) as client:
+        for base in ("", "/workbench"):
+            assert client.get(base+"/").status_code == 200
+            assert client.get(base+"/api/health").status_code == 401
+            assert client.get(base+"/api/screens").status_code == 401
+            valid = {"Authorization":"Bearer test-workbench"}
+            assert client.get(base+"/api/health", headers=valid).status_code == 200
+            assert client.get(base+"/api/screens", headers={**valid, "Origin":"https://unrelated.example"}).status_code == 403
+        assert "/workbench/openapi.json" in client.get("/workbench/docs").text
+
+
 def test_store_workspace_isolation(tmp_path):
     store = Store(tmp_path/'isolation.sqlite3', 'alice')
     body = ScreenInput.model_validate(screen()).model_dump(mode='json')
@@ -228,7 +329,26 @@ def test_store_workspace_isolation(tmp_path):
     assert other.list_screens() == []
     with pytest.raises(DomainError):
         other.get_screen(item['id'])
+    with pytest.raises(DomainError):
+        other.screen_page(2, before=item['id'])
     other.close()
+
+
+def test_older_screens_survive_timestamp_ties_insertions_and_withdrawals(client, monkeypatch):
+    monkeypatch.setattr("screenmind.store.now", lambda: "2026-11-21T03:00:00+00:00")
+    ids = sorted((upload(client, f"book-{n}") for n in range(5)), reverse=True)
+    first = client.get("/api/screens", params={"limit": 2}).json()
+    assert [s["id"] for s in first["screens"]] == ids[:2]
+    assert first["total"] == 5 and first["next_before"] == ids[1]
+    assert client.delete("/api/screens/"+ids[1]).status_code == 200
+    assert client.get("/api/screens/"+ids[1]).status_code == 404
+    monkeypatch.setattr("screenmind.store.now", lambda: "2026-11-21T04:00:00+00:00")
+    upload(client, "newer-book")
+    rest = client.get("/api/screens", params={"limit": 3, "before": first["next_before"]}).json()
+    assert [s["id"] for s in rest["screens"]] == ids[2:]
+    assert rest["total"] == 5 and rest["next_before"] is None
+    assert client.get("/api/screens/"+ids[-1]).json()["screen"]["id"] == ids[-1]
+    assert set(client.get("/api/screens").json()) == {"screens"}
 
 
 def test_process_lock(tmp_path):

@@ -22,7 +22,9 @@ object ChronoCapture {
     suspend fun recognize(context: Context, bitmap: Bitmap, appPackage: String = "unknown", appName: String = "截图导入") =
         withContext(Dispatchers.IO) {
             val output = ScreenPipeline.process(context, bitmap, "sess-${UUID.randomUUID()}", "evt-${UUID.randomUUID()}", appPackage, appName)
-            check(output.problems.isEmpty() && output.payload.blocks.isNotEmpty()) { "没有识别到有效聊天消息，请选择清晰的聊天截图" }
+            if (output.problems.isNotEmpty() || output.payload.blocks.isEmpty()) {
+                throw ScreenshotImportException("没能读出聊天文字，请选择清晰的聊天截图。")
+            }
             output.payload
         }
 
