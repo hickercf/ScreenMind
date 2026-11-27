@@ -22,12 +22,43 @@ import java.io.File
 class DeviceFlowTest {
     @get:Rule val compose = createAndroidComposeRule<MainActivity>()
 
+    @Test fun homeShowsAgendaWhileCluesAndSuggestionsHaveTheirOwnPages() {
+        val repository = (compose.activity.application as WeiguangApp).repository
+        val note = runBlocking {
+            repository.logout()
+            repository.enterOffline()
+            repository.saveEvent("只在线索页查看的测试记录", "manual", "note", false)
+        }
+        try {
+            compose.waitUntil(15_000) { compose.onAllNodesWithTag("home-date").fetchSemanticsNodes().isNotEmpty() }
+            compose.onNodeWithText("最近线索").assertDoesNotExist()
+            compose.onNodeWithText(note.text).assertDoesNotExist()
+            compose.onNodeWithText("生成日程建议").assertDoesNotExist()
+            compose.onNodeWithText("今日灵感").assertDoesNotExist()
+            screenshot("home-focus-agenda")
+
+            compose.onNodeWithText("线索", useUnmergedTree = true).performClick()
+            compose.waitUntil(15_000) { compose.onAllNodesWithText(note.text).fetchSemanticsNodes().isNotEmpty() }
+            screenshot("home-focus-clues")
+            compose.onNodeWithText("Cloud", useUnmergedTree = true).performClick()
+            compose.onNodeWithText("日程建议").performScrollTo().performClick()
+            compose.onNodeWithText("生成日程建议").assertIsNotEnabled()
+            screenshot("home-focus-suggestions")
+            compose.onNodeWithText("换个灵感").performScrollTo().performClick()
+            compose.onNodeWithText("去书店读书").assertExists()
+            compose.onNodeWithText("加入日程").performClick()
+            compose.onNodeWithTag("clue-editor-text").assertTextContains("去书店读书")
+        } finally {
+            runBlocking { repository.removeEvent(note.eventId) }
+        }
+    }
+
     @Test fun offlineEntryManualRecordAndTheme() {
         val repository = (compose.activity.application as WeiguangApp).repository
         runBlocking { repository.logout() }
         compose.waitUntil(15000) { compose.onAllNodesWithText("先离线使用").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("先离线使用").performScrollTo().performClick()
-        compose.waitUntil(15000) { compose.onAllNodesWithText("你的工作台").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(15000) { compose.onAllNodesWithTag("home-date").fetchSemanticsNodes().isNotEmpty() }
         compose.onNodeWithText("线索", useUnmergedTree = true).performClick()
         compose.onNodeWithText("手动记录").performClick()
         compose.onNodeWithTag("clue-editor-text").performTextInput("UI 自动化记录：周五在 A302 讨论")
@@ -77,7 +108,7 @@ class DeviceFlowTest {
         compose.onNodeWithText("密码", substring = false).performTextInput("Android-test-123")
         compose.onNodeWithText("确认密码", substring = false).performScrollTo().performTextInput("Android-test-123")
         compose.onNodeWithText("注册并登录").performScrollTo().performClick()
-        compose.waitUntil(30000) { compose.onAllNodesWithText("你的工作台").fetchSemanticsNodes().isNotEmpty() }
+        compose.waitUntil(30000) { compose.onAllNodesWithTag("home-date").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
         compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
         compose.onNodeWithText("测试组", substring = false).performScrollTo().performClick()
@@ -107,18 +138,23 @@ class DeviceFlowTest {
         waitReady()
         screenshot("clues")
         compose.onNodeWithText("首页", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("从已同步线索生成建议").performScrollTo().performClick()
+        compose.onNodeWithTag("home-date").performScrollTo()
+        compose.onNodeWithText("生成日程建议").assertDoesNotExist()
+        screenshot("home")
+        compose.onNodeWithText("Cloud", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("日程建议").performScrollTo().performClick()
+        compose.onNodeWithText("生成日程建议").performScrollTo().performClick()
         compose.waitUntil(30000) { compose.onAllNodesWithText("先确认线索中的具体时间").fetchSemanticsNodes().isNotEmpty() }
         waitReady()
-        compose.onNodeWithText("你的工作台").performScrollTo()
-        screenshot("home")
         compose.onNodeWithText("采纳", substring = false).performScrollTo().performClick()
         compose.waitUntil(15000) { compose.onAllNodesWithText("已采纳", substring = false).fetchSemanticsNodes().isNotEmpty() }
         waitReady()
-        compose.onNodeWithText("设备", useUnmergedTree = true).performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
+        compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
+        compose.onNodeWithText("设备与授权").performScrollTo().performClick()
         compose.onNodeWithText("手表提醒").assertExists()
         screenshot("devices")
-        compose.onNodeWithText("我的", useUnmergedTree = true).performClick()
+        compose.onNodeWithContentDescription("返回").performClick()
         compose.onNodeWithText("深色").performScrollTo().performClick()
         waitReady()
         compose.waitUntil(15000) { compose.onAllNodes(hasText("深色") and isSelected()).fetchSemanticsNodes().isNotEmpty() }

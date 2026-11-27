@@ -55,7 +55,7 @@ private val actionLabels = mapOf(
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
+fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>, onSuggestions: () -> Unit) {
     val draft = model.workDraft
     val session by model.session.collectAsStateWithLifecycle()
     val captureGrant by model.captureGrant.collectAsStateWithLifecycle()
@@ -106,6 +106,14 @@ fun ColumnScope.AgentScreen(model: AppViewModel, events: List<LocalEvent>) {
                 else -> "创建事项后，可以选择要使用的线索"
             },
             active = running > 0,
+        )
+    }
+    WorkspaceCard {
+        WorkspaceActionRow(
+            icon = Icons.Outlined.Lightbulb,
+            title = "日程建议",
+            onClick = onSuggestions,
+            enabled = !model.busy,
         )
     }
     model.agentError?.let {

@@ -26,7 +26,6 @@ import java.time.Duration
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 
-private val ideas = listOf("去公园散步", "去书店读书", "看一场展览")
 private val alertWords = Regex("延误|暴雨|停运|闭店|歇业|台风|预警")
 private val dayFormat = DateTimeFormatter.ofPattern("M月d日")
 
@@ -51,25 +50,16 @@ internal fun HomeAgendaView(
     }
 
     val first = agenda.today.firstOrNull { it.clock != null } ?: agenda.today.firstOrNull()
-    val accent = AuraColors.Rose
-    val shape = RoundedCornerShape(24.dp)
-    var idea by rememberSaveable(now.toLocalDate().toString()) { mutableIntStateOf(0) }
-    Column(
-        Modifier.fillMaxWidth().clip(shape)
-            .background(Brush.linearGradient(listOf(AuraColors.CardNowTop, AuraColors.CardNowBottom)))
-            .border(1.dp, AuraColors.HairlineStrong, shape)
-            .then(if (first != null) Modifier.clickable { onDetail(first.card) } else Modifier)
-            .padding(20.dp).testTag("home-focus"), verticalArrangement = Arrangement.spacedBy(9.dp)
-    ) {
-        if (first == null) {
-            Text("今日灵感", color = accent, fontSize = 13.sp)
-            Text(ideas[idea], color = AuraColors.TextPrimary, fontWeight = FontWeight.SemiBold, fontSize = 23.sp)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = { onDraft(ideas[idea], now.plusMinutes(30).withSecond(0).withNano(0)) },
-                    colors = ButtonDefaults.buttonColors(containerColor = accent, contentColor = Color.White)) { Text("加入日程") }
-                TextButton(onClick = { idea = (idea + 1) % ideas.size }) { Text("换个灵感", color = AuraColors.TextPrimary) }
-            }
-        } else {
+    if (first != null) {
+        val accent = AuraColors.Rose
+        val shape = RoundedCornerShape(24.dp)
+        Column(
+            Modifier.fillMaxWidth().clip(shape)
+                .background(Brush.linearGradient(listOf(AuraColors.CardNowTop, AuraColors.CardNowBottom)))
+                .border(1.dp, AuraColors.HairlineStrong, shape)
+                .clickable { onDetail(first.card) }
+                .padding(20.dp).testTag("home-focus"), verticalArrangement = Arrangement.spacedBy(9.dp)
+        ) {
             val seconds = first.start(now.zone)?.let { Duration.between(now, it).seconds }
             val remaining = first.end?.let { Duration.between(now, it).seconds }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {

@@ -90,12 +90,13 @@ import cn.weiguang.app.EditorDraft
 import cn.weiguang.app.R
 import cn.weiguang.app.SharedScreenshot
 import cn.weiguang.app.data.*
+import cn.weiguang.app.home.agenda
 import coil.compose.AsyncImage
 import org.json.JSONObject
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.Locale
 
@@ -328,9 +329,8 @@ fun WeiguangRoot(model: AppViewModel) {
                 Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
                     if (destination == "tab-0" && session != null) {
                         MaterialTheme(colorScheme = SakuraLight) {
-                            AuraFlowHomeScreen(model, events, decisions, chooseImage, { tab = 1 }, requestCalendar, { tab = 2 },
-                                sharedClue = { sharedImage?.let { SharedScreenshotCard(model, it, signedIn = true) } },
-                                decisionCards = { decisions.take(10).forEach { DecisionCard(model, it, events) } })
+                            AuraFlowHomeScreen(model, events, decisions, chooseImage, requestCalendar, { tab = 2 },
+                                sharedClue = { sharedImage?.let { SharedScreenshotCard(model, it, signedIn = true) } })
                         }
                         return@Box
                     }
@@ -359,7 +359,8 @@ fun WeiguangRoot(model: AppViewModel) {
                             LoginScreen(model, onEndpoint = { showEndpoint = true })
                         } else if (session != null) {
                             when {
-                                destination == "tab-2" -> AgentScreen(model, events)
+                                destination == "tab-2" -> AgentScreen(model, events, onSuggestions = { page = "schedule-suggestions" })
+                                destination == "schedule-suggestions" -> ScheduleSuggestionsScreen(model, events, decisions)
                                 destination == "groups" -> GroupScreen(model)
                                 destination == "watch" -> WatchScreen()
                                 destination == "devices" -> DevicesScreen(model, requestCalendar, requestLocation, requestNotification, { page = "watch" })
@@ -564,6 +565,42 @@ private fun EndpointDialog(model: AppViewModel, onDismiss: () -> Unit) {
         confirmButton = { TextButton(onClick = { model.saveEndpoint(address); onDismiss() }) { Text("保存") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("取消") } },
     )
+}
+
+private val dailyIdeas = listOf("去公园散步", "去书店读书", "看一场展览")
+
+@Composable
+private fun ScheduleSuggestionsScreen(model: AppViewModel, events: List<LocalEvent>, decisions: List<LocalDecision>) {
+    val session by model.session.collectAsStateWithLifecycle()
+    val now = ZonedDateTime.now()
+    val canGenerate = session?.endpoint != "offline" && events.any {
+        it.syncState == "synced" || it.consentToUpload && it.syncState in setOf("pending", "failed")
+    }
+
+    WorkspaceHeader("日程建议")
+    WorkspaceButton(onClick = model::generate, enabled = canGenerate && !model.busy, modifier = Modifier.fillMaxWidth()) {
+        Text("生成日程建议")
+    }
+    if (!canGenerate) {
+        Note(if (session?.endpoint == "offline") "登录并同步线索后即可生成建议。" else "同步线索后即可生成建议。")
+    }
+    decisions.take(10).forEach { DecisionCard(model, it, events) }
+
+    if (model.effectiveHomeSdui(events, decisions).agenda(now).today.isEmpty()) {
+        var ideaIndex by rememberSaveable(now.toLocalDate().toString()) { mutableIntStateOf(0) }
+        val idea = dailyIdeas[ideaIndex]
+        WorkspaceCard {
+            Text("今日灵感", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+            Text(idea, style = MaterialTheme.typography.titleLarge)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                WorkspaceButton(onClick = {
+                    val at = ZonedDateTime.now().plusMinutes(30).withSecond(0).withNano(0)
+                    model.openEditor(EditorDraft(idea, type = "schedule", occurredAt = at.toInstant().toString()))
+                }, enabled = !model.busy) { Text("加入日程") }
+                TextButton(onClick = { ideaIndex = (ideaIndex + 1) % dailyIdeas.size }, enabled = !model.busy) { Text("换个灵感") }
+            }
+        }
+    }
 }
 
 @Composable

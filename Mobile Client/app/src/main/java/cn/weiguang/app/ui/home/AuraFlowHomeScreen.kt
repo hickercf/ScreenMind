@@ -45,8 +45,6 @@ import cn.weiguang.app.AppViewModel
 import cn.weiguang.app.capture.CaptureRuntime
 import cn.weiguang.app.data.LocalDecision
 import cn.weiguang.app.data.LocalEvent
-import cn.weiguang.app.data.clueDisplayText
-import cn.weiguang.app.data.itemObjects
 import cn.weiguang.app.home.*
 import cn.weiguang.app.ui.SakuraStatusCard
 import kotlinx.coroutines.delay
@@ -56,31 +54,15 @@ import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private val HomeSourceLabels = mapOf(
-    "manual" to "手动记录",
-    "screenshot_ocr" to "截图识别",
-    "calendar" to "系统日历",
-    "location" to "位置采样"
-)
-private val HomeSyncLabels = mapOf(
-    "local" to "仅本机",
-    "pending" to "待同步",
-    "synced" to "已同步",
-    "failed" to "等待重试",
-    "conflict" to "版本冲突"
-)
-
 @Composable
 fun AuraFlowHomeScreen(
     model: AppViewModel,
     events: List<LocalEvent>,
     decisions: List<LocalDecision>,
     onImage: () -> Unit,
-    onClues: () -> Unit,
     onCalendar: () -> Unit,
     onAgent: () -> Unit,
     sharedClue: @Composable () -> Unit = {},
-    decisionCards: @Composable () -> Unit = {},
 ) {
     val session by model.session.collectAsStateWithLifecycle()
     val captureStatus by CaptureRuntime.status.collectAsStateWithLifecycle()
@@ -305,74 +287,12 @@ fun AuraFlowHomeScreen(
                 )
             }
 
-            // =================================================================
-            // REAL LEGACY DECISIONS & RECENT CLUES (OBSIDIAN GLASS INTEGRATION)
-            // Keeps full compatibility with real sync, OCR, and DeviceFlowTest
-            // =================================================================
-            if (decisions.isNotEmpty() || events.isNotEmpty() || session?.endpoint == "offline") {
-                HorizontalDivider(color = AuraColors.Hairline, modifier = Modifier.padding(top = 4.dp))
-            }
-
-            decisionCards()
-
-            if (events.isNotEmpty()) {
-                OutlinedButton(
-                    onClick = model::generate,
-                    enabled = !model.busy && session?.endpoint != "offline" &&
-                        events.any { it.syncState == "synced" || it.consentToUpload && it.syncState in setOf("pending", "failed") },
-                    modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AuraColors.Travel)
-                ) {
-                    Text("生成日程建议")
-                }
-            }
-
             if (session?.endpoint == "offline") {
                 Text(
                     "当前为离线体验，线索保存在本机。",
                     color = AuraColors.TextSecondary,
                     fontSize = 11.5.sp
                 )
-            }
-
-            // Recent Clues Footer Strip
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Text("最近线索", color = AuraColors.TextPrimary, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                TextButton(onClick = onClues) { Text("查看全部", color = palette.accent, fontSize = 12.sp) }
-            }
-            if (events.isEmpty()) {
-                Text("暂无线索。你可以导入截图或手动记录。", color = AuraColors.TextSecondary, fontSize = 12.sp)
-            } else {
-                events.take(3).forEach { event ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(AuraColors.CardSolidTop)
-                            .border(1.dp, AuraColors.Hairline, RoundedCornerShape(18.dp))
-                            .padding(14.dp),
-                        verticalArrangement = Arrangement.spacedBy(6.dp)
-                    ) {
-                        Text(
-                            "${HomeSourceLabels[event.sourceKind] ?: "线索"} · ${HomeSyncLabels[event.syncState] ?: "状态待确认"}",
-                            color = palette.accent,
-                            fontSize = 10.5.sp,
-                            fontFamily = FontFamily.SansSerif
-                        )
-                        Text(clueDisplayText(event.text), color = AuraColors.TextPrimary, fontSize = 13.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                        Text(
-                            "查看与纠错",
-                            color = AuraColors.TextSecondary,
-                            fontSize = 11.5.sp,
-                            modifier = Modifier.clickable(enabled = !model.busy) { model.edit(event) }
-                        )
-                    }
-                }
             }
 
             Spacer(Modifier.height(16.dp))
@@ -1229,87 +1149,6 @@ private fun RestModeView(
                     .padding(horizontal = 16.dp, vertical = 10.dp)
             ) {
                 Text("返回示例日程", color = AuraColors.TextSecondary, fontSize = 12.sp)
-            }
-        }
-    }
-}
-
-@Composable
-private fun AuraDecisionCard(
-    model: AppViewModel,
-    item: LocalDecision,
-    events: List<LocalEvent>
-) {
-    val data = remember(item.body) { JSONObject(item.body) }
-    var expanded by remember(item.decisionId) { mutableStateOf(false) }
-    val evidence = data.itemObjects("evidence")
-    val locallyChanged = evidence.any { reference ->
-        val event = events.find { it.eventId == reference.optString("event_id") }
-        event == null || event.revision != reference.optInt("revision")
-    }
-    val expired = data.optLong("expires_at", 0) <= Instant.now().epochSecond
-    val active = data.optString("status") == "active" && !locallyChanged && !expired
-    val supported = data.optInt("schema_version") == 1 && data.optString("card_type") in listOf("summary", "question")
-
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(22.dp))
-            .background(Brush.linearGradient(listOf(AuraColors.Travel.copy(alpha = 0.11f), AuraColors.CardSolidTop)))
-            .border(1.dp, AuraColors.Travel.copy(alpha = 0.35f), RoundedCornerShape(22.dp))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp)
-    ) {
-        Text(
-            "日程建议",
-            color = AuraColors.Travel,
-            fontSize = 10.5.sp,
-            fontFamily = FontFamily.SansSerif
-        )
-        Text(
-            if (supported) data.optString("title") else "收到暂不支持的卡片",
-            color = AuraColors.TextPrimary,
-            fontSize = 16.sp,
-            fontWeight = FontWeight.SemiBold
-        )
-        Text(
-            if (supported) data.optString("summary") else "更新应用后再试。",
-            color = AuraColors.TextSecondary,
-            fontSize = 13.sp
-        )
-        TextButton(onClick = { expanded = !expanded }) {
-            Text(if (expanded) "收起依据" else "查看 ${evidence.size} 条依据", color = AuraColors.Travel)
-        }
-        if (expanded) {
-            evidence.forEach { reference ->
-                val event = events.find { it.eventId == reference.optString("event_id") }
-                HorizontalDivider(color = AuraColors.Hairline)
-                Text(event?.let { clueDisplayText(it.text) } ?: "此线索已移除或尚未同步到本机", color = AuraColors.TextSecondary, fontSize = 13.sp)
-                event?.let {
-                    TextButton(onClick = { model.edit(it) }, enabled = !model.busy) {
-                        Text("核对原始记录", color = AuraColors.Travel)
-                    }
-                }
-            }
-        }
-        when {
-            !active -> Text("依据已修改、移除或建议已过期，请重新生成。", color = AuraColors.TextSecondary, fontSize = 12.sp)
-            !data.isNull("feedback") && data.optString("feedback").isNotEmpty() -> Text(
-                if (data.optString("feedback") == "accepted") "已采纳 · 反馈已记录" else "已忽略 · 反馈已记录",
-                color = AuraColors.Shopping,
-                fontSize = 12.sp
-            )
-            supported -> Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = { model.feedback(item.decisionId, "accepted") },
-                    enabled = !model.busy,
-                    colors = ButtonDefaults.buttonColors(containerColor = AuraColors.Travel, contentColor = Color.White)
-                ) { Text("采纳") }
-                OutlinedButton(
-                    onClick = { model.feedback(item.decisionId, "dismissed") },
-                    enabled = !model.busy,
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = AuraColors.TextPrimary)
-                ) { Text("忽略") }
             }
         }
     }
