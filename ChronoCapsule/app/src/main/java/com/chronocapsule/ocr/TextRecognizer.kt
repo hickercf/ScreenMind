@@ -28,11 +28,32 @@ object TextRecognizer {
     fun recognizeAll(bitmap: Bitmap, boxes: List<OcrBox>): List<OcrLine> {
         val result = ArrayList<OcrLine>(boxes.size)
         for (box in boxes) {
-            val line = recognize(bitmap, box)
+            val line = removeMisreadPlaceholder(bitmap, recognize(bitmap, box))
             // 空字符串说明框里不是字（图标、装饰线），直接丢掉
             if (line.text.isNotBlank()) result.add(line)
         }
         return result
+    }
+
+    private fun removeMisreadPlaceholder(bitmap: Bitmap, line: OcrLine): OcrLine {
+        if (line.text.length < 2 || !line.text.endsWith('0')) return line
+        val box = line.box
+        if (box.height < 12 || box.width <= box.height) return line
+
+        // Only inspect the line ending. An emoji rendered as a missing-font box can
+        // look like 0 to the recognizer, but it has four uninterrupted straight edges.
+        val width = minOf(box.width, box.height * 3)
+        val left = box.right - width
+        val pixels = IntArray(width * box.height)
+        bitmap.getPixels(pixels, 0, width, left, box.top, width, box.height)
+        val glyphStart = TrailingPlaceholder.find(pixels, width, box.height) ?: return line
+        val retryRight = left + glyphStart - PAD
+        if (retryRight <= box.left) return line
+
+        // If the original recognizer already ignored the box, the rerun will still
+        // read the real final 0. Keep the original text unless exactly one false 0 disappears.
+        val retry = recognize(bitmap, box.copy(right = retryRight))
+        return if (retry.text == line.text.dropLast(1)) line.copy(text = retry.text) else line
     }
 
     internal fun polishHeader(bitmap: Bitmap, line: OcrLine): OcrLine {

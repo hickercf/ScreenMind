@@ -146,6 +146,18 @@ _PAYMENT_CANCELLATION = re.compile(r"不用转|不必转|先别转|不要转|不
 _COMPLETED_PAYMENT = re.compile(r"已经转|已转|刚转|转好了|已付")
 
 
+def _is_payment_duty(title, names):
+    if _PAYMENT_WORDS.search(title):
+        return True
+    for name in names:
+        # Named recipients can appear before 转, as in “向阿宁转一半套餐价，94 元”.
+        # Requiring a payment cue and excluding forwarding keeps ordinary handoffs.
+        recipient = re.search(rf"(?:向|给)\s*{re.escape(name)}\s*转(?![发达告交寄])", title)
+        if recipient and re.search(r"\d\s*元|[¥￥]\s*\d|一半|款项", title[recipient.end():]):
+            return True
+    return False
+
+
 def _chat_payment_plan(plan, context):
     """Use verified speaker identities and stated meal prices for two-person chat payments."""
     bundle = context.task.get("memory_context") or {}
@@ -175,7 +187,7 @@ def _chat_payment_plan(plan, context):
         if name in names:
             people[name] = member.model_copy(update={"name": name})
     total = totals[-1]
-    duties = [duty for duty in plan.responsibilities if not _PAYMENT_WORDS.search(duty.title)]
+    duties = [duty for duty in plan.responsibilities if not _is_payment_duty(duty.title, names)]
     if set(people) != names:
         return plan.model_copy(update={"fixed_cost_cents": total, "responsibilities": duties})
     transfers = []
