@@ -411,6 +411,7 @@ _DINING_RE = re.compile(r"聚餐|聚会|晚宴|吃饭|餐厅|火锅|烧烤|包�
 _SHOPPING_RE = re.compile(r"买|购物|商场|伴手礼|礼盒|香氛|领券|满减|比价|下单|现货|恒隆|万象|百货|免税|逛街")
 _EXPLORE_RE = re.compile(r"逛逛|citywalk|散步|看展|美术馆|公园|落日|漫游|博物馆|书店|打卡|徒步", re.IGNORECASE)
 _CONFIRMED_RE = re.compile(r"已出票|出票成功|航旅纵横|登机口|座位|已订座|包厢号|已预订|已确认|已领券|已预约|已购票|\d+车\s*\d+[A-F]|GATE|SEAT", re.IGNORECASE)
+_LEADING_CANCELLATION = re.compile(r"(?:^取消(?:今天|明天|后天|周[一二三四五六日天])|(?<!不)(?<!别)(?<!能)(?:已经取消|已取消|先取消|取消了|取消吧|取消掉)[哈吧了哦呀]?(?=[\s。！!，,；;]|$))")
 _ALERT_RE = re.compile(r"延误|暴雨|台风|停运|取消|闭店|歇业|雷雨|改签|预警")
 _JOKE_RE = re.compile(r"巴黎.*咖啡|去火星|去月球|开玩笑|哈哈|飞.*喝咖啡|说走就走.*南极")
 _RETURN_RE = re.compile(r"(周[一二三四五六日天]|明天|后天).*回|返程|往返")
@@ -470,6 +471,9 @@ def _build_card_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
     text = event["payload"]["text"].strip()
     source = event.get("source_kind")
     at = event.get("occurred_at")
+    if (source == "screenshot_ocr" and event.get("event_type") == "message" and not at
+            and _LEADING_CANCELLATION.search(text.partition("\n")[0])):
+        return None
     category, theme = classify_category(text)
     if source == "location" or (category == "OFFICE" and not at and
             event.get("event_type") != "schedule" and not (_SCHEDULE_RE.search(text) or _TIME_RE.search(text) or _CN_TIME_RE.search(text))):

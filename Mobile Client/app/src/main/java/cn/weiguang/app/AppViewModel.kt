@@ -423,6 +423,7 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
     fun sync(showSuccess: Boolean = true) = action {
         repository.sync()
         val copies = repository.refreshRemote()
+        if (showSuccess) fetchServerHomeSdui(reportFailure = true)
         if (copies > 0) message = "有修改未同步，已在这台手机保留副本。"
         else if (showSuccess) message = "同步完成"
     }
@@ -468,10 +469,12 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
         val cards = remote?.events.orEmpty().associateBy { it.id }.toMutableMap()
         for ((id, card) in localCards) {
             val server = cards[id]
-            if (remote != null && server == null && sources[card.sourceEventId]?.syncState == "synced") continue
-            if (server == null || sources[card.sourceEventId]?.syncState != "synced") cards[id] = card
-            else cards[id] = server.copy(sourceWorkId = server.sourceWorkId ?: card.sourceWorkId,
-                sourceTaskId = server.sourceTaskId ?: card.sourceTaskId)
+            val synced = sources[card.sourceEventId]?.syncState == "synced"
+            if (remote != null && server == null && synced) continue
+            cards[id] = if (server != null && (server.sourceWorkId != null || synced)) {
+                server.copy(sourceWorkId = server.sourceWorkId ?: card.sourceWorkId,
+                    sourceTaskId = server.sourceTaskId ?: card.sourceTaskId)
+            } else card
         }
         val hidden = remote?.dismissedIds.orEmpty() + localHomeMutation.dismissedIds
         fun adjusted(card: AuraCard): AuraCard {
@@ -493,9 +496,9 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
                 else if (visible.isEmpty()) DayMode.EMPTY_EXPLORE else DayMode.ACTIVE_TIMELINE)
     }
 
-    suspend fun refreshHomeSdui() = fetchServerHomeSduiSilent()
+    suspend fun refreshHomeSdui() = fetchServerHomeSdui()
 
-    private suspend fun fetchServerHomeSduiSilent() {
+    private suspend fun fetchServerHomeSdui(reportFailure: Boolean = false) {
         val current = session.value ?: return
         if (current.endpoint == "offline") return
         try {
@@ -528,7 +531,8 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
             }
         } catch (cancelled: CancellationException) {
             throw cancelled
-        } catch (_: Exception) {
+        } catch (error: Exception) {
+            if (reportFailure) throw error
             // Local-only records remain available while the server is unreachable.
         }
     }

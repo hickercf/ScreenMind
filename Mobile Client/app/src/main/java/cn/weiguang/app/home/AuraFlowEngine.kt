@@ -38,6 +38,7 @@ object AuraFlowEngine {
     private val shoppingRegex = Regex("买|购物|商场|伴手礼|礼盒|香氛|领券|满减|比价|下单|现货|恒隆|万象|百货|免税|逛街")
     private val exploreRegex = Regex("逛逛|citywalk|散步|看展|美术馆|公园|落日|漫游|博物馆|书店|打卡|徒步", RegexOption.IGNORE_CASE)
     private val confirmedRegex = Regex("已出票|出票成功|航旅纵横|登机口|座位|已订座|包厢号|已预订|已确认|已领券|已预约|已购票|\\d+车\\s*\\d+[A-F]|GATE|SEAT", RegexOption.IGNORE_CASE)
+    private val leadingCancellation = Regex("""(?:^取消(?:今天|明天|后天|周[一二三四五六日天])|(?<!不)(?<!别)(?<!能)(?:已经取消|已取消|先取消|取消了|取消吧|取消掉)[哈吧了哦呀]?(?=[\s。！!，,；;]|$))""")
     private val alertRegex = Regex("延误|暴雨|台风|停运|取消|闭店|歇业|雷雨|改签|预警")
     private val jokeRegex = Regex("巴黎.*咖啡|去火星|去月球|开玩笑|哈哈|飞.*喝咖啡|说走就走.*南极")
     private val returnLeg = Regex("""((?:(?:下|本|这)?周[一二三四五六日天]|明天|后天)(?:\s*\d{1,2}:\d{2})?)\s*(?:回|返)""")
@@ -430,6 +431,9 @@ object AuraFlowEngine {
             }.toSet()
             for (event in localEvents) {
                 val text = event.text.trim()
+                if (event.sourceKind == "screenshot_ocr" && event.eventType == "message" &&
+                    event.occurredAt == null && leadingCancellation.containsMatchIn(text.lineSequence().first())
+                ) continue
                 val category = classifyCategory(text)
                 val hasTime = timeRegex.containsMatchIn(text) || cnTimeRegex.containsMatchIn(text) || event.occurredAt != null
                 if (event.sourceKind == "location" || category == AuraCategory.OFFICE && !hasTime &&

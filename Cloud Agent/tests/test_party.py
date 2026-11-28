@@ -58,6 +58,33 @@ def initialized(client):
     return w
 
 
+def test_relative_party_time_with_model_date_hint_uses_cited_message():
+    from types import SimpleNamespace
+    from screenmind.agents.party import party_time_label, proposed_party_start
+
+    value = "周日 18:30（日期待确认）"
+    block = {"source_ref": "screen:b1", "text": "那周日 18:30 桥边小馆？",
+             "message_at": "2026-11-27T21:46:00+08:00"}
+    context = SimpleNamespace(task={"memory_context": {"screens": [{"blocks": [block]}]}})
+    assert proposed_party_start(value, context, {block["source_ref"]}, {}) == "2026-11-29T18:30:00+08:00"
+    assert proposed_party_start(value, context, set(), {}) is None
+    assert party_time_label(value, None) == value
+
+
+def test_party_duties_display_yuan_in_candidate_and_saved_plan(client):
+    w = work(client)
+    t = task(client, w["id"], evidence(client, ["参加成员：小桃、阿宁",
+        "转给阿宁一半套餐费（9400 分）负责人：小桃",
+        "付款950分负责人：小桃", "结账后等30分钟负责人：阿宁", "答题拿100分负责人：阿宁"]))
+    fields = [field["label"] for field in t["card"]["fields"] if field["id"].startswith("responsibility_")]
+    assert fields == ["转给阿宁一半套餐费（94 元）负责人", "付款9.50 元负责人",
+                      "结账后等30分钟负责人", "答题拿100分负责人"]
+    assert confirm(client, t).status_code == 202
+    deck = client.get("/api/works/" + w["id"] + "/plan").json()
+    duties = next(card for card in deck["confirmed"] if card["id"] == "duties")
+    assert [row["label"] for row in duties["rows"]] == [label.removesuffix("负责人") for label in fields]
+
+
 def test_party_departure_confirm_and_reassignment(client):
     w = initialized(client)
     change = task(client, w["id"], evidence(client, ["我今晚不去了"], "小林"))

@@ -26,6 +26,17 @@ class AuraFlowEngineTest {
         assertNull(undated.unscheduled.single().start(thursday.zone))
     }
 
+    @Test fun cancelledChatDoesNotBorrowTheReplacementTime() {
+        val cancelled = LocalEvent("test", eventId = "cancelled", sourceKind = "screenshot_ocr",
+            eventType = "message", text = "周日那顿先取消哈\n我周一19:15可以")
+        val unchanged = cancelled.copy(eventId = "unchanged", text = "周日18:30的聚会不能取消了")
+        val explicitSchedule = cancelled.copy(eventId = "rescheduled", eventType = "schedule",
+            occurredAt = "2026-11-30T11:15:00Z")
+        val state = AuraFlowEngine.synthesize(listOf(cancelled, unchanged, explicitSchedule),
+            emptyList(), emptyList(), LocalAuraMutationState())
+        assertEquals(setOf("evt_unchanged", "evt_rescheduled"), state.events.map { it.id }.toSet())
+    }
+
     @Test fun emptyDayDispatchesExploreAndAdoptsToTimeline() {
         val state = AuraFlowEngine.synthesize(emptyList(), emptyList(), emptyList(), LocalAuraMutationState())
         assertEquals(DayMode.EMPTY_EXPLORE, state.dayMode)

@@ -1,7 +1,7 @@
 """Read-only presentation shared by the authenticated web and Android plan decks."""
 from typing import Literal
 from pydantic import Field
-from .agents.party import PartyState, money, party_time_label
+from .agents.party import PartyState, money, party_time_label, responsibility_label
 from .models import ActionInput, Identifier, ShortText, StrictModel, TaskInput
 from .store import DomainError
 
@@ -50,14 +50,15 @@ def party_cards(data, scheduled_at=None):
     responsibilities = []
     for item in plan.responsibilities:
         owner = people.get(item.owner_id)
+        title = responsibility_label(item.title)
         if item.status == "completed":
-            responsibilities.append(row(item.title, f"{owner.name} · 已完成" if owner else "已完成", "positive"))
+            responsibilities.append(row(title, f"{owner.name} · 已完成" if owner else "已完成", "positive"))
         elif not owner or owner.status == "declined":
-            responsibilities.append(row(item.title, "待重新分配", "attention"))
+            responsibilities.append(row(title, "待重新分配", "attention"))
         elif owner.status == "tentative":
-            responsibilities.append(row(item.title, f"{owner.name} · 需备用负责人", "attention"))
+            responsibilities.append(row(title, f"{owner.name} · 需备用负责人", "attention"))
         else:
-            responsibilities.append(row(item.title, f"{owner.name} · 待完成"))
+            responsibilities.append(row(title, f"{owner.name} · 待完成"))
     done = sum(item.status == "completed" for item in plan.responsibilities)
     duties = card("duties", "分工进度", f"{done} / {len(responsibilities)} 已完成" if responsibilities else "待添加分工",
                   rows=responsibilities)

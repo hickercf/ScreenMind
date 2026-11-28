@@ -54,6 +54,17 @@ class HomeSduiTests(unittest.TestCase):
         self.assertEqual(resp.status_code, 200, resp.text)
         return payload
 
+    def test_cancellation_message_stays_in_clues_without_borrowing_later_time(self):
+        cancelled = self.add_event(self.alice, "周日那顿先取消哈\n我周一19:15可以")
+        unchanged = self.add_event(self.alice, "周日18:30的聚会不能取消了")
+        explicit_schedule = self.add_event(self.alice, "周日那顿先取消哈\n我周一19:15可以",
+                                           event_type="schedule", occurred_at="2026-11-30T19:15:00+08:00")
+        doc = self.req(self.alice, "GET", "/v1/home/sdui").json()
+        sources = {card["sourceEventId"] for card in doc["events"]}
+        self.assertEqual(sources, {unchanged["event_id"], explicit_schedule["event_id"]})
+        clues = self.req(self.alice, "GET", "/v1/events").json()["items"]
+        self.assertIn(cancelled["event_id"], {event["event_id"] for event in clues})
+
     def test_empty_day_dispatches_explore_and_adopts_to_timeline(self):
         # Empty day -> EMPTY_EXPLORE
         doc = self.req(self.alice, "GET", "/v1/home/sdui").json()
