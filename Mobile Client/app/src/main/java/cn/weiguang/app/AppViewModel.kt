@@ -29,7 +29,7 @@ import java.util.Locale
 import java.util.UUID
 
 data class EditorDraft(val text: String = "", val source: String = "manual", val type: String = "note", val id: String? = null, val upload: Boolean = false, val occurredAt: String? = null, val uploaded: Boolean = false, val imageUri: Uri? = null,
-    val screenJson: String? = null)
+    val screenJson: String? = null, val captureSelf: String = "我", val capturePeer: String? = null)
 
 class ClueEditor(val original: EditorDraft, val accountKey: String, val openedEvent: LocalEvent? = null) {
     var draft by mutableStateOf(original)
@@ -358,7 +358,7 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
             val payload = capture.structured(uri)
             if (stillSelected()) {
                 openEditor(EditorDraft(text = payload.blocks.joinToString("\n") { it.text }, source = "screenshot_ocr", type = "message",
-                    imageUri = uri, screenJson = payload.toJson().toString()))
+                    imageUri = uri, screenJson = payload.toJson().toString(), capturePeer = payload.conversationPeer()))
                 if (share != null) dismissSharedScreenshot(share)
             }
         } catch (cancelled: CancellationException) {
@@ -403,7 +403,12 @@ class AppViewModel(application: Application, private val savedState: SavedStateH
         }
         val saved = if (value.screenJson != null && value.id == null) {
             val payload = com.chronocapsule.contract.ScreenContract.Payload.fromJson(JSONObject(value.screenJson))
-            cn.weiguang.app.capture.ChronoCapture.save(getApplication(), payload, editing.accountKey,
+            val verified = value.capturePeer?.trim()?.let { peer ->
+                val self = value.captureSelf.trim()
+                check(self.isNotEmpty() && peer.isNotEmpty() && self != peer) { "请核对两位发言人的姓名" }
+                payload.withConversationNames(self, peer)
+            } ?: payload
+            cn.weiguang.app.capture.ChronoCapture.save(getApplication(), verified, editing.accountKey,
                 upload = value.upload, occurredAt = value.occurredAt)
         } else repository.saveEvent(
             value.text, value.source, value.type, value.upload, value.id, value.occurredAt,

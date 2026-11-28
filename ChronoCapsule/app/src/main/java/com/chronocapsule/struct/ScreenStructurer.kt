@@ -111,17 +111,7 @@ object ScreenStructurer {
             .firstOrNull()
 
         // ---- L2 头部：头部区域里最靠上的一行就是 username ----
-        val headerCandidates = lines.filter {
-            val ny = it.box.centerY / h
-            ny >= HEADER_SEARCH_TOP &&
-                ny < HEADER_SEARCH_BOTTOM &&
-                it.box.left > w * HEADER_LEFT_MARGIN &&
-                it.score >= MIN_SCORE &&
-                it.box.height / h >= MIN_HEIGHT_RATIO
-        }
-        // 不能按字号取：QQ 默认主题里气泡正文比标题字还大，"又邀我玩原神"会被误判成 username。
-        // 标题永远是头部区域里最靠上的那行，所以按 top 取最小；top 相同再比字号。
-        val title = headerCandidates.minWithOrNull(compareBy({ it.box.top }, { -it.box.height }))
+        val title = headerLine(lines, width, height)
 
         // 标题正下方紧贴的那行是"在线 - 4G · 种菜中"这类状态，一并丢掉。
         // 只认"与标题的垂直间距最小且不超过 1.2 倍字高"的那一行，时间分隔符不算。
@@ -166,18 +156,39 @@ object ScreenStructurer {
         val messages = ArrayList<Message>(body.size)
         var currentTime: String? = null
         var currentUser: String? = null
+        var previousLine: OcrLine? = null
 
         for (line in body) {
             if (isTimeLabel(line.text)) {
                 currentTime = normalizeTime(line.text)
+                previousLine = null
                 continue
             }
             if (line in nameLines) {
                 // 昵称本身不是消息，只改"下一条是谁说的"
                 currentUser = line.text.trim()
+                previousLine = null
                 continue
             }
-            if (isSystemNotice(line, w)) continue
+            if (isSystemNotice(line, w)) {
+                previousLine = null
+                continue
+            }
+            if (isAvatarNoise(line, w)) continue
+            val prior = previousLine
+            previousLine = line
+            val previousMessage = messages.lastOrNull()
+            if (prior != null && previousMessage != null && isWrappedLine(previousMessage, prior, line, w)) {
+                val nextText = line.text.trim()
+                val separator = if (previousMessage.text.lastOrNull().isAsciiWord() && nextText.firstOrNull().isAsciiWord()) " " else ""
+                messages[messages.lastIndex] = previousMessage.copy(
+                    text = previousMessage.text.trimEnd() + separator + nextText,
+                    left = minOf(previousMessage.left, line.box.left),
+                    right = maxOf(previousMessage.right, line.box.right),
+                    bottom = maxOf(previousMessage.bottom, line.box.bottom)
+                )
+                continue
+            }
             val role = if (line.box.centerX < w * 0.5f) ROLE_PEER else ROLE_SELF
             // 自己发言后，下一条别人的消息会重新带昵称；这里先清空避免串台
             if (role == ROLE_SELF) currentUser = ROLE_SELF
@@ -207,6 +218,33 @@ object ScreenStructurer {
     }
 
     // ---------- 工具 ----------
+
+    internal fun headerLine(lines: List<OcrLine>, width: Int, height: Int): OcrLine? =
+        lines.asSequence().filter {
+            val ny = it.box.centerY / height
+            ny >= HEADER_SEARCH_TOP && ny < HEADER_SEARCH_BOTTOM &&
+                it.box.left > width * HEADER_LEFT_MARGIN && it.score >= MIN_SCORE &&
+                it.box.height.toFloat() / height >= MIN_HEIGHT_RATIO
+        }.minWithOrNull(compareBy({ it.box.top }, { -it.box.height }))
+
+    private fun Char?.isAsciiWord() = this != null && (this in 'a'..'z' || this in 'A'..'Z' || this in '0'..'9')
+
+    private fun isAvatarNoise(line: OcrLine, width: Float): Boolean {
+        val text = line.text.trim()
+        val atEdge = line.box.centerX < .085f * width || line.box.centerX > .915f * width
+        return atEdge && text.length <= 2 && text.all { it.code < 128 }
+    }
+
+    private fun isWrappedLine(message: Message, previous: OcrLine, next: OcrLine, width: Float): Boolean {
+        val height = maxOf(previous.box.height, next.box.height)
+        val gap = next.box.top - previous.box.bottom
+        val leftDelta = kotlin.math.abs(next.box.left - message.left)
+        // A wrapped bubble uses one text margin even if its short last line crosses the screen midpoint.
+        return message.right - message.left >= width * .39f &&
+            gap >= -.12f * height && gap <= .9f * height &&
+            leftDelta <= maxOf(.018f * width, .5f * height) &&
+            next.box.right <= message.right + .65f * height
+    }
 
     private fun isTimeLabel(text: String): Boolean {
         val t = text.trim().replace(" ", "")

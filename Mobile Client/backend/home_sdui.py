@@ -467,12 +467,30 @@ _SCHEDULE_RE = re.compile(r"会议|开会|晨会|面试|评审|上课|讨论|提
 _RETURN_LEG = re.compile(r"((?:(?:下|本|这)?周[一二三四五六日天]|明天|后天)(?:\s*\d{1,2}:\d{2})?)\s*(?:回|返)")
 
 
+def _starts_with_cancellation(event):
+    payload = event["payload"]
+    lines = payload["text"].strip().splitlines()
+    if not lines:
+        return False
+    first = lines[0].strip()
+    if _LEADING_CANCELLATION.search(first):
+        return True
+    if len(lines) < 2 or not first.endswith("先") or not lines[1].strip().startswith("取消"):
+        return False
+    blocks = (payload.get("screen") or {}).get("blocks", [])
+    if len(blocks) >= 2:
+        lead, continuation = blocks[:2]
+        if (lead.get("speaker"), lead.get("message_at")) != (continuation.get("speaker"), continuation.get("message_at")):
+            return False
+    return bool(_LEADING_CANCELLATION.search(first + lines[1].strip()))
+
+
 def _build_card_from_event(event: dict[str, Any]) -> dict[str, Any] | None:
     text = event["payload"]["text"].strip()
     source = event.get("source_kind")
     at = event.get("occurred_at")
     if (source == "screenshot_ocr" and event.get("event_type") == "message" and not at
-            and _LEADING_CANCELLATION.search(text.partition("\n")[0])):
+            and _starts_with_cancellation(event)):
         return None
     category, theme = classify_category(text)
     if source == "location" or (category == "OFFICE" and not at and

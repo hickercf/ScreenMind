@@ -35,6 +35,42 @@ object TextRecognizer {
         return result
     }
 
+    internal fun polishHeader(bitmap: Bitmap, line: OcrLine): OcrLine {
+        val box = line.box
+        if (box.width < 12 || box.height < 10 || box.width > bitmap.width / 2 || line.text.length > 20) return line
+        val edgeX = box.right - 1
+        val edgeY = box.bottom - 1
+        val background = bitmap.getPixel(box.left, box.top)
+        val corners = listOf(bitmap.getPixel(edgeX, box.top), bitmap.getPixel(box.left, edgeY), bitmap.getPixel(edgeX, edgeY))
+        if (corners.any { channelDifference(it, background) > 28 }) return line
+
+        var left = edgeX
+        var right = box.left
+        var top = edgeY
+        var bottom = box.top
+        for (y in box.top..edgeY) {
+            for (x in box.left..edgeX) {
+                if (channelDifference(bitmap.getPixel(x, y), background) < 60) continue
+                left = minOf(left, x)
+                right = maxOf(right, x)
+                top = minOf(top, y)
+                bottom = maxOf(bottom, y)
+            }
+        }
+        val ink = OcrBox(left, top, right + 1, bottom + 1)
+        if (ink.width < 8 || ink.height < 8 || ink.area > box.area * .9f) return line
+        val retry = recognize(bitmap, ink)
+        return if (retry.text.isNotBlank() && retry.score >= line.score + .015f &&
+            kotlin.math.abs(retry.text.length - line.text.length) <= 1
+        ) retry.copy(box = line.box) else line
+    }
+
+    private fun channelDifference(a: Int, b: Int): Int = maxOf(
+        kotlin.math.abs((a shr 16 and 255) - (b shr 16 and 255)),
+        kotlin.math.abs((a shr 8 and 255) - (b shr 8 and 255)),
+        kotlin.math.abs((a and 255) - (b and 255)),
+    )
+
     fun recognize(bitmap: Bitmap, box: OcrBox): OcrLine {
         val left = (box.left - PAD).coerceAtLeast(0)
         val top = (box.top - PAD).coerceAtLeast(0)

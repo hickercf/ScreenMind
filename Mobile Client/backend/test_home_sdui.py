@@ -65,6 +65,20 @@ class HomeSduiTests(unittest.TestCase):
         clues = self.req(self.alice, "GET", "/v1/events").json()["items"]
         self.assertIn(cancelled["event_id"], {event["event_id"] for event in clues})
 
+    def test_wrapped_cancellation_does_not_borrow_another_speakers_text(self):
+        from backend.home_sdui import _build_card_from_event
+
+        blocks = [
+            {"speaker": "阿宁", "message_at": "2026-11-28T15:35:00+08:00", "text": "周日那顿先"},
+            {"speaker": "阿宁", "message_at": "2026-11-28T15:35:00+08:00", "text": "取消哈"},
+            {"speaker": "小桃", "message_at": "2026-11-28T15:36:00+08:00", "text": "我周一19:15可以"},
+        ]
+        event = {"event_id": "test", "revision": 1, "source_kind": "screenshot_ocr", "event_type": "message",
+                 "payload": {"text": "\n".join(block["text"] for block in blocks), "screen": {"blocks": blocks}}}
+        self.assertIsNone(_build_card_from_event(event))
+        blocks[1]["speaker"] = "小桃"
+        self.assertIsNotNone(_build_card_from_event(event))
+
     def test_empty_day_dispatches_explore_and_adopts_to_timeline(self):
         # Empty day -> EMPTY_EXPLORE
         doc = self.req(self.alice, "GET", "/v1/home/sdui").json()

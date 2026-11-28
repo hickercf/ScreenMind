@@ -821,6 +821,10 @@ private fun EditorSheet(model: AppViewModel, editor: ClueEditor) {
     val initialText = remember(initial.text) { ReadableText.editable(initial.text) }
     val inputText = if (draft.text == initial.text) initialText else draft.text
     val textError = if (draft.text.isNotBlank() && draft.screenJson == null) Validation.eventText(draft.text) else null
+    val showSpeakers = draft.screenJson != null && initial.id == null && draft.capturePeer != null
+    val validSpeakers = !showSpeakers || with(draft) {
+        captureSelf.isNotBlank() && !capturePeer.isNullOrBlank() && captureSelf.trim() != capturePeer.trim()
+    }
     val newNote = initial.id == null && initial.source == "manual"
     val unchanged = initial.id != null && draft == initial
     var confirmDiscard by remember(editor) { mutableStateOf(false) }
@@ -891,7 +895,27 @@ private fun EditorSheet(model: AppViewModel, editor: ClueEditor) {
                 shape = MaterialTheme.shapes.small,
             )
             if (draft.screenJson != null) {
-                Note("已保留发言人、消息时间与文字位置。修改文字后将作为普通线索保存。")
+                Note("已保留发言人、消息时间与文字位置。修改正文后将作为普通线索保存。")
+            }
+            if (showSpeakers) {
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = draft.captureSelf,
+                        onValueChange = { editor.draft = draft.copy(captureSelf = it.take(40)) },
+                        label = { Text("我方发言人") },
+                        singleLine = true,
+                        enabled = !model.busy,
+                        modifier = Modifier.weight(1f).testTag("clue-speaker-self"),
+                    )
+                    OutlinedTextField(
+                        value = draft.capturePeer.orEmpty(),
+                        onValueChange = { editor.draft = draft.copy(capturePeer = it.take(40)) },
+                        label = { Text("对方发言人") },
+                        singleLine = true,
+                        enabled = !model.busy,
+                        modifier = Modifier.weight(1f).testTag("clue-speaker-peer"),
+                    )
+                }
             }
             WorkspaceButton(
                 onClick = { pickingTime = true },
@@ -926,7 +950,7 @@ private fun EditorSheet(model: AppViewModel, editor: ClueEditor) {
             }
             WorkspaceButton(
                 onClick = { model.saveEditor(editor) },
-                enabled = !model.busy && (unchanged || (textError == null && (draft.text.isNotBlank() || draft.screenJson != null))),
+                enabled = !model.busy && validSpeakers && (unchanged || (textError == null && (draft.text.isNotBlank() || draft.screenJson != null))),
                 modifier = Modifier.fillMaxWidth(),
             ) { Text(if (unchanged) "完成" else "确认并保存") }
         }

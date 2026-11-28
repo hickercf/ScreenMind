@@ -88,6 +88,23 @@ object ScreenContract {
 
         fun toJsonString(): String = toJson().toString(2)
 
+        fun conversationPeer(): String? {
+            val names = blocks.mapNotNull { it.speaker }.toSet()
+            if (SELF_SPEAKER !in names || names.size != 2) return null
+            return (names - SELF_SPEAKER).single().takeIf { it == pageTitle || pageTitle.isBlank() }
+        }
+
+        fun withConversationNames(self: String, peer: String): Payload {
+            val previousPeer = conversationPeer() ?: return this
+            return copy(pageTitle = peer, blocks = blocks.map { block ->
+                block.copy(speaker = when (block.speaker) {
+                    SELF_SPEAKER -> self
+                    previousPeer -> peer
+                    else -> block.speaker
+                })
+            })
+        }
+
         companion object {
             /**
              * 从 JSON 还原（离线队列重发用）。

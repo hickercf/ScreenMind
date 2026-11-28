@@ -48,6 +48,14 @@ object AuraFlowEngine {
     private val timeRegex = Regex("(?<!\\d)([01]?\\d|2[0-3]):([0-5]\\d)(?!\\d)")
     private val cnTimeRegex = Regex("(上午|下午|晚上|明早|今晚)?(\\d{1,2})点(?:(\\d{1,2})分|半)?")
 
+    private fun startsWithCancellation(text: String): Boolean {
+        val lines = text.lineSequence().take(2).map(String::trim).toList()
+        val first = lines.firstOrNull().orEmpty()
+        val next = lines.getOrNull(1).orEmpty()
+        return leadingCancellation.containsMatchIn(first) ||
+            (first.endsWith("先") && next.startsWith("取消") && leadingCancellation.containsMatchIn(first + next))
+    }
+
     fun defaultExplorePresets(): Map<String, List<ExplorePreset>> = mapOf(
         "sunny" to listOf(
             ExplorePreset(
@@ -432,7 +440,7 @@ object AuraFlowEngine {
             for (event in localEvents) {
                 val text = event.text.trim()
                 if (event.sourceKind == "screenshot_ocr" && event.eventType == "message" &&
-                    event.occurredAt == null && leadingCancellation.containsMatchIn(text.lineSequence().first())
+                    event.occurredAt == null && startsWithCancellation(text)
                 ) continue
                 val category = classifyCategory(text)
                 val hasTime = timeRegex.containsMatchIn(text) || cnTimeRegex.containsMatchIn(text) || event.occurredAt != null

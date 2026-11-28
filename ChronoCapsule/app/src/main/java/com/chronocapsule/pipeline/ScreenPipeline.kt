@@ -59,7 +59,11 @@ object ScreenPipeline {
         val detCost = System.currentTimeMillis() - t1
 
         val t2 = System.currentTimeMillis()
-        val lines = TextRecognizer.recognizeAll(bitmap, boxes)
+        val detected = TextRecognizer.recognizeAll(bitmap, boxes)
+        val title = ScreenStructurer.headerLine(detected, bitmap.width, bitmap.height)
+        val lines = if (title == null) detected else detected.map {
+            if (it === title) TextRecognizer.polishHeader(bitmap, it) else it
+        }
         val recCost = System.currentTimeMillis() - t2
 
         val t3 = System.currentTimeMillis()

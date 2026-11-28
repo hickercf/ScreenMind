@@ -71,6 +71,31 @@ def test_relative_party_time_with_model_date_hint_uses_cited_message():
     assert party_time_label(value, None) == value
 
 
+def test_two_person_chat_uses_evidence_for_payment_direction_and_amount():
+    from screenmind.agents.base import AgentContext
+    from screenmind.agents.party import PartyAgent
+
+    proposed = {"title": "约饭", "fixed_cost_cents": 9400,
+                "participants": [{"id": "peach", "name": "小桃"}, {"id": "ning", "name": "阿宁"}],
+                "responsibilities": [{"title": "阿宁转给小桃 94 元", "owner_id": "ning"}]}
+    def run(text):
+        blocks = [{"source_ref": "screen:b0", "speaker": "阿宁", "text": "可以"},
+                  {"source_ref": "screen:b1", "speaker": "小桃", "text": text}]
+        refs = frozenset(block["source_ref"] for block in blocks)
+        context = AgentContext({"memory_context": {"screens": [{"page_title": "阿宁", "blocks": blocks}]}}, None, refs)
+        return PartyAgent().propose({"state": proposed, "source_refs": sorted(refs)}, context)
+
+    initial = run("双人套餐168，两人平摊")
+    assert initial.memory["plan"]["fixed_cost_cents"] == 16800
+    assert initial.memory["plan"]["responsibilities"] == []
+    assert any("¥84.00" in field["value"] for field in initial.card["fields"])
+    revised = run("双人套餐188，一人一半吧，我到时转你")
+    assert revised.memory["plan"]["fixed_cost_cents"] == 18800
+    assert revised.memory["plan"]["responsibilities"] == [
+        {"title": "小桃转给阿宁 94 元", "owner_id": "peach", "status": "pending"}]
+    assert any("¥94.00" in field["value"] for field in revised.card["fields"])
+
+
 def test_party_duties_display_yuan_in_candidate_and_saved_plan(client):
     w = work(client)
     t = task(client, w["id"], evidence(client, ["参加成员：小桃、阿宁",
